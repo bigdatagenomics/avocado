@@ -11,8 +11,8 @@ trait ReadFilter {
   /**
    * Method signature for filter operation.
    *
-   * @param[in] reads An RDD containing reference oriented stacks of nucleotides.
-   * @return An RDD containing lists of pileups.
+   * @param[in] reads An RDD containing reads.
+   * @return An RDD containing lists of reads.
    */
   def filter (reads: RDD [(void, ADAMRecord)]): RDD [(Any, List[ADAMRecord])]
 }
