@@ -14,5 +14,5 @@ trait PileupFilter {
    * @param[in] pileups An RDD containing reference oriented stacks of nucleotides.
    * @return An RDD containing lists of pileups.
    */
-  def filter (pileups: RDD [(void, Pileup)]): RDD [(void, List[Pileup])] 
+  def filter (pileups: RDD [(void, Pileup)]): RDD [(Any, List[Pileup])] 
 }
