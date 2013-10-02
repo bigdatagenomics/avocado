@@ -1,23 +1,20 @@
-package edu.berkeley.cs.amplab.avocado
+package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import parquet.filter.{RecordFilter, UnboundRecordFilter}
-import parquet.column.ColumnReader
-import parquet.filter.ColumnRecordFilter._
-import parquet.filter.ColumnPredicates._
+import spark.{RDD,SparkContext}
+import edu.berkeley.cs.amplab.adam.util.{Pileup,PileupTraversable}
+import edu.berkeley.cs.amplab.adam.avro.ADAMVariant
 
-class PileupMatchesReference extends UnboundRecordFilter 
-{
-  def bind(readers: Iterable[ColumnReader]): RecordFilter = 
-  {
-    not (column ("op", notEqualTo (MATCH)).bind(readers))
-  }
+/**
+ * Trait for filtering pileups. 
+ */
+trait PileupCall {
+
+  /**
+   * Method signature for variant calling operation.
+   *
+   * @param[in] pileupGroups An RDD containing lists of pileups.
+   * @return An RDD containing called variants.
+   */
+  def filter (pileupGroups: RDD [(void, List[Pileup])]): RDD [ADAMVariant])] 
 }
 
-object StackupCalls 
-{
-  
-  def callVote ()
-  {
-  }
-  
-}
