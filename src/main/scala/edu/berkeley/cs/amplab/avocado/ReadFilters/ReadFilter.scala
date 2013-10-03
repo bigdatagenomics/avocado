@@ -18,11 +18,13 @@ package edu.berkeley.cs.amplab.avocado.filters.reads
 
 import spark.{RDD,SparkContext}
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import org.streum.configrity._
 
 /**
- * Trait for filtering reads.
+ * Abstract class for filtering reads.
  */
-trait ReadFilter {
+abstract class ReadFilter (val filterName: String,
+			   val config: Configuration) {
 
   /**
    * Method signature for filter operation.

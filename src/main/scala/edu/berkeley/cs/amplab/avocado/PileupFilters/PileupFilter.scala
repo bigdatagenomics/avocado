@@ -18,11 +18,13 @@ package edu.berkeley.cs.amplab.avocado.filters.pileup
 
 import spark.{RDD,SparkContext}
 import edu.berkeley.cs.amplab.adam.util.{Pileup,PileupTraversable}
+import org.streum.configrity._
 
 /**
- * Trait for filtering pileups. 
+ * Abstract class for filtering pileups. 
  */
-trait PileupFilter {
+abstract class PileupFilter (val filterName: String,
+			     val config: Configuration) {
 
   /**
    * Method signature for filter operation.

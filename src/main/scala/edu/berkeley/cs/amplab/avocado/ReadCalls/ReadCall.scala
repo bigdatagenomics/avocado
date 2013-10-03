@@ -17,22 +17,21 @@
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
 import spark.{RDD,SparkContext}
-import edu.berkeley.cs.amplab.adam.util.{Pileup,PileupTraversable}
-import edu.berkeley.cs.amplab.adam.avro.ADAMVariant
+import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord,ADAMVariant}
 import org.streum.configrity._
 
 /**
  * Abstract class for calling variants on reads. 
  */
-abstract class PileupCall (val callName: String,
-			   val config: Configuration) {
+abstract class ReadCall (val callName: String,
+			 val config: Configuration) {
 
   /**
    * Method signature for variant calling operation.
    *
-   * @param[in] pileupGroups An RDD containing lists of pileups.
+   * @param[in] pileupGroups An RDD containing lists of reads.
    * @return An RDD containing called variants.
    */
-  def call (pileupGroups: RDD [(void, List[Pileup])]): RDD [ADAMVariant] 
+  def call (pileupGroups: RDD [(void, List[ADAMRecord])]): RDD [ADAMVariant] 
 }
 
