@@ -26,8 +26,12 @@ import edu.berkeley.cs.amplab.avocado.utils.Phred
  */
 class PileupCallSimpleSNP extends PileupCall {
   
-  // assume human diploid
-  val ploidy = 2
+  // get ploidy - if no ploidy, assume human diploid
+  try {
+    val ploidy = config [Int]("ploidy")
+  } catch {
+    case NoSuchElementException nse: val ploidy = 2
+  }
 
   /**
    * Calls a SNP for a single pileup, if mismatch from the reference.
@@ -73,6 +77,11 @@ class PileupCallSimpleSNP extends PileupCall {
       
       likelihood (g) = productMatch * productMismatch / pow (ploidy, k)
     }
+
+    if (likelihood.indexOf (likelihood.max) == 0) {
+      return List[ADAMVariant](0) // if max likelihood is homozygous reference, return no variants
+    }
+      
   }
 
   /**

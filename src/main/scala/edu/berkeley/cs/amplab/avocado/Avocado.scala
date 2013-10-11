@@ -27,6 +27,23 @@ import java.io.File
 
 object Avocado {
 
+  def main (args: Array[String])
+  {
+    if (args.size != 1) {
+      println ("Usage: avocado <config>")
+    } else {
+      val pipeline = new Avocado (args (0))
+      
+      pipeline.run ()
+    }
+  }
+}
+
+class Avocado (config: String) {
+  
+  val sc = new SparkContext ()
+  
+
   def filterReads ()
   {
   }
@@ -43,8 +60,4 @@ object Avocado {
   {
   }
 
-  def main (args: Array[String])
-  {
-    
-  }
 }
