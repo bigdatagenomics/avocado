@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls.pileup
+package edu.berkeley.cs.amplab.avocado.utils
 
 import scala.math.pow
 

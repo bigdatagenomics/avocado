@@ -14,24 +14,22 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls.pileup
+package edu.berkeley.cs.amplab.avocado.calls.reads
 
 import spark.{RDD,SparkContext}
 import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord,ADAMVariant}
-import org.streum.configrity._
 
 /**
  * Abstract class for calling variants on reads. 
  */
-abstract class ReadCall (val callName: String,
-			 val config: Configuration) {
+abstract class ReadCall (val callName: String) {
 
   /**
    * Method signature for variant calling operation.
    *
-   * @param[in] pileupGroups An RDD containing lists of reads.
+   * @param[in] pileupGroups An RDD containing reads.
    * @return An RDD containing called variants.
    */
-  def call (pileupGroups: RDD [(void, List[ADAMRecord])]): RDD [ADAMVariant] 
+  def call (pileupGroups: RDD [ADAMRecord]): RDD [ADAMVariant] 
 }
 

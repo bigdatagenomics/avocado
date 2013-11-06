@@ -17,14 +17,12 @@
 package edu.berkeley.cs.amplab.avocado.filters.variants
 
 import spark.{RDD,SparkContext}
-import edu.berkeley.cs.amplab.adam.util.{ADAMVariant}
-import org.streum.configrity._
+import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant}
 
 /**
  * Abstract class for filtering called variants. 
  */
-abstract class VariantCallFilter (val filterName: String,
-				  val config: Configuration) {
+abstract class VariantCallFilter (val filterName: String) {
 
   /**
    * Method signature for filter operation.

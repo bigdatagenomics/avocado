@@ -17,14 +17,12 @@
 package edu.berkeley.cs.amplab.avocado.filters.pileup
 
 import spark.{RDD,SparkContext}
-import edu.berkeley.cs.amplab.adam.util.{Pileup,PileupTraversable}
-import org.streum.configrity._
+import edu.berkeley.cs.amplab.adam.avro.ADAMPileup
 
 /**
  * Abstract class for filtering pileups. 
  */
-abstract class PileupFilter (val filterName: String,
-			     val config: Configuration) {
+abstract class PileupFilter (val filterName: String) {
 
   /**
    * Method signature for filter operation.
@@ -32,5 +30,5 @@ abstract class PileupFilter (val filterName: String,
    * @param[in] pileups An RDD containing reference oriented stacks of nucleotides.
    * @return An RDD containing lists of pileups.
    */
-  def filter (pileups: RDD [(void, Pileup)]): RDD [(Any, List[Pileup])] 
+  def filter (pileups: RDD [ADAMPileup]): RDD [ADAMPileup]
 }

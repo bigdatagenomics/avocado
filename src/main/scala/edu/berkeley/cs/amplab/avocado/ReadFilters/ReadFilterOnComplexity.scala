@@ -18,7 +18,6 @@ package edu.berkeley.cs.amplab.avocado.filters.reads
 
 import spark.{RDD,SparkContext}
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.avocado.filters.reads.ReadFilter
 import scala.math.{min,max}
 
 /**
@@ -29,12 +28,10 @@ object MapComplexity extends Enumeration {
   val High, Medium, Low = Value
 }
 
-import MapComplexity._
-
 /**
  * Class that implements a complexity based read filter.
  */ 
-class ReadFilterOnComplexity extends ReadFilter {
+class ReadFilterOnComplexity (val filterName: String) extends ReadFilter {
 
   val stripe = 1000
   val overlap = 100
@@ -50,20 +47,20 @@ class ReadFilterOnComplexity extends ReadFilter {
    * @param[in] reads A list of reads.
    * @return Tuple of region complexity and list of reads.
    */
-  def scoreComplexity (segment: (int, List[ADAMRecord]): (MapComplexity, List[ADAMRecord]) = {
+  def scoreComplexity (segment: (Int, List[ADAMRecord])): (Value, List[ADAMRecord]) = {
     val (segmentNumber, reads) = segment
-    val segmentStart = segment * stripe
-    val segmentEnd = (segment + 1) * stripe
+    val segmentStart = segmentNumber * stripe
+    val segmentEnd = (segmentNumber + 1) * stripe
     val complexity = reads.map (_.mapq).reduce (_ + _) / reads.length
-    val coverage = reads.map (min (_.end, segmentEnd) - max (_.start, segmentStart))
+    val coverage = reads.map (v => min (v.getStart + v.getSequence.length, segmentEnd) - max (v.getStart, segmentStart))
                         .reduce (_ + _) / reads.length
 
     if (complexity >= mappingQualityThreshold && coverage >= coverageThreshold) {
-      return (High, reads)
+      return (MapComplexity.High, reads)
     } else if (complexity >= mappingQualityThreshold || coverage >= coverageThreshold) {
-      return (Medium, reads)
+      return (MapComplexity.Medium, reads)
     } else {
-      return (Low, reads)
+      return (MapComplexity.Low, reads)
     }
   }
 
@@ -73,13 +70,12 @@ class ReadFilterOnComplexity extends ReadFilter {
    * @param[in] reads An RDD containing reads.
    * @return An RDD containing lists of reads.
    */
-  def filter (reads: RDD [(void, ADAMRecord)]): RDD [(MapComplexity, List[ADAMRecord])] = {
+  def filter (reads: RDD [ADAMRecord]): RDD [ADAMRecord] = {
 
     /* split into windows of reads
      * FIXME: add overlap on windows
      */
-    val segments = reads.map (_ => (_.start / stripe, _))
-			.groupByKey ()
+    val segments = reads.groupBy (v => v.getStart / stripe)
     
     /* compute complexity value, group by complexity, and return */
     return segments.map (scoreComplexity).reduceByKey (_ :: _)

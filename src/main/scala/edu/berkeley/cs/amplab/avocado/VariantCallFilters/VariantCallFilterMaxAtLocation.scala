@@ -17,8 +17,7 @@
 package edu.berkeley.cs.amplab.avocado.filters.variants
 
 import spark.{RDD,SparkContext}
-import edu.berkeley.cs.amplab.adam.util.{ADAMVariant}
-import org.streum.configrity._
+import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant}
 
 /**
  * Simple filter. Checks to make sure that no more variants show up at a
@@ -27,14 +26,10 @@ import org.streum.configrity._
  * For now, if more than two variants show up at a single location, we throw
  * those variants out. This will be changed later.
  */
-class VariantCallFilterMaxAtLocation extends VariantCallFilter {
+class VariantCallFilterMaxAtLocation extends VariantCallFilter ("") {
 
   // get ploidy - if no ploidy, assume human diploid
-  try {
-    val ploidy = config [Int]("ploidy")
-  } catch {
-    case NoSuchElementException nse: val ploidy = 2
-  }
+  val ploidy = 2
     
   /**
    * Simple filter to check for no more than two variants at a single location.
@@ -43,9 +38,8 @@ class VariantCallFilterMaxAtLocation extends VariantCallFilter {
    * @return An RDD containing variants.
    */
   override def filter (variants: RDD [ADAMVariant]): RDD [ADAMVariant] = {
-    variants.map (variant => ((variant.getChromosome (), variant.getPosition ()), variant))
-            .groupByKey ().filter ((k: (Int, Int), v: List [ADAMVariant]) = v.length <= ploidy)
-            .flatMap ((k: (Int, Int), v: List [ADAMVariant]) = v)
+    variants.groupBy (_.getPosition).filter (kv => kv._2.length <= ploidy)
+      .flatMap (kv => kv._2.toList)
   }
 
 }

@@ -17,14 +17,13 @@
 package edu.berkeley.cs.amplab.avocado.filters.pileup
 
 import spark.{RDD,SparkContext}
-import edu.berkeley.cs.amplab.adam.util.{Pileup,PileupTraversable}
-import edu.berkeley.cs.amplab.avocado.filters.pileup.PileupFilter
+import edu.berkeley.cs.amplab.adam.avro.ADAMPileup
 
 /**
  * Class implementing a filter that only returns Pileups that contain
  * a mismatch on any bases in the pileup.
  */
-class PileupFilterOnMismatch extends PileupFilter {
+class PileupFilterOnMismatch extends PileupFilter ("") {
 
   /**
    * Filter to only return pileups with mismatches.
@@ -32,8 +31,19 @@ class PileupFilterOnMismatch extends PileupFilter {
    * @param[in] pileups An RDD containing reference oriented stacks of nucleotides.
    * @return An RDD containing only pileups that contain at least one mismatch.
    */
-  override def filter (pileups: RDD [(void, Pileup)]): RDD [(void, List[Pileup])] = {
-    return pileups.filter (_.mismatches != List.empty)
-                  .map (_ => (void, List (_)))
+  override def filter (pileups: RDD [ADAMPileup]): RDD [ADAMPileup] = {
+
+    val pileupsGroupedByPosition = pileups.groupBy ((pileup: ADAMPileup) => pileup.getPosition.toLong)
+      
+    val multipleEvidence = pileupsGroupedByPosition.filter ((kv: (Long, Seq[ADAMPileup])) => kv._2.length > 1)
+      .map (kv => (kv._1, kv._2.toList))
+      .flatMap ((kv: (Long, List[ADAMPileup])) => kv._2)
+
+    val singleEvidenceMismatch = pileupsGroupedByPosition.filter ((kv: (Long, Seq[ADAMPileup])) => kv._2.length == 1)
+      .map (kv => (kv._1, kv._2.toList))
+      .flatMap ((kv: (Long, List[ADAMPileup])) => kv._2)
+      .filter ((pileup: ADAMPileup) => pileup.getReadBase != pileup.getReferenceBase)
+
+    multipleEvidence ++ singleEvidenceMismatch
   }
 }
