@@ -22,7 +22,9 @@ import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,ADAMVariant}
 /**
  * Abstract class for calling variants on reads. 
  */
-abstract class PileupCall (val callName: String) {
+abstract class PileupCall {
+
+  val callName: String
 
   /**
    * Method signature for variant calling operation.

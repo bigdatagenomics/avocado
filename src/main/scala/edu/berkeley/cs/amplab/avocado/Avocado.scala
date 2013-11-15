@@ -52,26 +52,45 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
 
 class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [AvocadoArgs] {
   
+  // companion object to this class - needed for AdamCommand framework
   val companion = Avocado
     
-  /*def filterReads ()
+  /* TODO: Add these steps in. Currently do not have any read based calls implemented,
+   * and are waiting on ADAM transformation pipeline to be completed.
+  def filterReads ()
   {
   }
 
   def processReads ()
   {
-  }*/
+  }
+  */
 
+  /**
+   * Function to pass over all pileups. Will either mark them for calling and provide a calling algorithm
+   * for them, or will discard them.
+   *
+   * @param[in] pileups A Spark RDD containing pileups which are ready for calling.
+   */
   def filterPileups (pileups: RDD[ADAMPileup]): Map [PileupCall, RDD [ADAMPileup]] = {
     
+    // TODO: currently only supports a single filter and calling algorithm - need to extend
     val call = new PileupCallSimpleSNP
     val filter = new PileupFilterOnMismatch
-
+    
+    // run filter over input pileups, and assign a variant calling algorithm to them
     val map: Map [PileupCall, RDD [ADAMPileup]] = Map (call -> filter.filter (pileups))
     
     map
   }
 
+  /**
+   * Applies variant calling algorithms to reads and pileups. Reduces down and returns called variants.
+   *
+   * @param[in] reads Map containing read calling algorithm and RDD record pairs.
+   * @param[in] pileups Map containing pileup calling algorithm and RDD pileup pairs.
+   * @return Joined output of variant calling algorithms.
+   */
   def callVariants (reads: Map [ReadCall, RDD [ADAMRecord]],
 		    pileups: Map [PileupCall, RDD [ADAMPileup]]): RDD [ADAMVariant] = {
   
@@ -82,22 +101,36 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     readCalledVariants ++ pileupCalledVariants
   }
 
+  /**
+   * Main method. Implements body of variant caller. SparkContext and Hadoop Job are provided
+   * by the AdamSparkCommand shell.
+   *
+   * @param[in] sc SparkContext for RDDs.
+   * @param[in] job Hadoop Job container for file I/O.
+   */
   def run (sc: SparkContext, job: Job) {
     
+    // load in reads from ADAM file
     val reads: RDD[ADAMRecord] = sc.adamLoad (args.readInput, Some (classOf[LocusPredicate]))
     
-    // placeholder
+    // TODO: add in read filtering stage
     //val readsToCall = reads.filter (v => false)
 
+    // translate non-filtered reads into pileups
     val readProcessor = new ReadProcessor
     val pileups: RDD[ADAMPileup] = reads.flatMap ({readProcessor.readToPileups})
 
+    // apply filters to pileups - these 
     val pileupsToCall = filterPileups (pileups)
 
-    // fixme: null
-    val calledVariants = callVariants (null, pileupsToCall)
+    // call variants on filtered reads and pileups
+    // TODO: currently, we don't have read filtering or calling implemented, so we pass an empty list to the read input
+    val calledVariants = callVariants (Map[ReadCall, RDD [ADAMRecord]](), pileupsToCall)
 
-    println (calledVariants.count)
+    // TODO: clean up variant call filters and add filtering hook here
+
+    // save variants to output file
+    calledVariants.adamSave (args.variantOutput)
   }
 
 }

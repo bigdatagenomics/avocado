@@ -16,7 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.utils
 
-import scala.math.pow
+import scala.math.{pow, log10}
 
 object Phred {
 
@@ -31,4 +31,16 @@ object Phred {
   def phredToProbability (phredScore: Int): Double = {
     return pow (10.0, (-phredScore / 10.0))
   }  
+
+  /**
+   * Static method for converting probability to a PHRED score.
+   * Formula used is:
+   * Q = -10*log10(P)
+   *
+   * @param[in] probability Double probability score.
+   * @return Integer phred score.
+   */
+  def probabilityToPhred (probability: Double): Int = {
+    (-10.0 * log10 (probability)).toInt
+  }
 }
