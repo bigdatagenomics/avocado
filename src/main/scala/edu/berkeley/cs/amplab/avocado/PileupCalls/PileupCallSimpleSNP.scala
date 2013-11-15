@@ -48,44 +48,93 @@ class PileupCallSimpleSNP extends PileupCall {
   val variantQuality = 30
 
   /**
-   * Calls a SNP for a single pileup, if there is sufficient evidence of a mismatch from the reference.
-   * Takes in a single pileup rod from a single sample at a single locus. For simplicity, we assume that
-   * all sites are biallelic.
-   * 
-   * @param[in] pileup List of pileups. Should only contain one rod.
-   * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
+   * Takes pileup info and likelihoods and writes out to a variant list.
+   *
+   * @param[in] pileupHead Single pileup that contains location and sample info.
+   * @param[in] likelihood List of likelihoods for homozygous ref/heterozygous/homozygous non ref.
+   * @param[in] maxNonRefBase Highest likelihood base for mismatch.
+   * @return List of variants called, with 0 (homozygous reference) or 1 entry.
    */
-  def callSNP (pileup: List[ADAMPileup]): List[ADAMVariant] = {
-	
+  protected def writeCallInfo (pileupHead: ADAMPileup, likelihood: MutableList[Double], maxNonRefBase: Base): List[ADAMVariant] = {
+    assert (likelihood.length == 3)
+
+    // get phred scores
+    val homozygousRefPhred = Phred.probabilityToPhred (likelihood (0))
+    val heterozygousPhred = Phred.probabilityToPhred (likelihood (1))
+    val homozygousNonPhred = Phred.probabilityToPhred (likelihood (2))
+
+    // build genotype and variant descriptors and write out
+    // TODO: some code here converts List[Int] to java.lang.List[java.lang.Integer] and is ugly
+    // add implicit conversion to utils
+
+    // simplifying assumption - snps are biallelic
+    if (likelihood.indexOf (likelihood.max) == 1 &&
+	heterozygousPhred >= variantQuality) {
+      // hetereozygous
+      // and, variant quality is >= threshold 
+            
+      val genotype = ADAMGenotype.newBuilder ()
+	.setSampleId (pileupHead.getRecordGroupSample)
+	.setGenotype (asList (List (0, 1).map (i => i : java.lang.Integer)))
+	.setPhredLikelihoods (asList (List (heterozygousPhred).map (i => i : java.lang.Integer)))
+	.build()
+
+      val variant = ADAMVariant.newBuilder ()
+	.setReferenceName (pileupHead.getReferenceName)
+	.setPosition (pileupHead.getPosition)
+	.setReferenceAllele (pileupHead.getReferenceBase.toString)
+	.setAlternateAlleles (asList (List (maxNonRefBase.toString)))
+	.setAlleleCount (asList (List (1, 1).map (i => i : java.lang.Integer)))
+	.setChromosomeCount (ploidy)
+	.setType (VariantType.SNP)
+	.setGenotypes (asList (List (genotype)))
+	.build()
+
+      List (variant)
+    } else if (likelihood.indexOf (likelihood.max) == 2 &&
+	       homozygousNonPhred >= variantQuality) {
+      // homozygous non reference
+      // and, variant quality is >= threshold
+      
+      val genotype = ADAMGenotype.newBuilder ()
+	.setSampleId (pileupHead.getRecordGroupSample)
+	.setGenotype (asList (List (1, 1).map (i => i : java.lang.Integer)))
+	.setPhredLikelihoods (asList (List (homozygousNonPhred).map (i => i : java.lang.Integer)))
+	.build()
+
+      val variant = ADAMVariant.newBuilder ()
+	.setReferenceName (pileupHead.getReferenceName)
+	.setPosition (pileupHead.getPosition)
+	.setReferenceAllele (pileupHead.getReferenceBase.toString)
+	.setAlternateAlleles (asList (List (maxNonRefBase.toString)))
+	.setAlleleCount (asList (List (0, 2).map (i => i : java.lang.Integer)))
+	.setChromosomeCount (ploidy)
+	.setType (VariantType.SNP)
+	.setGenotypes (asList (List (genotype)))
+	.build()
+
+      List (variant)
+    } else {
+      // homozygous
+      // or, variant quality is < threshold
+      List [ADAMVariant] ()
+    }
+  }
+
+  /**
+   * Scores likelihoods for genotypes using equation from Li 2009.
+   *
+   * @param[in] pileup Rod containing pileup bases.
+   * @return List of doubles corresponding to likelihood of homozygous (0), heterozygous (1), and homozygous non-reference (2).
+   */
+  protected def scoreGenotypeLikelihoods (pileup: List[ADAMPileup]): MutableList[Double] = {
+
     // allocate list for homozygous reference, heterozygous, homozygous minor allele
     var likelihood = MutableList[Double](3)
 
     // count bases in pileup
     val k = pileup.map (_.getCountAtPosition).reduce (_ + _)
 
-    // get a count of the total number of bases that are a mismatch with the reference
-    val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
-      .groupBy(_.getReadBase)
-      .map(kv => (kv._1, kv._2.length))
-
-    /**
-     * Out of two Base, Int pairs, picks the one with the higher count.
-     *
-     * @param[in] kv1 Key/value pair containing a Base and it's count.
-     * @param[in] kv2 Key/value pair containing a Base and it's count.
-     * @return The key/value pair with the higher count.
-     */
-    def pickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
-      if (kv1._2 > kv2._2) {
-	kv1
-      } else {
-	kv2
-      }
-    }
-
-    // reduce down to get the base with the highest count
-    val maxNonRefBase = nonRefBaseCount.reduce (pickMaxBase)._1
-      
     /* find genotype for pileup
      * likelihood for genotype is derived from:
      * L(g) = 1/m^k *
@@ -123,77 +172,53 @@ class PileupCallSimpleSNP extends PileupCall {
       
       likelihood (g) = productMatch * productMismatch / pow (ploidy.toDouble, k.toDouble)
     }
+    
+    likelihood
+  }
 
+  /**
+   * Calls a SNP for a single pileup, if there is sufficient evidence of a mismatch from the reference.
+   * Takes in a single pileup rod from a single sample at a single locus. For simplicity, we assume that
+   * all sites are biallelic.
+   * 
+   * @param[in] pileup List of pileups. Should only contain one rod.
+   * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
+   */
+  protected def callSNP (pileup: List[ADAMPileup]): List[ADAMVariant] = {
+	
+    // get a count of the total number of bases that are a mismatch with the reference
+    val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
+      .groupBy(_.getReadBase)
+      .map(kv => (kv._1, kv._2.length))
+
+    /**
+     * Out of two Base, Int pairs, picks the one with the higher count.
+     *
+     * @param[in] kv1 Key/value pair containing a Base and it's count.
+     * @param[in] kv2 Key/value pair containing a Base and it's count.
+     * @return The key/value pair with the higher count.
+     */
+    def pickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
+      if (kv1._2 > kv2._2) {
+	kv1
+      } else {
+	kv2
+      }
+    }
+
+    // reduce down to get the base with the highest count
+    val maxNonRefBase = nonRefBaseCount.reduce (pickMaxBase)._1
+
+    // score off of rod info
+    var likelihood = scoreGenotypeLikelihoods (pileup) 
+      
     // compensate likelihoods by minor allele frequency - eqn 19 from source
     likelihood (0) = likelihood (0) * pow ((1.0 - minorAlleleFrequency), 2.0)
     likelihood (1) = likelihood (1) * minorAlleleFrequency * (1.0 - minorAlleleFrequency)
     likelihood (2) = likelihood (2) * pow (minorAlleleFrequency, 2.0)
-    
-    // get phred scores
-    val homozygousRefPhred = Phred.probabilityToPhred (likelihood (0))
-    val heterozygousPhred = Phred.probabilityToPhred (likelihood (1))
-    val homozygousNonPhred = Phred.probabilityToPhred (likelihood (2))
 
-    // build genotype and variant descriptors and write out
-    // TODO: some code here converts List[Int] to java.lang.List[java.lang.Integer] and is ugly
-    // add implicit conversion to utils
-
-    // simplifying assumption - snps are biallelic
-    if (likelihood.indexOf (likelihood.max) == 1 &&
-	heterozygousPhred >= variantQuality) {
-      // hetereozygous
-      // and, variant quality is >= threshold 
-      
-      val pileupHead = pileup.head
-      
-      val genotype = ADAMGenotype.newBuilder ()
-	.setSampleId (pileupHead.getRecordGroupSample)
-	.setGenotype (asList (List (0, 1).map (i => i : java.lang.Integer)))
-	.setPhredLikelihoods (asList (List (heterozygousPhred).map (i => i : java.lang.Integer)))
-	.build()
-
-      val variant = ADAMVariant.newBuilder ()
-	.setReferenceName (pileupHead.getReferenceName)
-	.setPosition (pileupHead.getPosition)
-	.setReferenceAllele (pileupHead.getReferenceBase.toString)
-	.setAlternateAlleles (asList (List (maxNonRefBase.toString)))
-	.setAlleleCount (asList (List (1, 1).map (i => i : java.lang.Integer)))
-	.setChromosomeCount (ploidy)
-	.setType (VariantType.SNP)
-	.setGenotypes (asList (List (genotype)))
-	.build()
-
-      List (variant)
-    } else if (likelihood.indexOf (likelihood.max) == 2 &&
-	       homozygousNonPhred >= variantQuality) {
-      // homozygous non reference
-      // and, variant quality is >= threshold
- 
-      val pileupHead = pileup.head
-      
-      val genotype = ADAMGenotype.newBuilder ()
-	.setSampleId (pileupHead.getRecordGroupSample)
-	.setGenotype (asList (List (1, 1).map (i => i : java.lang.Integer)))
-	.setPhredLikelihoods (asList (List (homozygousNonPhred).map (i => i : java.lang.Integer)))
-	.build()
-
-      val variant = ADAMVariant.newBuilder ()
-	.setReferenceName (pileupHead.getReferenceName)
-	.setPosition (pileupHead.getPosition)
-	.setReferenceAllele (pileupHead.getReferenceBase.toString)
-	.setAlternateAlleles (asList (List (maxNonRefBase.toString)))
-	.setAlleleCount (asList (List (0, 2).map (i => i : java.lang.Integer)))
-	.setChromosomeCount (ploidy)
-	.setType (VariantType.SNP)
-	.setGenotypes (asList (List (genotype)))
-	.build()
-
-      List (variant)
-    } else {
-      // homozygous
-      // or, variant quality is < threshold
-      List [ADAMVariant] ()
-    }
+    // write calls to list
+    writeCallInfo (pileup.head, likelihood, maxNonRefBase)
   }
 
   /**
