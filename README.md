@@ -5,7 +5,7 @@ A Variant Caller, Distributed
 
 # Who/What/When/Where/Why avocado?
 
-avocado is a distributed variant caller built on top of the [ADAM format and pipeline](http://www.github.com/massie/adam) and [Apache Spark](http://spark.incubator.apache.org/). Currently, avocado is a research project coming out of the [UC Berkeley AMPLab](https://amplab.cs.berkeley.edu/), and is developed by @ehiunno, @fnothaft, and @peterhj. avocado is open source and is covered by the Apache license.
+avocado is a distributed variant caller built on top of the [ADAM format and pipeline](http://www.github.com/massie/adam) and [Apache Spark](http://spark.incubator.apache.org/). Currently, avocado is a research project coming out of the [UC Berkeley AMPLab](https://amplab.cs.berkeley.edu/). avocado is open source and is covered by the Apache license.
 
 There are several reasons that we are building avocado:
 
