@@ -14,12 +14,19 @@ net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 excludeFilter := "ReadFilterOnComplexity.scala"
 
+exportJars := true
+
+seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
+
+mainClass in oneJar := Some("edu.berkeley.cs.amplab.avocado.Avocado")
+
 libraryDependencies ++= Seq(
   "org.spark-project" % "spark-core_2.9.3" % "0.7.3",
   "org.scalatest" %% "scalatest" % "1.9.1" % "test",
   "edu.berkeley.cs.amplab.adam" % "adam-format" % "0.5.0-SNAPSHOT",
   "edu.berkeley.cs.amplab.adam" % "adam-commands" % "0.5.0-SNAPSHOT",
-  "args4j" % "args4j" % "2.0.23"
+  "args4j" % "args4j" % "2.0.23",
+  "commons-lang" % "commons-lang" % "2.6"
 )
 
 libraryDependencies ++= Seq(
