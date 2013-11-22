@@ -1,3 +1,7 @@
+import AssemblyKeys._
+
+assemblySettings
+
 name := "Avocado"
 
 version := "0.0.1"
@@ -14,11 +18,10 @@ net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 excludeFilter := "ReadFilterOnComplexity.scala"
 
-exportJars := true
+//exportJars := true
+//seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
+//mainClass in oneJar := Some("edu.berkeley.cs.amplab.avocado.Avocado")
 
-seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
-
-mainClass in oneJar := Some("edu.berkeley.cs.amplab.avocado.Avocado")
 
 libraryDependencies ++= Seq(
   "org.spark-project" % "spark-core_2.9.3" % "0.7.3",
@@ -43,3 +46,14 @@ resolvers ++= Seq(
   "apache" at "https://repository.apache.org/content/repositories/releases"
 )
 
+mergeStrategy in assembly := {
+ case m if m.toLowerCase.endsWith("manifest.mf") => MergeStrategy.discard
+ case m if m.toLowerCase.matches("meta-inf.*\\.sf$") => MergeStrategy.discard
+ case "META-INF/services/org.apache.hadoop.fs.FileSystem" =>
+MergeStrategy.concat
+ case "reference.conf" => MergeStrategy.concat
+ case "log4j.properties" => MergeStrategy.concat
+ case _ => MergeStrategy.first
+}
+
+assemblyCacheOutput in assembly := false

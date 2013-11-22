@@ -93,12 +93,20 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
    */
   def callVariants (reads: Map [ReadCall, RDD [ADAMRecord]],
 		    pileups: Map [PileupCall, RDD [ADAMPileup]]): RDD [ADAMVariant] = {
-  
-    val readCalledVariants = reads.map (kv => kv._1.call (kv._2)).reduce (_ ++ _)
-
-    val pileupCalledVariants = pileups.map (kv => kv._1.call (kv._2)).reduce (_ ++ _)
-
-    readCalledVariants ++ pileupCalledVariants
+    
+    if (!reads.isEmpty && !pileups.isEmpty) {
+      val readCalledVariants = reads.map (kv => kv._1.call (kv._2)).reduce (_ ++ _)
+      
+      val pileupCalledVariants = pileups.map (kv => kv._1.call (kv._2)).reduce (_ ++ _)
+      
+      readCalledVariants ++ pileupCalledVariants
+    } else if (!reads.isEmpty) {
+      reads.map (kv => kv._1.call (kv._2)).reduce (_ ++ _)
+    } else if (!pileups.isEmpty) {
+      pileups.map (kv => kv._1.call (kv._2)).reduce (_ ++ _)
+    } else {
+      throw new IllegalArgumentException ("Must have some inputs to call.")
+    }
   }
 
   /**
