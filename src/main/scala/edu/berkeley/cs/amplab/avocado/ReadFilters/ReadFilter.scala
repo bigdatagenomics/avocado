@@ -16,13 +16,16 @@
 
 package edu.berkeley.cs.amplab.avocado.filters.reads
 
-import spark.{RDD,SparkContext}
+import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 
 /**
  * Abstract class for filtering reads.
  */
-abstract class ReadFilter (val filterName: String) {
+abstract class ReadFilter extends Serializable with Logging {
+
+  val filterName: String
 
   /**
    * Method signature for filter operation.

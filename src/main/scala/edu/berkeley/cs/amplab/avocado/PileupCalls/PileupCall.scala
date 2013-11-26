@@ -16,15 +16,19 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import spark.{RDD,SparkContext}
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,ADAMVariant}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, ADAMGenotype}
+import edu.berkeley.cs.amplab.avocado.Avocado
+import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.rdd.RDD
 
 /**
  * Abstract class for calling variants on reads. 
  */
-abstract class PileupCall {
+abstract class PileupCall extends Serializable with Logging {
 
   val callName: String
+  val coverage = Avocado.coverage
+  val reducePartitions = Avocado.reducePartitions
 
   /**
    * Method signature for variant calling operation.
@@ -32,6 +36,6 @@ abstract class PileupCall {
    * @param[in] pileups An RDD of pileups.
    * @return An RDD containing called variants.
    */
-  def call (pileups: RDD [ADAMPileup]): RDD [ADAMVariant]
+  def call (pileups: RDD [ADAMPileup]): RDD [(ADAMVariant, List[ADAMGenotype])]
 }
 

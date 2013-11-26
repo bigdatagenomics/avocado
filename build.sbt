@@ -12,19 +12,12 @@ scalaVersion := "2.9.3"
 
 classpathTypes ++= Set ("orbit")
 
-//classpathTypes ~= (_ + "orbit" + "bundle")
-
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 excludeFilter := "ReadFilterOnComplexity.scala"
 
-//exportJars := true
-//seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
-//mainClass in oneJar := Some("edu.berkeley.cs.amplab.avocado.Avocado")
-
-
 libraryDependencies ++= Seq(
-  "org.spark-project" % "spark-core_2.9.3" % "0.7.3",
+  "org.apache.spark" %% "spark-core" % "0.8.0-incubating",
   "org.scalatest" %% "scalatest" % "1.9.1" % "test",
   "edu.berkeley.cs.amplab.adam" % "adam-format" % "0.5.0-SNAPSHOT",
   "edu.berkeley.cs.amplab.adam" % "adam-commands" % "0.5.0-SNAPSHOT",

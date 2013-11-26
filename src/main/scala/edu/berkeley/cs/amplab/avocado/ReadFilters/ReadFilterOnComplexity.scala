@@ -16,7 +16,8 @@
 
 package edu.berkeley.cs.amplab.avocado.filters.reads
 
-import spark.{RDD,SparkContext}
+import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 import scala.math.{min,max}
 
@@ -31,7 +32,9 @@ object MapComplexity extends Enumeration {
 /**
  * Class that implements a complexity based read filter.
  */ 
-class ReadFilterOnComplexity (val filterName: String) extends ReadFilter {
+class ReadFilterOnComplexity extends ReadFilter {
+
+  val filterName = "ComplexityRegions"
 
   val stripe = 1000
   val overlap = 100

@@ -16,7 +16,8 @@
 
 package edu.berkeley.cs.amplab.avocado.filters.variants
 
-import spark.{RDD,SparkContext}
+import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant}
 
 /**
@@ -26,7 +27,9 @@ import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant}
  * For now, if more than two variants show up at a single location, we throw
  * those variants out. This will be changed later.
  */
-class VariantCallFilterMaxAtLocation extends VariantCallFilter ("") {
+class VariantCallFilterMaxAtLocation extends VariantCallFilter {
+
+  val filterName = "MaxAtLocation"
 
   // get ploidy - if no ploidy, assume human diploid
   val ploidy = 2
@@ -38,7 +41,7 @@ class VariantCallFilterMaxAtLocation extends VariantCallFilter ("") {
    * @return An RDD containing variants.
    */
   override def filter (variants: RDD [ADAMVariant]): RDD [ADAMVariant] = {
-    variants.groupBy (_.getPosition).filter (kv => kv._2.length <= ploidy)
+    variants.groupBy (_.getStartPosition).filter (kv => kv._2.length <= ploidy)
       .flatMap (kv => kv._2.toList)
   }
 

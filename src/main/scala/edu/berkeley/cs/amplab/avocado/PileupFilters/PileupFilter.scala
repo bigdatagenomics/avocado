@@ -16,13 +16,19 @@
 
 package edu.berkeley.cs.amplab.avocado.filters.pileup
 
-import spark.{RDD,SparkContext}
+import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.ADAMPileup
+import edu.berkeley.cs.amplab.avocado.Avocado
 
 /**
  * Abstract class for filtering pileups. 
  */
-abstract class PileupFilter (val filterName: String) {
+abstract class PileupFilter extends Serializable with Logging {
+
+  val filterName: String
+  val coverage = Avocado.coverage
+  val reducePartitions = Avocado.reducePartitions
 
   /**
    * Method signature for filter operation.

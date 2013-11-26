@@ -16,13 +16,16 @@
 
 package edu.berkeley.cs.amplab.avocado.filters.variants
 
-import spark.{RDD,SparkContext}
+import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant}
 
 /**
  * Abstract class for filtering called variants. 
  */
-abstract class VariantCallFilter (val filterName: String) {
+abstract class VariantCallFilter extends Serializable with Logging {
+
+  val filterName: String
 
   /**
    * Method signature for filter operation.

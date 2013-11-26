@@ -16,7 +16,8 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import spark.{RDD,SparkContext}
+import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,ADAMVariant,Base,ADAMGenotype,VariantType}
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
@@ -45,7 +46,7 @@ class PileupCallSNPVCFForMAF extends PileupCallSimpleSNP {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  override protected def callSNP (pileup: List[ADAMPileup]): List[ADAMVariant] = {
+  override protected def callSNP (pileup: List[ADAMPileup]): (List[ADAMVariant], List[ADAMGenotype]) = {
 	
     // get a count of the total number of bases that are a mismatch with the reference
     val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)

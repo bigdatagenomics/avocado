@@ -16,8 +16,9 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import spark.{RDD,SparkContext}
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,ADAMVariant,Base,ADAMGenotype,VariantType}
+import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, Base, ADAMGenotype, VariantType}
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
 import scala.collection.mutable.MutableList
@@ -55,8 +56,10 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] maxNonRefBase Highest likelihood base for mismatch.
    * @return List of variants called, with 0 (homozygous reference) or 1 entry.
    */
-  protected def writeCallInfo (pileupHead: ADAMPileup, likelihood: MutableList[Double], maxNonRefBase: Base): List[ADAMVariant] = {
+  protected def writeCallInfo (pileupHead: ADAMPileup, likelihood: MutableList[Double], maxNonRefBase: Base): (List[ADAMVariant], List[ADAMGenotype]) = {
     assert (likelihood.length == 3)
+
+    log.info ("Writing call info at " + pileupHead.getPosition)
 
     // get phred scores
     val homozygousRefPhred = Phred.probabilityToPhred (likelihood (0))
@@ -75,22 +78,20 @@ class PileupCallSimpleSNP extends PileupCall {
             
       val genotype = ADAMGenotype.newBuilder ()
 	.setSampleId (pileupHead.getRecordGroupSample)
-	.setGenotype (asList (List (0, 1).map (i => i : java.lang.Integer)))
-	.setPhredLikelihoods (asList (List (heterozygousPhred).map (i => i : java.lang.Integer)))
+	.setGenotype ("0,1")
+	.setPhredLikelihoods (heterozygousPhred.toString)
 	.build()
 
       val variant = ADAMVariant.newBuilder ()
 	.setReferenceName (pileupHead.getReferenceName)
-	.setPosition (pileupHead.getPosition)
+	.setStartPosition (pileupHead.getPosition)
 	.setReferenceAllele (pileupHead.getReferenceBase.toString)
-	.setAlternateAlleles (asList (List (maxNonRefBase.toString)))
-	.setAlleleCount (asList (List (1, 1).map (i => i : java.lang.Integer)))
-	.setChromosomeCount (ploidy)
+	.setAlternateAlleles (maxNonRefBase.toString)
+	.setAlleleCount (2)
 	.setType (VariantType.SNP)
-	.setGenotypes (asList (List (genotype)))
 	.build()
 
-      List (variant)
+      (List (variant), List (genotype))
     } else if (likelihood.indexOf (likelihood.max) == 2 &&
 	       homozygousNonPhred >= variantQuality) {
       // homozygous non reference
@@ -98,26 +99,24 @@ class PileupCallSimpleSNP extends PileupCall {
       
       val genotype = ADAMGenotype.newBuilder ()
 	.setSampleId (pileupHead.getRecordGroupSample)
-	.setGenotype (asList (List (1, 1).map (i => i : java.lang.Integer)))
-	.setPhredLikelihoods (asList (List (homozygousNonPhred).map (i => i : java.lang.Integer)))
+	.setGenotype ("1,1")
+	.setPhredLikelihoods (homozygousNonPhred.toString)
 	.build()
 
       val variant = ADAMVariant.newBuilder ()
 	.setReferenceName (pileupHead.getReferenceName)
-	.setPosition (pileupHead.getPosition)
+	.setStartPosition (pileupHead.getPosition)
 	.setReferenceAllele (pileupHead.getReferenceBase.toString)
-	.setAlternateAlleles (asList (List (maxNonRefBase.toString)))
-	.setAlleleCount (asList (List (0, 2).map (i => i : java.lang.Integer)))
-	.setChromosomeCount (ploidy)
+	.setAlternateAlleles (maxNonRefBase.toString)
+	.setAlleleCount (1)
 	.setType (VariantType.SNP)
-	.setGenotypes (asList (List (genotype)))
 	.build()
 
-      List (variant)
+      (List (variant), List (genotype))
     } else {
       // homozygous
       // or, variant quality is < threshold
-      List [ADAMVariant] ()
+      (List [ADAMVariant] (), List [ADAMGenotype] ())
     }
   }
 
@@ -130,7 +129,7 @@ class PileupCallSimpleSNP extends PileupCall {
   protected def scoreGenotypeLikelihoods (pileup: List[ADAMPileup]): MutableList[Double] = {
 
     // allocate list for homozygous reference, heterozygous, homozygous minor allele
-    var likelihood = MutableList[Double](3)
+    var likelihood = MutableList[Double](0.0, 0.0, 0.0)
 
     // count bases in pileup
     val k = pileup.map (_.getCountAtPosition).reduce (_ + _)
@@ -150,26 +149,37 @@ class PileupCallSimpleSNP extends PileupCall {
      */
     for (g <- 0 to 2) {
       // contribution of bases that match the reference
-      val productMatch = pileup.filter(v => v.getReadBase == v.getReferenceBase).map ((base) => {
-        val epsilon = Phred.phredToProbability ((base.getMapQuality + base.getSangerQuality) / 2)
+      val refBases = pileup.filter(v => v.getReadBase == v.getReferenceBase)
+      val productMatch = if (refBases.length != 0) {
+        refBases.map ((base) => {
+          val epsilon = Phred.phredToProbability ((base.getMapQuality + base.getSangerQuality) / 2)
         
-	pow ((ploidy - g) * epsilon + g * (1 - epsilon), base.getCountAtPosition.toDouble)
-      }).reduce (_ * _)
-      
+	  pow ((ploidy - g) * epsilon + g * (1 - epsilon), base.getCountAtPosition.toDouble)
+        }).reduce (_ * _)
+      } else {
+        0.0
+      }
+
       // contribution of bases that do not match the base
-      val productMismatch = pileup.filter(v => {
+      val mismatchBases = pileup.filter(v => {
 	val readBase = Option (v.getReadBase) match {
 	  case Some(base) => base
 	  case None => Base.N // TODO: add better exception handling code - this case shouldn't happen unless there is deletion evidence in the rod
 	}
 
 	((readBase != v.getReferenceBase) && v.getRangeLength == 0)
-      }).map ((base) => {
-        val epsilon = Phred.phredToProbability ((base.getMapQuality + base.getSangerQuality) / 2)
-        
-	pow ((ploidy - g) * (1 - epsilon) + g * epsilon, base.getCountAtPosition.toDouble)
-      }).reduce (_ * _)
-      
+      })
+
+      val productMismatch = if (mismatchBases.length != 0) {
+        mismatchBases.map ((base) => {
+          val epsilon = Phred.phredToProbability ((base.getMapQuality + base.getSangerQuality) / 2)
+          
+	  pow ((ploidy - g) * (1 - epsilon) + g * epsilon, base.getCountAtPosition.toDouble)
+        }).reduce (_ * _)
+      } else {
+        0.0
+      }
+
       likelihood (g) = productMatch * productMismatch / pow (ploidy.toDouble, k.toDouble)
     }
     
@@ -184,8 +194,11 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP (pileup: List[ADAMPileup]): List[ADAMVariant] = {
+  protected def callSNP (pileup: List[ADAMPileup]): (List[ADAMVariant], List[ADAMGenotype]) = {
 	
+    val loci = pileup.head.getPosition
+    log.info ("Calling pileup at " + loci)
+    
     // get a count of the total number of bases that are a mismatch with the reference
     val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
       .groupBy(_.getReadBase)
@@ -207,7 +220,11 @@ class PileupCallSimpleSNP extends PileupCall {
     }
 
     // reduce down to get the base with the highest count
-    val maxNonRefBase = nonRefBaseCount.reduce (pickMaxBase)._1
+    val maxNonRefBase = if (!nonRefBaseCount.isEmpty) {
+      nonRefBaseCount.reduce (pickMaxBase)._1
+    } else {
+      Base.N // TODO: add better exception handling code
+    }
 
     // score off of rod info
     var likelihood = scoreGenotypeLikelihoods (pileup) 
@@ -227,8 +244,17 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] pileupGroups An RDD containing lists of pileups.
    * @return An RDD containing called variants.
    */
-  override def call (pileups: RDD [ADAMPileup]): RDD [ADAMVariant] = {
-    return pileups.groupBy (_.getPosition).map (_._2.toList).flatMap (callSNP)
+  override def call (pileups: RDD [ADAMPileup]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
+
+    log.info ("Grouping pileups by position.")
+    val pileupsByPos = pileups.groupBy ((r: ADAMPileup) => r.getPosition, reducePartitions).map (_._2.toList)
+    log.info (pileupsByPos.count.toString + " rods to call.")
+
+    log.info ("Calling SNPs on pileups and flattening.")
+    pileupsByPos.filter(_.length != 0)
+      .map (callSNP)
+      .filter (_._1.length == 1)
+      .map (kv => (kv._1 (0), kv._2))
   }
 }
 
