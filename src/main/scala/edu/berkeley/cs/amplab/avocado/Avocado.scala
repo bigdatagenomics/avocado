@@ -64,16 +64,32 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
   // companion object to this class - needed for AdamCommand framework
   val companion = Avocado
     
-  /* TODO: Add these steps in. Currently do not have any read based calls implemented,
-   * and are waiting on ADAM transformation pipeline to be completed.
+  /* TODO: Add these steps in. Currently do not have any read based calls implemented.
   def filterReads ()
   {
-  }
+  }*/
 
-  def processReads ()
-  {
+  /**
+   * Applies several pre-processing steps to the read pipeline. Currently, these are the default
+   * steps in the ADAM processing pipeline.
+   *
+   * @param[in] reads RDD of reads to process.
+   * @return RDD containing reads that have been sorted and deduped.
+   */
+  def processReads (reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
+    
+    // must sort reads before deduping them
+    val sortedReads = reads.adamSortReadsByReferencePosition ()
+
+    // dedupes reads across chromosomes
+    val dedupedReads = sortedReads.adamMarkDuplicates ()
+
+    // TODO: add in BQSR and indel realignment
+    // BQSR: need VCF to mark out sites
+    // Indel Realignment: waiting on algorithm in adam
+    
+    dedupedReads
   }
-  */
 
   /**
    * Function to pass over all pileups. Will either mark them for calling and provide a calling algorithm
@@ -162,6 +178,10 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     val readCount = reads.count
 
     log.info ("Read " + readCount + " reads from " + args.readInput)
+
+    // apply read translation steps
+    log.info ("Processing reads.")
+    val cleanedReads = processReads (reads)
     
     // TODO: add in read filtering stage
     //val readsToCall = reads.filter (v => false)
@@ -169,7 +189,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     log.info ("Translating reads into pileups.")
 
     // translate non-filtered reads into pileups
-    val pileups: RDD[ADAMPileup] = reads.adamRecords2Pileup ()
+    val pileups: RDD[ADAMPileup] = cleanedReads.adamRecords2Pileup ()
     val pileupCount = pileups.count ()
     Avocado.coverage = (pileupCount / reads.count ()).toInt
     Avocado.reducePartitions = pileups.partitions.length * Avocado.coverage / 2
