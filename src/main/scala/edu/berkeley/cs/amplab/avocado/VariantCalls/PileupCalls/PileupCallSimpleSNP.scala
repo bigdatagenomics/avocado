@@ -256,6 +256,8 @@ class PileupCallSimpleSNP extends PileupCall {
       .filter (_._1.length == 1)
       .map (kv => (kv._1 (0), kv._2))
   }
+
+  override def isCallable (): Boolean = true
 }
 
 
