@@ -28,7 +28,7 @@ import edu.berkeley.cs.amplab.adam.predicates.LocusPredicate
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMRecord, ADAMVariant, ADAMGenotype}
 import edu.berkeley.cs.amplab.adam.commands.{AdamSparkCommand, AdamCommandCompanion, ParquetArgs, SparkArgs}
 import edu.berkeley.cs.amplab.adam.util.{Args4j, Args4jBase}
-import edu.berkeley.cs.amplab.avocado.calls.pileup.{PileupCall, PileupCallSimpleSNP}
+import edu.berkeley.cs.amplab.avocado.calls.pileup.{PileupCall, PileupCallSimpleSNP, PileupCallSNPVCFForMAF}
 import edu.berkeley.cs.amplab.avocado.filters.pileup.{PileupFilter, PileupFilterOnMismatch}
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
 import edu.berkeley.cs.amplab.avocado.calls.reads.ReadCall
@@ -55,6 +55,9 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
 
   @Argument (metaVar = "GENOTYPES", required = true, usage = "ADAM genotype output", index = 2)
   var variantOutputG: String = _
+
+  @option (name = "-m", usage = "VCF formatted file containing MAFs as GMAF attribute")
+  var mafFileName: String = ""
 }
 
 class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [AvocadoArgs] with Logging {
@@ -100,7 +103,13 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
   def filterPileups (pileups: RDD[ADAMPileup]): Map [PileupCall, RDD [ADAMPileup]] = {
     
     // TODO: currently only supports a single filter and calling algorithm - need to extend
-    val call = new PileupCallSimpleSNP
+    // if -m use PileupCallVCF(
+    val call = if ( args.mafFileName == "" ) {
+      new PileupCallSimpleSNP
+    } else {
+      new PileupCallSNPVCFForMAF( args.mafFileName )
+    }
+
     val filter = new PileupFilterOnMismatch
     
     // run filter over input pileups, and assign a variant calling algorithm to them
