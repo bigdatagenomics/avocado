@@ -20,26 +20,28 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 import scala.math.{min,max}
+import edu.berkeley.cs.amplab.avocado.calls.reads.ReadCallUnspecified
+import edu.berkeley.cs.amplab.avocado.calls.pileup.PileupCallUnspecified
+import edu.berkeley.cs.amplab.avocado.calls.VariantCall
 
 /**
  * Enumeration for levels of complexity (high, medium, low).
  */
 object MapComplexity extends Enumeration {
-  type MapComplexity = Value
-  val High, Medium, Low = Value
+  val High, Low = Value
 }
 
 /**
  * Class that implements a complexity based read filter.
  */ 
-class ReadFilterOnComplexity extends ReadFilter {
+class ReadFilterOnComplexity (coverageThresholdHigh: Int,
+                              coverageThresholdLow: Int,
+                              mappingQualityThreshold: Int) extends ReadFilter {
 
   val filterName = "ComplexityRegions"
 
   val stripe = 1000
   val overlap = 100
-  val mappingQualityThreshold = 30
-  val coverageThreshold = 40
 
   /**
    * Calculates the complexity of a region. Uses the following heuristics:
@@ -50,18 +52,16 @@ class ReadFilterOnComplexity extends ReadFilter {
    * @param[in] reads A list of reads.
    * @return Tuple of region complexity and list of reads.
    */
-  def scoreComplexity (segment: (Int, List[ADAMRecord])): (Value, List[ADAMRecord]) = {
+  def scoreComplexity (segment: (Long, Seq[ADAMRecord])): (MapComplexity.Value, Seq[ADAMRecord]) = {
     val (segmentNumber, reads) = segment
     val segmentStart = segmentNumber * stripe
     val segmentEnd = (segmentNumber + 1) * stripe
-    val complexity = reads.map (_.mapq).reduce (_ + _) / reads.length
+    val complexity = reads.map (_.getMapq).reduce (_ + _) / reads.length
     val coverage = reads.map (v => min (v.getStart + v.getSequence.length, segmentEnd) - max (v.getStart, segmentStart))
                         .reduce (_ + _) / reads.length
 
-    if (complexity >= mappingQualityThreshold && coverage >= coverageThreshold) {
+    if (complexity < mappingQualityThreshold || (coverage > coverageThresholdHigh) || (coverage < coverageThresholdLow)) {
       return (MapComplexity.High, reads)
-    } else if (complexity >= mappingQualityThreshold || coverage >= coverageThreshold) {
-      return (MapComplexity.Medium, reads)
     } else {
       return (MapComplexity.Low, reads)
     }
@@ -73,14 +73,29 @@ class ReadFilterOnComplexity extends ReadFilter {
    * @param[in] reads An RDD containing reads.
    * @return An RDD containing lists of reads.
    */
-  def filter (reads: RDD [ADAMRecord]): RDD [ADAMRecord] = {
+  def filter (reads: RDD [ADAMRecord]): Map[VariantCall, RDD[ADAMRecord]] = {
 
+    var callMap = Map[VariantCall, RDD[ADAMRecord]]()
+    
     /* split into windows of reads
      * FIXME: add overlap on windows
      */
     val segments = reads.groupBy (v => v.getStart / stripe)
     
-    /* compute complexity value, group by complexity, and return */
-    return segments.map (scoreComplexity).reduceByKey (_ :: _)
+    // compute complexity value, group by complexity, and return
+    val segmentsByComplexity = segments.map (scoreComplexity)
+
+    // call high compexity regions with a read call
+    val readCallRegions = segmentsByComplexity.filter (_._1 == MapComplexity.High)
+      .flatMap (_._2)
+    callMap += (new ReadCallUnspecified -> readCallRegions)
+
+    // call low complexity regions with a pileup call
+    val pileupCallRegions = segmentsByComplexity.filter (_._1 == MapComplexity.Low)
+      .flatMap (_._2)
+    callMap += (new PileupCallUnspecified -> pileupCallRegions)
+
+    // return call map
+    callMap
   }
 }

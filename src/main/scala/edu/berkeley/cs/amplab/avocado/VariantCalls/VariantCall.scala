@@ -14,25 +14,22 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.filters.reads
+package edu.berkeley.cs.amplab.avocado.calls
 
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, ADAMGenotype}
+import edu.berkeley.cs.amplab.avocado.Avocado
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.avocado.calls.VariantCall
 
 /**
- * Abstract class for filtering reads.
+ * Abstract class for calling variants on reads. 
  */
-abstract class ReadFilter extends Serializable with Logging {
+abstract class VariantCall extends Serializable with Logging {
 
-  val filterName: String
+  val callName: String
 
-  /**
-   * Method signature for filter operation.
-   *
-   * @param[in] reads An RDD containing reads.
-   * @return An RDD containing lists of reads.
-   */
-  def filter (reads: RDD [ADAMRecord]): Map[VariantCall, RDD [ADAMRecord]]
+  def isReadCall (): Boolean
+  def isPileupCall (): Boolean
+  def isCallable (): Boolean
 }
+

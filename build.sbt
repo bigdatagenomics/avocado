@@ -14,8 +14,6 @@ classpathTypes ++= Set ("orbit")
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
-excludeFilter := "ReadFilterOnComplexity.scala"
-
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "0.8.0-incubating",
   "org.scalatest" %% "scalatest" % "1.9.1" % "test",
@@ -36,7 +34,7 @@ resolvers ++= Seq(
   "Typesafe" at "http://repo.typesafe.com/typesafe/releases",
   "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots/",
   "Spray" at "http://repo.spray.cc",
-  "Local" at "file:///Users/brielinbrown/.m2/repository",
+  "Local" at "file:///Users/fnothaft/.m2/repository",
   "massie-maven" at "http://www.cs.berkeley.edu/~massie/maven/",
   "apache" at "https://repository.apache.org/content/repositories/releases",
   "hadoop-bam" at "http://hadoop-bam.sourceforge.net/maven/"
