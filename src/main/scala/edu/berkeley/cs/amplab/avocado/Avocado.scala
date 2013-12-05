@@ -33,7 +33,7 @@ import edu.berkeley.cs.amplab.avocado.calls.pileup.{PileupCall, PileupCallSimple
 import edu.berkeley.cs.amplab.avocado.filters.pileup.{PileupFilter, PileupFilterOnMismatch}
 import edu.berkeley.cs.amplab.avocado.filters.reads.{ReadFilter, ReadFilterOnComplexity}
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
-import edu.berkeley.cs.amplab.avocado.calls.reads.{ReadCall, ReadCallUnspecified}
+import edu.berkeley.cs.amplab.avocado.calls.reads.{ReadCall, ReadCallAssemblyPhaser, ReadCallUnspecified}
 import edu.berkeley.cs.amplab.avocado.calls.VariantCall
 import java.io.File
 
