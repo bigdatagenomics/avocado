@@ -34,9 +34,16 @@ import scala.collection.JavaConversions._
  * we assume a MAF of 1 in 10. We only call the genotype if the likelihood has a phred score greater than or equal to 30.
  * At the current point in time, we assume that we are running on a diploid organism.
  */
-class PileupCallSNPVCFForMAF extends PileupCallSimpleSNP {
+class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
   
   override val callName = "SNPVCFForMAF"
+  
+  def loadMaf (fileName: String, sc: SparkContext): Map[Long,Double] = {
+    val minMaf = 0.001
+    val mafs = sc.newAPIHadoopFile[org.apache.hadoop.io.LongWritable, fi.tkk.ics.hadoop.bam.VariantContextWritable, fi.tkk.ics.hadoop.bam.VCFInputFormat](fileName).
+    	map( rec => (rec._2.get().getStart().toLong , rec._2.get().getAttributeAsDouble("GMAF", minMaf)) ).collect().toMap
+    return mafs
+  }
 
   /**
    * Calls a SNP for a single pileup, if there is sufficient evidence of a mismatch from the reference.
@@ -46,8 +53,8 @@ class PileupCallSNPVCFForMAF extends PileupCallSimpleSNP {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  override protected def callSNP (pileup: List[ADAMPileup]): (List[ADAMVariant], List[ADAMGenotype]) = {
-	
+  protected def callSNP (pileup: List[ADAMPileup], mafs: Map[Long,Double] ): (List[ADAMVariant], List[ADAMGenotype]) = {
+
     // get a count of the total number of bases that are a mismatch with the reference
     val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
       .groupBy(_.getReadBase)
@@ -75,12 +82,37 @@ class PileupCallSNPVCFForMAF extends PileupCallSimpleSNP {
     var likelihood = scoreGenotypeLikelihoods (pileup) 
       
     // compensate likelihoods by minor allele frequency - get from vcf
-    likelihood (0) = likelihood (0) * pow ((1.0), 2.0)
-    likelihood (1) = likelihood (1) * (1.0)
-    likelihood (2) = likelihood (2) * pow (1.0, 2.0)
+    val position = pileup.head.getPosition()
+    val m = mafs(position)
+    likelihood (0) = likelihood (0) * pow ((1.0-m), 2.0)
+    likelihood (1) = likelihood (1) * m * (1.0-m)
+    likelihood (2) = likelihood (2) * pow (m, 2.0)
 
     // write calls to list
     writeCallInfo (pileup.head, likelihood, maxNonRefBase)
+  }
+
+  /**
+   * Call variants using simple pileup based SNP calling algorithm.
+   *
+   * @param[in] pileupGroups An RDD containing lists of pileups.
+   * @return An RDD containing called variants.
+   */
+  override def call (pileups: RDD [ADAMPileup]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
+
+    val sc = pileups.context
+    val maf = loadMaf (fileName, sc)
+    val bcastMaf = sc.broadcast(maf)
+
+    log.info ("Grouping pileups by position.")
+    val pileupsByPos = pileups.groupBy ((r: ADAMPileup) => r.getPosition, reducePartitions).map (_._2.toList)
+    log.info (pileupsByPos.count.toString + " rods to call.")
+
+    log.info ("Calling SNPs on pileups and flattening.")
+    pileupsByPos.filter(_.length != 0)
+      .map (p => callSNP(p, bcastMaf.value))
+      .filter (_._1.length == 1)
+      .map (kv => (kv._1 (0), kv._2))
   }
 }
 
