@@ -32,7 +32,9 @@ import scala.collection.JavaConversions._
  * genetical parameter estimation from sequencing data." Bioinformatics 27.21 (2011): 2987-2993.
  *
  * for a single sample. As we are taking in a single sample, we do not calculate a minor allele frequency (MAF); rather,
- * we assume a MAF of 1 in 10. We only call the genotype if the likelihood has a phred score greater than or equal to 30.
+ * we look up the MAF in a provided dbSNP vcf fil.e This provides MAF as the attribute MAF.
+ * NOTE: In calculations we use MAJOR allele freqency for consistency with SAMTools publications! 
+ * 
  * At the current point in time, we assume that we are running on a diploid organism.
  */
 class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
@@ -82,11 +84,12 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
     // score off of rod info
     var likelihood = scoreGenotypeLikelihoods (pileup) 
       
-    // compensate likelihoods by minor allele frequency - get from vcf
+    // compensate likelihoods by allele frequency - get from vcf
+    // NOTE: For consistency with SAMtools docs, we use MAJOR allele frequeny = 1 - maf
     val position = pileup.head.getPosition()
-    val m = mafs(position)
+    val m = 1.0 - mafs(position)
     likelihood (0) = likelihood (0) * pow ((1.0-m), 2.0)
-    likelihood (1) = likelihood (1) * m * (1.0-m)
+    likelihood (1) = likelihood (1) * 2.0 * m * (1.0-m)
     likelihood (2) = likelihood (2) * pow (m, 2.0)
 
     // write calls to list
