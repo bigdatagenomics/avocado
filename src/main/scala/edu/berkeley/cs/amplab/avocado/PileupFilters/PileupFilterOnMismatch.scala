@@ -18,7 +18,7 @@ package edu.berkeley.cs.amplab.avocado.filters.pileup
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMPileup
+import edu.berkeley.cs.amplab.adam.models.ADAMRod
 
 /**
  * Class implementing a filter that only returns Pileups that contain
@@ -34,25 +34,18 @@ class PileupFilterOnMismatch extends PileupFilter {
    * @param[in] pileups An RDD containing reference oriented stacks of nucleotides.
    * @return An RDD containing only pileups that contain at least one mismatch.
    */
-  override def filter (pileups: RDD [ADAMPileup]): RDD [ADAMPileup] = {
+  override def filter (pileups: RDD [ADAMRod]): RDD [ADAMRod] = {
 
-    val pileupsGroupedByPosition = pileups.groupBy ((pileup: ADAMPileup) => pileup.getPosition.toLong, reducePartitions)
-    val positionCount = pileupsGroupedByPosition.count
-
-    log.info (positionCount.toString + " rods to filter.")
+    log.info (pileups.count.toString + " rods to filter.")
       
-    val multipleEvidence = pileupsGroupedByPosition.filter ((kv: (Long, Seq[ADAMPileup])) => kv._2.length > 1)
-      .map (kv => (kv._1, kv._2.toList))
-      .flatMap ((kv: (Long, List[ADAMPileup])) => kv._2)
+    val multipleEvidence = pileups.filter ((p: ADAMRod) => p.pileups.length > 1)
 
     log.info (multipleEvidence.count.toString + " rods with evidence of multiple alleles.")
 
-    val singleEvidenceMismatch = pileupsGroupedByPosition.filter ((kv: (Long, Seq[ADAMPileup])) => kv._2.length == 1)
-      .map (kv => (kv._1, kv._2.toList))
-      .flatMap ((kv: (Long, List[ADAMPileup])) => kv._2)
-      .filter ((pileup: ADAMPileup) => pileup.getReadBase != pileup.getReferenceBase)
+    val singleEvidenceMismatch = pileups.filter ((p: ADAMRod) => p.pileups.length == 1)
+      .filter ((p: ADAMRod) => p.pileups.head.getReadBase != p.pileups.head.getReferenceBase)
 
-    log.info (singleEvidenceMismatch.toString + " rods with evidence of a single non-reference allele.")
+    log.info (singleEvidenceMismatch.count.toString + " rods with evidence of a single non-reference allele.")
 
     multipleEvidence ++ singleEvidenceMismatch
   }

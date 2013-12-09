@@ -19,6 +19,7 @@ package edu.berkeley.cs.amplab.avocado.calls.pileup
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, Base, ADAMGenotype, VariantType}
+import edu.berkeley.cs.amplab.adam.models.ADAMRod
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
 import scala.collection.mutable.MutableList
@@ -244,14 +245,12 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] pileupGroups An RDD containing lists of pileups.
    * @return An RDD containing called variants.
    */
-  override def call (pileups: RDD [ADAMPileup]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
+  override def call (pileups: RDD [ADAMRod]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
 
-    log.info ("Grouping pileups by position.")
-    val pileupsByPos = pileups.groupBy ((r: ADAMPileup) => r.getPosition, reducePartitions).map (_._2.toList)
-    log.info (pileupsByPos.count.toString + " rods to call.")
+    log.info (pileups.count.toString + " rods to call.")
 
     log.info ("Calling SNPs on pileups and flattening.")
-    pileupsByPos.filter(_.length != 0)
+    pileups.map (_.pileups)
       .map (callSNP)
       .filter (_._1.length == 1)
       .map (kv => (kv._1 (0), kv._2))

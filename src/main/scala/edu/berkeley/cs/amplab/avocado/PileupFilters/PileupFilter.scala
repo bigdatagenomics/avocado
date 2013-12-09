@@ -18,7 +18,7 @@ package edu.berkeley.cs.amplab.avocado.filters.pileup
 
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMPileup
+import edu.berkeley.cs.amplab.adam.models.ADAMRod
 import edu.berkeley.cs.amplab.avocado.Avocado
 
 /**
@@ -36,5 +36,5 @@ abstract class PileupFilter extends Serializable with Logging {
    * @param[in] pileups An RDD containing reference oriented stacks of nucleotides.
    * @return An RDD containing lists of pileups.
    */
-  def filter (pileups: RDD [ADAMPileup]): RDD [ADAMPileup]
+  def filter (pileups: RDD [ADAMRod]): RDD [ADAMRod]
 }
