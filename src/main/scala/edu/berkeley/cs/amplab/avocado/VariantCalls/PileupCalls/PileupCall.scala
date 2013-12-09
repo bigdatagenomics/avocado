@@ -17,8 +17,9 @@
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
 import edu.berkeley.cs.amplab.avocado.calls.VariantCall
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, ADAMGenotype}
 import edu.berkeley.cs.amplab.avocado.Avocado
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, ADAMGenotype}
+import edu.berkeley.cs.amplab.adam.models.ADAMRod
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
 
@@ -37,7 +38,7 @@ abstract class PileupCall extends VariantCall {
    * @param[in] pileups An RDD of pileups.
    * @return An RDD containing called variants.
    */
-  def call (pileups: RDD [ADAMPileup]): RDD [(ADAMVariant, List[ADAMGenotype])]
+  def call (pileups: RDD [ADAMRod]): RDD [(ADAMVariant, List[ADAMGenotype])]
 
   override def isReadCall (): Boolean = false
   override def isPileupCall (): Boolean = true
