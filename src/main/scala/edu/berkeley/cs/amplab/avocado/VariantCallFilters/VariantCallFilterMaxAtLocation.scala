@@ -41,7 +41,7 @@ class VariantCallFilterMaxAtLocation extends VariantCallFilter {
    * @return An RDD containing variants.
    */
   override def filter (variants: RDD [ADAMVariant]): RDD [ADAMVariant] = {
-    variants.groupBy (_.getStartPosition).filter (kv => kv._2.length <= ploidy)
+    variants.groupBy (_.getPosition).filter (kv => kv._2.length <= ploidy)
       .flatMap (kv => kv._2.toList)
   }
 

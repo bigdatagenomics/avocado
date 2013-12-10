@@ -18,7 +18,7 @@ package edu.berkeley.cs.amplab.avocado.calls.pileup
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, Base, ADAMGenotype, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, Base, ADAMGenotype, VariantType}
 import edu.berkeley.cs.amplab.adam.models.ADAMRod
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
@@ -57,7 +57,7 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] maxNonRefBase Highest likelihood base for mismatch.
    * @return List of variants called, with 0 (homozygous reference) or 1 entry.
    */
-  protected def writeCallInfo (pileupHead: ADAMPileup, likelihood: MutableList[Double], maxNonRefBase: Base): (List[ADAMVariant], List[ADAMGenotype]) = {
+  protected def writeCallInfo (pileupHead: ADAMPileup, likelihood: MutableList[Double], maxNonRefBase: Base): List[ADAMGenotype] = {
     assert (likelihood.length == 3)
 
     log.info ("Writing call info at " + pileupHead.getPosition)
@@ -77,47 +77,76 @@ class PileupCallSimpleSNP extends PileupCall {
       // hetereozygous
       // and, variant quality is >= threshold 
             
-      val genotype = ADAMGenotype.newBuilder ()
-	.setSampleId (pileupHead.getRecordGroupSample)
-	.setGenotype ("0,1")
-	.setPhredLikelihoods (heterozygousPhred.toString)
+      val genotypeRef = ADAMGenotype.newBuilder ()
+        .setReferenceId(pileupHead.getReferenceId)
+        .setReferenceName(pileupHead.getReferenceName)
+        .setPosition(pileupHead.getPosition)
+        .setSampleId (pileupHead.getRecordGroupSample)
+        .setAlleleVariantType(VariantType.SNP)
+        .setGenotypeQuality(heterozygousPhred)
+        .setPloidy(2)
+        .setHaplotypeNumber(0)
+        .setIsReference(true)
+        .setReferenceAllele(pileupHead.getReferenceBase.toString)
+        .setAllele(pileupHead.getReferenceBase.toString)
+        .setExpectedAlleleDosage(1.0)
+	.build()
+      val genotypeNonRef = ADAMGenotype.newBuilder ()
+        .setReferenceId(pileupHead.getReferenceId)
+        .setReferenceName(pileupHead.getReferenceName)
+        .setPosition(pileupHead.getPosition)
+        .setSampleId (pileupHead.getRecordGroupSample)
+        .setAlleleVariantType(VariantType.SNP)
+        .setGenotypeQuality(heterozygousPhred)
+        .setPloidy(2)
+        .setHaplotypeNumber(1)
+        .setIsReference(false)
+        .setReferenceAllele(pileupHead.getReferenceBase.toString)
+        .setAllele(maxNonRefBase.toString)
+        .setExpectedAlleleDosage(1.0)
 	.build()
 
-      val variant = ADAMVariant.newBuilder ()
-	.setReferenceName (pileupHead.getReferenceName)
-	.setStartPosition (pileupHead.getPosition)
-	.setReferenceAllele (pileupHead.getReferenceBase.toString)
-	.setAlternateAlleles (maxNonRefBase.toString)
-	.setAlleleCount (2)
-	.setType (VariantType.SNP)
-	.build()
-
-      (List (variant), List (genotype))
+      List (genotypeRef, genotypeNonRef)
     } else if (likelihood.indexOf (likelihood.max) == 2 &&
 	       homozygousNonPhred >= variantQuality) {
       // homozygous non reference
       // and, variant quality is >= threshold
       
-      val genotype = ADAMGenotype.newBuilder ()
-	.setSampleId (pileupHead.getRecordGroupSample)
-	.setGenotype ("1,1")
-	.setPhredLikelihoods (homozygousNonPhred.toString)
+            
+      val genotypeNonRef0 = ADAMGenotype.newBuilder ()
+        .setReferenceId(pileupHead.getReferenceId)
+        .setReferenceName(pileupHead.getReferenceName)
+        .setPosition(pileupHead.getPosition)
+        .setSampleId (pileupHead.getRecordGroupSample)
+        .setAlleleVariantType(VariantType.SNP)
+        .setGenotypeQuality(homozygousNonPhred)
+        .setPloidy(2)
+        .setHaplotypeNumber(0)
+        .setIsReference(false)
+        .setReferenceAllele(pileupHead.getReferenceBase.toString)
+        .setAllele(maxNonRefBase.toString)
+        .setExpectedAlleleDosage(1.0)
+	.build()
+      val genotypeNonRef1 = ADAMGenotype.newBuilder ()
+        .setReferenceId(pileupHead.getReferenceId)
+        .setReferenceName(pileupHead.getReferenceName)
+        .setPosition(pileupHead.getPosition)
+        .setSampleId (pileupHead.getRecordGroupSample)
+        .setAlleleVariantType(VariantType.SNP)
+        .setGenotypeQuality(homozygousNonPhred)
+        .setPloidy(2)
+        .setHaplotypeNumber(1)
+        .setIsReference(false)
+        .setReferenceAllele(pileupHead.getReferenceBase.toString)
+        .setAllele(maxNonRefBase.toString)
+        .setExpectedAlleleDosage(1.0)
 	.build()
 
-      val variant = ADAMVariant.newBuilder ()
-	.setReferenceName (pileupHead.getReferenceName)
-	.setStartPosition (pileupHead.getPosition)
-	.setReferenceAllele (pileupHead.getReferenceBase.toString)
-	.setAlternateAlleles (maxNonRefBase.toString)
-	.setAlleleCount (1)
-	.setType (VariantType.SNP)
-	.build()
-
-      (List (variant), List (genotype))
+      List (genotypeNonRef0, genotypeNonRef1)
     } else {
       // homozygous
       // or, variant quality is < threshold
-      (List [ADAMVariant] (), List [ADAMGenotype] ())
+      List [ADAMGenotype] ()
     }
   }
 
@@ -195,7 +224,7 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP (pileup: List[ADAMPileup]): (List[ADAMVariant], List[ADAMGenotype]) = {
+  protected def callSNP (pileup: List[ADAMPileup]): List[ADAMGenotype] = {
 	
     val loci = pileup.head.getPosition
     log.info ("Calling pileup at " + loci)
@@ -245,15 +274,15 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] pileupGroups An RDD containing lists of pileups.
    * @return An RDD containing called variants.
    */
-  override def call (pileups: RDD [ADAMRod]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
+  override def call (pileups: RDD [ADAMRod]): RDD [ADAMGenotype] = {
 
     log.info (pileups.count.toString + " rods to call.")
 
     log.info ("Calling SNPs on pileups and flattening.")
     pileups.map (_.pileups)
       .map (callSNP)
-      .filter (_._1.length == 1)
-      .map (kv => (kv._1 (0), kv._2))
+      .filter (_.length != 0)
+      .flatMap((p: List[ADAMGenotype]) => p)
   }
 
   override def isCallable (): Boolean = true

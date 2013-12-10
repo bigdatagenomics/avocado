@@ -18,7 +18,7 @@ package edu.berkeley.cs.amplab.avocado.calls.pileup
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,ADAMVariant,Base,ADAMGenotype,VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,Base,ADAMGenotype,VariantType}
 import edu.berkeley.cs.amplab.adam.models.ADAMRod
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
@@ -58,7 +58,7 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP (pileup: List[ADAMPileup], mafs: Map[Long,Double] ): (List[ADAMVariant], List[ADAMGenotype]) = {
+  protected def callSNP (pileup: List[ADAMPileup], mafs: Map[Long, Double]): List[ADAMGenotype] = {
 
     // get a count of the total number of bases that are a mismatch with the reference
     val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
@@ -104,7 +104,7 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
    * @param[in] pileupGroups An RDD containing lists of pileups.
    * @return An RDD containing called variants.
    */
-  override def call (pileups: RDD [ADAMRod]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
+  override def call (pileups: RDD [ADAMRod]): RDD [ADAMGenotype] = {
 
     val sc = pileups.context
     val maf = loadMaf (fileName, sc)
@@ -115,8 +115,8 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
     log.info ("Calling SNPs on pileups and flattening.")
     pileups.map (_.pileups)
       .map (p => callSNP(p, bcastMaf.value))
-      .filter (_._1.length == 1)
-      .map (kv => (kv._1 (0), kv._2))
+      .filter (_.length != 0)
+      .flatMap ((p: List[ADAMGenotype]) => p)
   }
 }
 
