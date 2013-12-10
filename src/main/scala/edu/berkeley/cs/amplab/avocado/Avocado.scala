@@ -26,13 +26,13 @@ import org.kohsuke.args4j.{Option => option, Argument}
 import org.apache.hadoop.mapreduce.Job
 import edu.berkeley.cs.amplab.adam.predicates.LocusPredicate
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMRecord, ADAMVariant, ADAMGenotype}
-import edu.berkeley.cs.amplab.adam.models.ADAMRod
+import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.adam.commands.{AdamSparkCommand, AdamCommandCompanion, ParquetArgs, SparkArgs}
 import edu.berkeley.cs.amplab.adam.util.{Args4j, Args4jBase}
+import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
 import edu.berkeley.cs.amplab.avocado.calls.pileup.{PileupCall, PileupCallSimpleSNP, PileupCallSNPVCFForMAF, PileupCallUnspecified}
 import edu.berkeley.cs.amplab.avocado.filters.pileup.{PileupFilter, PileupFilterOnMismatch}
 import edu.berkeley.cs.amplab.avocado.filters.reads.{ReadFilter, ReadFilterOnComplexity}
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
 import edu.berkeley.cs.amplab.avocado.calls.reads.{ReadCall, ReadCallAssemblyPhaser, ReadCallUnspecified}
 import edu.berkeley.cs.amplab.avocado.calls.VariantCall
 import java.io.File
@@ -55,10 +55,7 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
   var readInput: String = _
 
   @Argument (metaVar = "VARIANTS", required = true, usage = "ADAM variant output", index = 1)
-  var variantOutputV: String = _
-
-  @Argument (metaVar = "GENOTYPES", required = true, usage = "ADAM genotype output", index = 2)
-  var variantOutputG: String = _
+  var variantOutput: String = _
 
   @option (name = "-m", usage = "VCF formatted file containing MAFs as GMAF attribute")
   var mafFileName: String = ""
@@ -184,7 +181,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
    * @return Joined output of variant calling algorithms.
    */
   def callVariants (reads: Map [ReadCall, RDD [ADAMRecord]],
-		    pileups: Map [PileupCall, RDD [ADAMRod]]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
+		    pileups: Map [PileupCall, RDD [ADAMRod]]): RDD [ADAMGenotype] = {
     
     // filter out generic calls that are not callable
     val readsFiltered = reads.filter (_._1.isCallable)
@@ -324,8 +321,11 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     val pileupsToCall = filterPileups (pileupCalls)
 
     // call variants on filtered reads and pileups
-    val calledVariants = callVariants (readsToCall, pileupsToCall)
+    val calledGenotypes = callVariants (readsToCall, pileupsToCall)
     
+    // compute variants from genotypes
+    val calledVariants = calledGenotypes.adamConvertGenotypes()
+
     // TODO: clean up variant call filters and add filtering hook here
     if (args.logCounts) {
       val variantCount = calledVariants.count ()
@@ -334,8 +334,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     }
 
     // save variants to output file
-    calledVariants.map (_._1).adamSave (args.variantOutputV)
-    calledVariants.flatMap (_._2).adamSave (args.variantOutputG)
+    calledVariants.adamSave (args.variantOutput, args)
   }
 
 }

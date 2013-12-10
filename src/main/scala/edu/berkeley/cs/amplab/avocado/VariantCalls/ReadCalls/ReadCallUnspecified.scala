@@ -18,7 +18,7 @@ package edu.berkeley.cs.amplab.avocado.calls.reads
 
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMVariant, ADAMGenotype}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMGenotype}
 
 /**
  * Abstract class for calling variants on reads. 
@@ -30,7 +30,7 @@ class ReadCallUnspecified extends ReadCall {
   /**
    * Empty calling method.
    */
-  def call (pileupGroups: RDD [ADAMRecord]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
+  def call (pileupGroups: RDD [ADAMRecord]): RDD [ADAMGenotype] = {
     throw new IllegalArgumentException (callName + " is not callable.")
   }
 

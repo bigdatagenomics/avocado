@@ -16,7 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMVariant, ADAMGenotype, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMGenotype, VariantType}
 import edu.berkeley.cs.amplab.adam.util.{MdTag}
 import edu.berkeley.cs.amplab.avocado.utils.{Phred}
 import net.sf.samtools.{Cigar, CigarOperator, CigarElement, TextCigarCodec}
@@ -727,14 +727,7 @@ class ReadCallAssemblyPhaser extends ReadCall {
     kmer_graph
   }
 
-  def emitVariantCall(var_type: VariantType, var_length: Int, var_offset: Int, ref_offset: Int, var_sequence: String, ref_sequence: String, heterozygous_ref: Boolean, heterozygous_nonref: Boolean, phred: Int, ref_pos: Long, sample_name: String, ref_name: String): (ADAMVariant, List[ADAMGenotype]) = {
-    val (genotype_str, allele_count) = if (heterozygous_ref) {
-      ("0,1", 2)
-    } else if (!heterozygous_ref && !heterozygous_nonref) {
-      ("1,1", 2)
-    } else {
-      ("1,2", 3)
-    }
+  def emitVariantCall(var_type: VariantType, var_length: Int, var_offset: Int, ref_offset: Int, var_sequence: String, ref_sequence: String, heterozygous_ref: Boolean, heterozygous_nonref: Boolean, phred: Int, ref_pos: Long, sample_name: String, ref_name: String, ref_id: Int): List[ADAMGenotype] = {
     val ref_allele = if (var_type != VariantType.Insertion) {
       ref_sequence.substring(ref_offset, ref_offset + var_length)
     } else {
@@ -745,20 +738,76 @@ class ReadCallAssemblyPhaser extends ReadCall {
     } else {
       ""
     }
-    val genotype = ADAMGenotype.newBuilder
-        .setSampleId(sample_name)
-        .setGenotype(genotype_str)
-        .setPhredLikelihoods(phred.toString)
-        .build
-    val variant = ADAMVariant.newBuilder
+
+    if (heterozygous_ref) {
+      
+      val genotypeRef = ADAMGenotype.newBuilder ()
+        .setReferenceId(ref_id)
         .setReferenceName(ref_name)
-        .setStartPosition(ref_pos + ref_offset)
+        .setPosition(ref_pos)
+        .setSampleId (sample_name)
+        .setPloidy(2)
+        .setHaplotypeNumber(0)
+        .setGenotypeQuality(phred)
+        .setIsReference(true)
         .setReferenceAllele(ref_allele)
-        .setAlternateAlleles(alt_allele)
-        .setAlleleCount(allele_count)
-        .setType(var_type)
-        .build
-    (variant, List(genotype))
+        .setAllele(ref_allele)
+        .setExpectedAlleleDosage(1.0)
+        .setAlleleVariantType(var_type)
+	.build()
+      val genotypeNonRef = ADAMGenotype.newBuilder ()
+        .setReferenceId(ref_id)
+        .setReferenceName(ref_name)
+        .setPosition(ref_pos)
+        .setSampleId (sample_name)
+        .setPloidy(2)
+        .setHaplotypeNumber(1)
+        .setGenotypeQuality(phred)
+        .setIsReference(false)
+        .setReferenceAllele(ref_allele)
+        .setAllele(alt_allele)
+        .setExpectedAlleleDosage(1.0)
+        .setAlleleVariantType(var_type)
+	.build()
+
+      List(genotypeRef, genotypeNonRef)
+    } else if (!heterozygous_ref && !heterozygous_nonref) {
+      
+      val genotypeNonRef0 = ADAMGenotype.newBuilder ()
+        .setReferenceId(ref_id)
+        .setReferenceName(ref_name)
+        .setPosition(ref_pos)
+        .setSampleId (sample_name)
+        .setPosition(ref_pos)
+        .setSampleId (sample_name)
+        .setPloidy(2)
+        .setHaplotypeNumber(0)
+        .setGenotypeQuality(phred)
+        .setIsReference(false)
+        .setReferenceAllele(ref_allele)
+        .setAllele(alt_allele)
+        .setExpectedAlleleDosage(1.0)
+        .setAlleleVariantType(var_type)
+	.build()
+      val genotypeNonRef1 = ADAMGenotype.newBuilder ()
+        .setReferenceId(ref_id)
+        .setReferenceName(ref_name)
+        .setPosition(ref_pos)
+        .setSampleId (sample_name)
+        .setPloidy(2)
+        .setHaplotypeNumber(1)
+        .setGenotypeQuality(phred)
+        .setIsReference(false)
+        .setReferenceAllele(ref_allele)
+        .setAllele(alt_allele)
+        .setExpectedAlleleDosage(1.0)
+        .setAlleleVariantType(var_type)
+	.build()
+
+      List(genotypeNonRef0, genotypeNonRef1)
+    } else {
+      List[ADAMGenotype]()
+    }
   }
 
   /**
@@ -767,7 +816,7 @@ class ReadCallAssemblyPhaser extends ReadCall {
    * C.A. Albers, G. Lunter, D.G. MacArthur, G. McVean, W.H. Ouwehand, R. Durbin.
    * "Dindel: Accurate indel calls from short-read data." Genome Research 21 (2011).
    */
-  def phaseAssembly(region: Seq[ADAMRecord], kmer_graph: KmerGraph, ref: String): Seq[(ADAMVariant, List[ADAMGenotype])] = {
+  def phaseAssembly(region: Seq[ADAMRecord], kmer_graph: KmerGraph, ref: String): List[ADAMGenotype] = {
     var ref_haplotype = new Haplotype(ref)
 
     // Score all haplotypes against the reads.
@@ -845,11 +894,12 @@ class ReadCallAssemblyPhaser extends ReadCall {
 
     // TODO(peter, 12/8) Call variants, _without_ incorporating phasing for now.
     if (called_haplotype_pair != null) {
-      var variants = new ArrayBuffer[(ADAMVariant, List[ADAMGenotype])]
+      var variants = List[ADAMGenotype]()
       val sorted_region = region.sortBy(_.getStart)
       val first_read = sorted_region(0)
       val ref_pos = first_read.getStart
       val ref_name = first_read.getReferenceName.toString
+      val ref_id = first_read.getReferenceId
       val sample_name = first_read.getRecordGroupSample.toString
       var called_haplotypes = new HashSet[Haplotype]
       val called_haplotype1 = called_haplotype_pair.haplotype1
@@ -884,8 +934,8 @@ class ReadCallAssemblyPhaser extends ReadCall {
                                             heterozygous_nonref,
                                             variant_phred,
                                             ref_pos,
-                                            sample_name, ref_name)
-              variants += variant
+                                            sample_name, ref_name, ref_id)
+              variants ::: variant
             }
             if (move != 'D') {
               variant_offset += variant_length
@@ -909,7 +959,7 @@ class ReadCallAssemblyPhaser extends ReadCall {
    * @param[in] pileupGroups An RDD containing reads.
    * @return An RDD containing called variants.
    */
-  override def call(reads: RDD[ADAMRecord]): RDD[(ADAMVariant, List[ADAMGenotype])] = {
+  override def call(reads: RDD[ADAMRecord]): RDD[ADAMGenotype] = {
     log.info("Grouping reads into active regions.")
     val active_regions = reads.groupBy(r => r.getStart / region_window)
                               .map(x => (getReference(x._2), x._2))
