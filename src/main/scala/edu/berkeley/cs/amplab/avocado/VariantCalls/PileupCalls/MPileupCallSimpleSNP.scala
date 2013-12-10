@@ -18,7 +18,7 @@ package edu.berkeley.cs.amplab.avocado.calls.pileup
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,ADAMVariant,Base,ADAMGenotype,VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, Base, ADAMGenotype, VariantType}
 import edu.berkeley.cs.amplab.adam.models.ADAMRod
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
@@ -31,24 +31,12 @@ import scala.collection.JavaConversions._
  * Li, Heng. "A statistical framework for SNP calling, mutation discovery, association mapping and population
  * genetical parameter estimation from sequencing data." Bioinformatics 27.21 (2011): 2987-2993.
  *
- * for a single sample. As we are taking in a single sample, we do not calculate a minor allele frequency (MAF); rather,
- * we look up the MAF in a provided dbSNP vcf fil.e This provides MAF as the attribute MAF.
- * NOTE: In calculations we use MAJOR allele freqency for consistency with SAMTools publications! 
- * 
- * At the current point in time, we assume that we are running on a diploid organism.
+ * for multiple samples. At the current point in time, we assume that we are running on a diploid organism,
+ * and that all sites are biallelic.
  */
-class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
+class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
   
-  override val callName = "SNPVCFForMAF"
-  
-  def loadMaf (fileName: String, sc: SparkContext): Map[Long,Double] = {
-    val minMaf = 0.001
-    val mafs = sc.newAPIHadoopFile[org.apache.hadoop.io.LongWritable, fi.tkk.ics.hadoop.bam.VariantContextWritable, fi.tkk.ics.hadoop.bam.VCFInputFormat](fileName)
-    	.map(rec => (rec._2.get().getStart().toLong, rec._2.get().getAttributeAsDouble("GMAF", minMaf)))
-        .collect()
-        .toMap
-    return mafs
-  }
+  override val callName = "MultipleSamplesSimpleSNP"
 
   /**
    * Calls a SNP for a single pileup, if there is sufficient evidence of a mismatch from the reference.
@@ -58,10 +46,13 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP (pileup: List[ADAMPileup], mafs: Map[Long,Double] ): (List[ADAMVariant], List[ADAMGenotype]) = {
-
+  protected def callSNP (pileup: ADAMRod): (List[ADAMVariant], List[ADAMGenotype]) = {
+	
+    val loci = pileup.position
+    log.info ("Calling pileup at " + loci)
+    
     // get a count of the total number of bases that are a mismatch with the reference
-    val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
+    val nonRefBaseCount = pileup.pileups.filter (r => r.getReadBase != r.getReferenceBase)
       .groupBy(_.getReadBase)
       .map(kv => (kv._1, kv._2.length))
 
@@ -81,21 +72,49 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
     }
 
     // reduce down to get the base with the highest count
-    val maxNonRefBase = nonRefBaseCount.reduce (pickMaxBase)._1
+    val maxNonRefBase = if (!nonRefBaseCount.isEmpty) {
+      nonRefBaseCount.reduce (pickMaxBase)._1
+    } else {
+      Base.N // TODO: add better exception handling code
+    }
+
+    val samples = pileup.splitBySamples
 
     // score off of rod info
-    var likelihood = scoreGenotypeLikelihoods (pileup) 
+    val likelihoods: Array[Array[(Double, Double, Double)]] = samples.map(_.pileups)
+      .map(scoreGenotypeLikelihoods)
+      .map(v => Array((v(0), v(1), v(2))))
+      .toArray
       
-    // compensate likelihoods by allele frequency - get from vcf
-    // NOTE: For consistency with SAMtools docs, we use MAJOR allele frequeny = 1 - maf
-    val position = pileup.head.getPosition()
-    val m = 1.0 - mafs(position)
-    likelihood (0) = likelihood (0) * pow ((1.0 - m), 2.0)
-    likelihood (1) = likelihood (1) * 2.0 * m * (1.0 - m)
-    likelihood (2) = likelihood (2) * pow (m, 2.0)
+    // run maf EM
+    val majAlleleFrequency = EMForAlleles.emForMAF(Array(1.0 - minorAlleleFrequency),
+                                      likelihoods)
 
-    // write calls to list
-    writeCallInfo (pileup.head, likelihood, maxNonRefBase)
+    def compensate (likelihood: Array[(Double, Double, Double)], maf: Double): Array[Double] = {
+      // compensate likelihoods by major allele frequency - eqn 19 from source
+      Array(likelihood (0)._1 * pow ((1.0 - maf), 2.0),
+            likelihood (0)._2 * 2.0 * maf * (1.0 - maf),
+            likelihood (0)._3 * pow (maf, 2.0))
+    }
+
+    // compensate genotypes by maf
+    val compensatedLikelihoods = likelihoods.map(compensate(_, majAlleleFrequency (0)))
+
+    // genotype/variant lists
+    var v = List[ADAMVariant]()
+    var g = List[ADAMGenotype]()
+    
+    // loop over samples and write calls to list
+    for (i <- 0 until likelihoods.length) {
+      val l = MutableList(compensatedLikelihoods(i):_*)
+
+      val (sv, sg): (List[ADAMVariant], List[ADAMGenotype]) = writeCallInfo (samples(i).pileups.head, l, maxNonRefBase)
+    
+      v = v ::: sv
+      g = g ::: sg
+    }
+
+    (v, g)
   }
 
   /**
@@ -106,18 +125,15 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
    */
   override def call (pileups: RDD [ADAMRod]): RDD [(ADAMVariant, List[ADAMGenotype])] = {
 
-    val sc = pileups.context
-    val maf = loadMaf (fileName, sc)
-    val bcastMaf = sc.broadcast(maf)
-
     log.info (pileups.count.toString + " rods to call.")
 
     log.info ("Calling SNPs on pileups and flattening.")
-    pileups.map (_.pileups)
-      .map (p => callSNP(p, bcastMaf.value))
+    pileups.map (callSNP)
       .filter (_._1.length == 1)
       .map (kv => (kv._1 (0), kv._2))
   }
+
+  override def isCallable (): Boolean = true
 }
 
 

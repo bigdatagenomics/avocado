@@ -232,7 +232,7 @@ class PileupCallSimpleSNP extends PileupCall {
       
     // compensate likelihoods by minor allele frequency - eqn 19 from source
     likelihood (0) = likelihood (0) * pow ((1.0 - minorAlleleFrequency), 2.0)
-    likelihood (1) = likelihood (1) * minorAlleleFrequency * (1.0 - minorAlleleFrequency)
+    likelihood (1) = likelihood (1) * 2.0 * minorAlleleFrequency * (1.0 - minorAlleleFrequency)
     likelihood (2) = likelihood (2) * pow (minorAlleleFrequency, 2.0)
 
     // write calls to list
