@@ -20,7 +20,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 import scala.math.{min,max}
-import edu.berkeley.cs.amplab.avocado.calls.reads.ReadCallUnspecified
+import edu.berkeley.cs.amplab.avocado.calls.reads.ReadCallAssemblyPhaser
 import edu.berkeley.cs.amplab.avocado.calls.pileup.PileupCallUnspecified
 import edu.berkeley.cs.amplab.avocado.calls.VariantCall
 
@@ -88,7 +88,7 @@ class ReadFilterOnComplexity (coverageThresholdHigh: Int,
     // call high compexity regions with a read call
     val readCallRegions = segmentsByComplexity.filter (_._1 == MapComplexity.High)
       .flatMap (_._2)
-    callMap += (new ReadCallUnspecified -> readCallRegions)
+    callMap += (new ReadCallAssemblyPhaser -> readCallRegions)
 
     // call low complexity regions with a pileup call
     val pileupCallRegions = segmentsByComplexity.filter (_._1 == MapComplexity.Low)
