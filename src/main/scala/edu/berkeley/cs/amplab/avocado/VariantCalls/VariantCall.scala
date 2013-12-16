@@ -17,6 +17,10 @@
 package edu.berkeley.cs.amplab.avocado.calls
 
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMVariant, ADAMGenotype}
+import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
+import edu.berkeley.cs.amplab.adam.projections.ADAMVariantField
+import edu.berkeley.cs.amplab.adam.rdd.GenotypesToVariantsConverter
+import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import edu.berkeley.cs.amplab.avocado.Avocado
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
@@ -27,6 +31,28 @@ import org.apache.spark.rdd.RDD
 abstract class VariantCall extends Serializable with Logging {
 
   val callName: String
+
+  final def genotypesToVariantContext(genotypes: List[ADAMGenotype],
+                                      samples: Int = 1): List[ADAMVariantContext] = {
+    
+    val conv = new GenotypesToVariantsConverter(false, false)
+
+    val grouped = genotypes.groupBy(g => (g.getReferenceId, g.getAllele))
+      .flatMap(kv => {
+        val (k, g) = kv
+        val sk = (k._1.toInt, k._2.toString)
+
+        try {
+          val v = conv.convertGenotypes(g, sk, None, Set[ADAMVariantField.Value](), g.length, samples)
+
+          Some(new ADAMVariantContext(g.head.getPosition, List(v), g, None))
+        } catch {
+          case _ => None
+        }
+      })
+    
+    grouped.toList
+  }
 
   def isReadCall (): Boolean
   def isPileupCall (): Boolean

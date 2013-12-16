@@ -27,6 +27,7 @@ import edu.berkeley.cs.amplab.adam.models.ADAMRod
 class PileupFilterOnMismatch extends PileupFilter {
 
   val filterName = "FilterOnMismatchSNP"
+  val debug = false
 
   /**
    * Filter to only return pileups with mismatches.
@@ -36,16 +37,22 @@ class PileupFilterOnMismatch extends PileupFilter {
    */
   override def filter (pileups: RDD [ADAMRod]): RDD [ADAMRod] = {
 
-    log.info (pileups.count.toString + " rods to filter.")
-      
+    if (debug) {
+      log.info (pileups.count.toString + " rods to filter.")
+    }
+
     val multipleEvidence = pileups.filter ((p: ADAMRod) => p.pileups.length > 1)
 
-    log.info (multipleEvidence.count.toString + " rods with evidence of multiple alleles.")
+    if (debug) {
+      log.info (multipleEvidence.count.toString + " rods with evidence of multiple alleles.")
+    }
 
     val singleEvidenceMismatch = pileups.filter ((p: ADAMRod) => p.pileups.length == 1)
       .filter ((p: ADAMRod) => p.pileups.head.getReadBase != p.pileups.head.getReferenceBase)
 
-    log.info (singleEvidenceMismatch.count.toString + " rods with evidence of a single non-reference allele.")
+    if (debug) {
+      log.info (singleEvidenceMismatch.count.toString + " rods with evidence of a single non-reference allele.")
+    }
 
     multipleEvidence ++ singleEvidenceMismatch
   }

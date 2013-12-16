@@ -34,8 +34,8 @@ object MapComplexity extends Enumeration {
 /**
  * Class that implements a complexity based read filter.
  */ 
-class ReadFilterOnComplexity (coverageThresholdHigh: Int,
-                              coverageThresholdLow: Int,
+class ReadFilterOnComplexity (coverageThresholdHigh: Double,
+                              coverageThresholdLow: Double,
                               mappingQualityThreshold: Int) extends ReadFilter {
 
   val filterName = "ComplexityRegions"
@@ -56,14 +56,16 @@ class ReadFilterOnComplexity (coverageThresholdHigh: Int,
     val (segmentNumber, reads) = segment
     val segmentStart = segmentNumber * stripe
     val segmentEnd = (segmentNumber + 1) * stripe
-    val complexity = reads.map (_.getMapq).reduce (_ + _) / reads.length
+    val complexity = reads.map (_.getMapq).reduce (_ + _).toDouble / reads.length.toDouble
     val coverage = reads.map (v => min (v.getStart + v.getSequence.length, segmentEnd) - max (v.getStart, segmentStart))
-                        .reduce (_ + _) / reads.length
+                        .reduce (_ + _).toDouble / stripe.toDouble
 
-    if (complexity < mappingQualityThreshold || (coverage > coverageThresholdHigh) || (coverage < coverageThresholdLow)) {
-      return (MapComplexity.High, reads)
+    if (complexity < mappingQualityThreshold.toDouble || (coverage > coverageThresholdHigh) || (coverage < coverageThresholdLow)) {
+      log.warn("High complexity segment " + segmentNumber + " has coverage " + coverage + " and complexity: " + complexity + ".") 
+      (MapComplexity.High, reads)
     } else {
-      return (MapComplexity.Low, reads)
+      log.warn("Low complexity segment " + segmentNumber + " has coverage " + coverage + " and complexity: " + complexity + ".") 
+      (MapComplexity.Low, reads)
     }
   }
 
