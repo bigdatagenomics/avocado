@@ -19,10 +19,7 @@ Avocado is currently in its infancy, but we hope to have something interesting t
 
 ## Building avocado
 
-avocado uses [sbt](http://www.scala-sbt.org/) to build. To build avocado, cd into the repository and run "sbt compile".
+avocado uses [Maven](http://maven.apache.org/) to build. To build avocado, cd into the repository and run "mvn package".
 
 Known issues with building:
-* There is a current issue where the first time that the project is built, it fails on the first build before succeeding on the second build. This is because of an issue with a local dependency, that should hopefully be fixed soon.
-* And... that local dependency is Adam. To install Adam locally, check out Adam and do "mvn package install" (for build instructions, see [the Adam readme](https://github.com/bigdatagenomics/adam)). We are picky though: currently, avocado depends on an Adam pull request that hasn't merged in yet. This pull request is available as the "avocado-patch" branch at [fnothaft/adam](https://github.com/fnothaft/adam).
-
-Standalone JARs are built using [sbt assembly](https://github.com/sbt/sbt-assembly). Once you have compiled, you can build the JAR by running "sbt assembly". Currently, the initial JAR takes about 10 minutes to build, but YMMV.
+* This project requires Adam as a local dependency. To install Adam locally, check out Adam and do "mvn package install" (for build instructions, see [the Adam readme](https://github.com/bigdatagenomics/adam)). We build off of the Adam trunk.
