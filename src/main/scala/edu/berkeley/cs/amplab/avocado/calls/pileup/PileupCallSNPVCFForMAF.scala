@@ -32,92 +32,50 @@ import scala.collection.JavaConversions._
  * genetical parameter estimation from sequencing data." Bioinformatics 27.21 (2011): 2987-2993.
  *
  * for a single sample. As we are taking in a single sample, we do not calculate a minor allele frequency (MAF); rather,
- * we look up the MAF in a provided dbSNP vcf fil.e This provides MAF as the attribute MAF.
+ * we look up the MAF in a provided dbSNP vcf file. This provides MAF as the attribute MAF.
  * NOTE: In calculations we use MAJOR allele freqency for consistency with SAMTools publications! 
  * 
  * At the current point in time, we assume that we are running on a diploid organism.
  */
-class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
+class PileupCallSNPVCFForMAF(sc: SparkContext, fileName: String) extends PileupCallSimpleSNP {
   
   override val callName = "SNPVCFForMAF"
+
+  val maf = loadMaf(fileName, sc)
+  val bcastMaf = sc.broadcast(maf)
   
   def loadMaf (fileName: String, sc: SparkContext): Map[Long,Double] = {
     val minMaf = 0.001
     val mafs = sc.newAPIHadoopFile[org.apache.hadoop.io.LongWritable, fi.tkk.ics.hadoop.bam.VariantContextWritable, fi.tkk.ics.hadoop.bam.VCFInputFormat](fileName)
-    	.map(rec => (rec._2.get().getStart().toLong, rec._2.get().getAttributeAsDouble("GMAF", minMaf)))
-        .collect()
-        .toMap
+      .map(rec =>(rec._2.get().getStart().toLong, rec._2.get().getAttributeAsDouble("GMAF", minMaf)))
+      .collect()
+      .toMap
+    
     return mafs
   }
 
   /**
-   * Calls a SNP for a single pileup, if there is sufficient evidence of a mismatch from the reference.
-   * Takes in a single pileup rod from a single sample at a single locus. For simplicity, we assume that
-   * all sites are biallelic.
-   * 
-   * @param[in] pileup List of pileups. Should only contain one rod.
-   * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
+   * Compensates likelihoods. Likelihoods are compensated by MAF data.
+   *
+   * @param likelihoods List of likelihood values.
+   * @param pileup List of pileups at this position.
+   * @return Likelihoods after compensation.
    */
-  protected def callSNP (pileup: List[ADAMPileup], mafs: Map[Long, Double]): List[ADAMVariantContext] = {
+  override def compensate(likelihoods: List[Double], pileup: List[ADAMPileup]): List[Double] = {
+    var compensatedLikelihoods = List[Double]()
 
-    // get a count of the total number of bases that are a mismatch with the reference
-    val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
-      .groupBy(_.getReadBase)
-      .map(kv => (kv._1, kv._2.length))
+    // get broadcast MAF values
+    val mafs = bcastMaf.value
 
-    /**
-     * Out of two Base, Int pairs, picks the one with the higher count.
-     *
-     * @param[in] kv1 Key/value pair containing a Base and it's count.
-     * @param[in] kv2 Key/value pair containing a Base and it's count.
-     * @return The key/value pair with the higher count.
-     */
-    def vPickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
-      if (kv1._2 > kv2._2) {
-	kv1
-      } else {
-	kv2
-      }
-    }
-
-    // reduce down to get the base with the highest count
-    val maxNonRefBase = nonRefBaseCount.reduce (vPickMaxBase)._1
-
-    // score off of rod info
-    var likelihood = scoreGenotypeLikelihoods (pileup) 
-      
     // compensate likelihoods by allele frequency - get from vcf
     // NOTE: For consistency with SAMtools docs, we use MAJOR allele frequeny = 1 - maf
     val position = pileup.head.getPosition()
     val m = 1.0 - mafs(position)
-    likelihood (0) = likelihood (0) * pow ((1.0 - m), 2.0)
-    likelihood (1) = likelihood (1) * 2.0 * m * (1.0 - m)
-    likelihood (2) = likelihood (2) * pow (m, 2.0)
-
-    // write calls to list
-    genotypesToVariantContext(writeCallInfo (pileup.head, likelihood, maxNonRefBase))
-  }
-
-  /**
-   * Call variants using simple pileup based SNP calling algorithm.
-   *
-   * @param[in] pileupGroups An RDD containing lists of pileups.
-   * @return An RDD containing called variants.
-   */
-  override def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
-
-    val sc = pileups.context
-    val maf = loadMaf (fileName, sc)
-    val bcastMaf = sc.broadcast(maf)
-
-    if (debug) {
-      log.info (pileups.count.toString + " rods to call.")
-    }
-      
-    log.info ("Calling SNPs on pileups and flattening.")
-    pileups.map (_.pileups)
-      .map (p => callSNP(p, bcastMaf.value))
-      .flatMap ((p: List[ADAMVariantContext]) => p)
+    compensatedLikelihoods = likelihoods(2) * pow(m, 2.0) :: compensatedLikelihoods
+    compensatedLikelihoods = likelihoods(1) * 2.0 * m * (1.0 - m) :: compensatedLikelihoods
+    compensatedLikelihoods = likelihoods(0) * pow((1.0 - m), 2.0) :: compensatedLikelihoods
+  
+    compensatedLikelihoods
   }
 }
 

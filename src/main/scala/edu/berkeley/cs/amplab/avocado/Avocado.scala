@@ -178,7 +178,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
         } else if (args.mafFileName == "") {
           new PileupCallSimpleSNP
         } else {
-          new PileupCallSNPVCFForMAF(args.mafFileName)
+          new PileupCallSNPVCFForMAF(pileups.context, args.mafFileName)
         }
         
         val filter = new PileupFilterOnMismatch
@@ -340,31 +340,23 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     // initial assignment of reads to variant calling algorithms
     val filteredReads = filterReads (cleanedReads)
 
-    if (args.nocall) {
-      filteredReads.foreach(kv => {
-        val (algo, rdd) = kv
-        println ("Filtered " + rdd.count + " reads to " + algo + ".")
-      })
-    } else {
-      // translate reads to pileups for pileup based algorithms
-      val (readsToCall, pileupCalls) = translateReadsToPileups (filteredReads)
-      
-      // apply filters to pileups 
-      val pileupsToCall = filterPileups (pileupCalls)
-      
-      // call variants on filtered reads and pileups
+    // translate reads to pileups for pileup based algorithms
+    val (readsToCall, pileupCalls) = translateReadsToPileups (filteredReads)
+    
+    // apply filters to pileups 
+    val pileupsToCall = filterPileups (pileupCalls)
+    
+    // call variants on filtered reads and pileups
       val calledVariants = callVariants (readsToCall, pileupsToCall)
 
-      // TODO: clean up variant call filters and add filtering hook here
-      /*if (args.logCounts) {
+    // TODO: clean up variant call filters and add filtering hook here
+    if (args.logCounts) {
       val variantCount = calledVariants.count ()
       
       log.info ("Writing out " + variantCount + " variants.")
-      /}*/
-            
-      // save variants to output file
-      calledVariants.adamSave (args.variantOutput, args)
     }
+    
+    // save variants to output file
+    calledVariants.adamSave (args.variantOutput, args)
   }
-
 }

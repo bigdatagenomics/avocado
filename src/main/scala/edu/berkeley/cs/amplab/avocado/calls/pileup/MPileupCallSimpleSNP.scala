@@ -38,6 +38,8 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
   
   override val callName = "MultipleSamplesSimpleSNP"
 
+  val minorAlleleFrequency = 0.1
+
   /**
    * Calls a SNP for a single pileup, if there is sufficient evidence of a mismatch from the reference.
    * Takes in a single pileup rod from a single sample at a single locus. For simplicity, we assume that
@@ -47,37 +49,6 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
   protected def callSNP (pileup: ADAMRod): List[ADAMVariantContext] = {
-	
-    val loci = pileup.position
-    log.info ("Calling pileup at " + loci)
-    
-    // get a count of the total number of bases that are a mismatch with the reference
-    val nonRefBaseCount = pileup.pileups.filter (r => r.getReadBase != r.getReferenceBase)
-      .groupBy(_.getReadBase)
-      .map(kv => (kv._1, kv._2.length))
-
-    /**
-     * Out of two Base, Int pairs, picks the one with the higher count.
-     *
-     * @param[in] kv1 Key/value pair containing a Base and it's count.
-     * @param[in] kv2 Key/value pair containing a Base and it's count.
-     * @return The key/value pair with the higher count.
-     */
-    def mPickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
-      if (kv1._2 > kv2._2) {
-	kv1
-      } else {
-	kv2
-      }
-    }
-
-    // reduce down to get the base with the highest count
-    val maxNonRefBase = if (!nonRefBaseCount.isEmpty) {
-      nonRefBaseCount.reduce (mPickMaxBase)._1
-    } else {
-      Base.N // TODO: add better exception handling code
-    }
-
     val samples = pileup.splitBySamples
 
     // score off of rod info
@@ -88,48 +59,34 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
       
     // run maf EM
     val majAlleleFrequency = EMForAlleles.emForMAF(Array(1.0 - minorAlleleFrequency),
-                                      likelihoods)
+                                                   likelihoods)
 
-    def compensate (likelihood: Array[(Double, Double, Double)], maf: Double): Array[Double] = {
+    def compensate (likelihood: Array[(Double, Double, Double)], maf: Double): List[Double] = {
       // compensate likelihoods by major allele frequency - eqn 19 from source
-      Array(likelihood (0)._1 * pow ((1.0 - maf), 2.0),
-            likelihood (0)._2 * 2.0 * maf * (1.0 - maf),
-            likelihood (0)._3 * pow (maf, 2.0))
+      List(likelihood(0)._1 * pow((1.0 - maf), 2.0),
+           likelihood(0)._2 * 2.0 * maf * (1.0 - maf),
+           likelihood(0)._3 * pow(maf, 2.0))
     }
 
     // compensate genotypes by maf
-    val compensatedLikelihoods = likelihoods.map(compensate(_, majAlleleFrequency (0)))
+    val compensatedLikelihoods = likelihoods.map(compensate(_, majAlleleFrequency(0)))
 
     // genotype/variant lists
     var g = List[ADAMGenotype]()
     
+    // get most often seen non-reference base
+    val maxNonRefBase = getMaxNonRefBase(pileup.pileups)
+    
     // loop over samples and write calls to list
     for (i <- 0 until likelihoods.length) {
-      val l = MutableList(compensatedLikelihoods(i):_*)
+      val l = compensatedLikelihoods(i)
 
-      val sg: List[ADAMGenotype] = writeCallInfo (samples(i).pileups.head, l, maxNonRefBase)
+      val sg: List[ADAMGenotype] = writeCallInfo(samples(i).pileups.head, l, maxNonRefBase)
     
       g = g ::: sg
     }
 
     genotypesToVariantContext(g, samples.length)
-  }
-
-  /**
-   * Call variants using simple pileup based SNP calling algorithm.
-   *
-   * @param[in] pileupGroups An RDD containing lists of pileups.
-   * @return An RDD containing called variants.
-   */
-  override def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
-
-    if (debug) {
-      log.info (pileups.count.toString + " rods to call.")
-    }
-
-    log.info ("Calling SNPs on pileups and flattening.")
-    pileups.map (callSNP)
-      .flatMap ((p: List[ADAMVariantContext]) => p)
   }
 
   override def isCallable (): Boolean = true

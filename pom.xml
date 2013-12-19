@@ -7,6 +7,13 @@
     <version>0.0.2</version>
     <packaging>jar</packaging>
     <name>avocado: A Variant Caller, Distributed</name>
+
+    <properties>
+        <java.version>1.6</java.version>
+        <scala.version>2.9.3</scala.version>
+        <adam.version>0.5.0-SNAPSHOT</adam.version>
+    </properties>
+
     <build>
         <plugins>
             <plugin>
@@ -102,6 +109,7 @@
                     </javacArgs>
                 </configuration>
             </plugin>
+
             <!-- disable surefire -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -111,6 +119,26 @@
                     <skipTests>true</skipTests>
                 </configuration>
             </plugin>
+            <!-- enable scalatest -->
+            <plugin>
+                <groupId>org.scalatest</groupId>
+                <artifactId>scalatest-maven-plugin</artifactId>
+                <version>1.0-RC2</version>
+                <configuration>
+                    <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
+                    <junitxml>.</junitxml>
+                    <filereports>ADAMTestSuite.txt</filereports>
+                    <argLine>-Xmx1024m</argLine>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>test</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
@@ -118,12 +146,18 @@
         <dependency>
             <groupId>edu.berkeley.cs.amplab.adam</groupId>
             <artifactId>adam-format</artifactId>
-            <version>0.5.0-SNAPSHOT</version>
+            <version>${adam.version}</version>
         </dependency>
         <dependency>
             <groupId>edu.berkeley.cs.amplab.adam</groupId>
             <artifactId>adam-commands</artifactId>
-            <version>0.5.0-SNAPSHOT</version>
+            <version>${adam.version}</version>
+        </dependency>
+        <dependency>
+          <groupId>org.scalatest</groupId>
+          <artifactId>scalatest_${scala.version}</artifactId>
+          <version>1.9.2</version>
+          <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
