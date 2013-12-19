@@ -19,7 +19,7 @@ package edu.berkeley.cs.amplab.avocado.calls.pileup
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, Base, ADAMGenotype, VariantType}
-import edu.berkeley.cs.amplab.adam.models.ADAMRod
+import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
 import scala.collection.mutable.MutableList
@@ -46,7 +46,7 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP (pileup: ADAMRod): List[ADAMGenotype] = {
+  protected def callSNP (pileup: ADAMRod): List[ADAMVariantContext] = {
 	
     val loci = pileup.position
     log.info ("Calling pileup at " + loci)
@@ -63,7 +63,7 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
      * @param[in] kv2 Key/value pair containing a Base and it's count.
      * @return The key/value pair with the higher count.
      */
-    def pickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
+    def mPickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
       if (kv1._2 > kv2._2) {
 	kv1
       } else {
@@ -73,7 +73,7 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
 
     // reduce down to get the base with the highest count
     val maxNonRefBase = if (!nonRefBaseCount.isEmpty) {
-      nonRefBaseCount.reduce (pickMaxBase)._1
+      nonRefBaseCount.reduce (mPickMaxBase)._1
     } else {
       Base.N // TODO: add better exception handling code
     }
@@ -112,7 +112,7 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
       g = g ::: sg
     }
 
-    g
+    genotypesToVariantContext(g, samples.length)
   }
 
   /**
@@ -121,14 +121,15 @@ class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
    * @param[in] pileupGroups An RDD containing lists of pileups.
    * @return An RDD containing called variants.
    */
-  override def call (pileups: RDD [ADAMRod]): RDD [ADAMGenotype] = {
+  override def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
 
-    log.info (pileups.count.toString + " rods to call.")
+    if (debug) {
+      log.info (pileups.count.toString + " rods to call.")
+    }
 
     log.info ("Calling SNPs on pileups and flattening.")
     pileups.map (callSNP)
-      .filter (_.length != 0)
-      .flatMap ((p: List[ADAMGenotype]) => p)
+      .flatMap ((p: List[ADAMVariantContext]) => p)
   }
 
   override def isCallable (): Boolean = true

@@ -19,7 +19,7 @@ package edu.berkeley.cs.amplab.avocado.calls.pileup
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,Base,ADAMGenotype,VariantType}
-import edu.berkeley.cs.amplab.adam.models.ADAMRod
+import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.avocado.utils.Phred
 import scala.math.pow
 import scala.collection.mutable.MutableList
@@ -58,7 +58,7 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
    * @param[in] pileup List of pileups. Should only contain one rod.
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP (pileup: List[ADAMPileup], mafs: Map[Long, Double]): List[ADAMGenotype] = {
+  protected def callSNP (pileup: List[ADAMPileup], mafs: Map[Long, Double]): List[ADAMVariantContext] = {
 
     // get a count of the total number of bases that are a mismatch with the reference
     val nonRefBaseCount = pileup.filter (r => r.getReadBase != r.getReferenceBase)
@@ -72,7 +72,7 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
      * @param[in] kv2 Key/value pair containing a Base and it's count.
      * @return The key/value pair with the higher count.
      */
-    def pickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
+    def vPickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
       if (kv1._2 > kv2._2) {
 	kv1
       } else {
@@ -81,7 +81,7 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
     }
 
     // reduce down to get the base with the highest count
-    val maxNonRefBase = nonRefBaseCount.reduce (pickMaxBase)._1
+    val maxNonRefBase = nonRefBaseCount.reduce (vPickMaxBase)._1
 
     // score off of rod info
     var likelihood = scoreGenotypeLikelihoods (pileup) 
@@ -95,7 +95,7 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
     likelihood (2) = likelihood (2) * pow (m, 2.0)
 
     // write calls to list
-    writeCallInfo (pileup.head, likelihood, maxNonRefBase)
+    genotypesToVariantContext(writeCallInfo (pileup.head, likelihood, maxNonRefBase))
   }
 
   /**
@@ -104,19 +104,20 @@ class PileupCallSNPVCFForMAF(fileName: String) extends PileupCallSimpleSNP {
    * @param[in] pileupGroups An RDD containing lists of pileups.
    * @return An RDD containing called variants.
    */
-  override def call (pileups: RDD [ADAMRod]): RDD [ADAMGenotype] = {
+  override def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
 
     val sc = pileups.context
     val maf = loadMaf (fileName, sc)
     val bcastMaf = sc.broadcast(maf)
 
-    log.info (pileups.count.toString + " rods to call.")
-
+    if (debug) {
+      log.info (pileups.count.toString + " rods to call.")
+    }
+      
     log.info ("Calling SNPs on pileups and flattening.")
     pileups.map (_.pileups)
       .map (p => callSNP(p, bcastMaf.value))
-      .filter (_.length != 0)
-      .flatMap ((p: List[ADAMGenotype]) => p)
+      .flatMap ((p: List[ADAMVariantContext]) => p)
   }
 }
 

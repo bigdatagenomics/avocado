@@ -16,8 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMGenotype
-import edu.berkeley.cs.amplab.adam.models.ADAMRod
+import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.avocado.Avocado
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
@@ -33,7 +32,7 @@ class PileupCallUnspecified extends PileupCall {
   /**
    * Empty calling method.
    */
-  override def call (pileups: RDD [ADAMRod]): RDD [ADAMGenotype] = {
+  override def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
     throw new IllegalArgumentException (callName + " is not callable.")
   }
 
