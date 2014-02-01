@@ -11,7 +11,7 @@
   <properties>
     <java.version>1.6</java.version>
     <scala.version>2.9.3</scala.version>
-    <adam.version>0.5.0-SNAPSHOT</adam.version>
+    <adam.version>0.6.1-SNAPSHOT</adam.version>
     <avro.version>1.7.4</avro.version>
   </properties>
 
@@ -152,6 +152,21 @@
     </plugins>
   </build>
 
+  <repositories> 
+    <repository>
+      <id>Sonatype</id>
+      <url>http://oss.sonatype.org/content/repositories/snapshots/</url>
+    </repository>
+    <repository>
+      <id>hadoop-bam</id>
+      <url>http://hadoop-bam.sourceforge.net/maven/</url>
+    </repository>
+    <repository>
+      <id>Apache</id>
+      <url>http://people.apache.org/repo/m2-snapshot-repository</url>
+    </repository>
+  </repositories>
+
   <dependencies>
     <dependency>
       <groupId>edu.berkeley.cs.amplab.adam</groupId>
@@ -160,7 +175,12 @@
     </dependency>
     <dependency>
       <groupId>edu.berkeley.cs.amplab.adam</groupId>
-      <artifactId>adam-commands</artifactId>
+      <artifactId>adam-core</artifactId>
+      <version>${adam.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <artifactId>adam-cli</artifactId>
       <version>${adam.version}</version>
     </dependency>
     <dependency>
@@ -173,6 +193,11 @@
       <groupId>commons-configuration</groupId>
       <artifactId>commons-configuration</artifactId>
       <version>1.10</version>
+    </dependency>
+    <dependency>
+      <groupId>args4j</groupId>
+      <artifactId>args4j</artifactId>
+      <version>2.0.23</version>
     </dependency>
   </dependencies>
 </project>

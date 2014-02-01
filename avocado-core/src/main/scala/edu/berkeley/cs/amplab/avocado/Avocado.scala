@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013. Regents of the University of California
+ * Copyright (c) 2013-2014. Regents of the University of California
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,36 +16,29 @@
 
 package edu.berkeley.cs.amplab.avocado
 
-import parquet.hadoop.{ParquetOutputFormat, ParquetInputFormat}
+import org.apache.commons.configuration.{HierarchicalConfiguration, DefaultConfigurationBuilder}
+import org.apache.hadoop.mapreduce.Job
+import org.apache.spark.RangePartitioner
+import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext._
 import org.apache.spark.{SparkContext, Logging}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.RangePartitioner
-import org.apache.hadoop.mapreduce.Job
-import parquet.avro.{AvroParquetOutputFormat, AvroWriteSupport, AvroReadSupport}
 import org.kohsuke.args4j.{Option => option, Argument}
-import org.apache.hadoop.mapreduce.Job
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMRecord, ADAMVariant, ADAMGenotype, ADAMFastaFragment}
+import edu.berkeley.cs.amplab.adam.cli.{AdamSparkCommand, AdamCommandCompanion, ParquetArgs, SparkArgs, Args4j, Args4jBase}
+import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext, ReferenceRegion}
 import edu.berkeley.cs.amplab.adam.predicates.LocusPredicate
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMRecord, ADAMVariant, ADAMGenotype}
-import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
-import edu.berkeley.cs.amplab.adam.commands.{AdamSparkCommand, AdamCommandCompanion, ParquetArgs, SparkArgs}
-import edu.berkeley.cs.amplab.adam.util.{Args4j, Args4jBase}
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
-import edu.berkeley.cs.amplab.avocado.calls.pileup.{PileupCall, PileupCallSimpleSNP, PileupCallSNPVCFForMAF, PileupCallUnspecified, MPileupCallSimpleSNP}
-import edu.berkeley.cs.amplab.avocado.filters.pileup.{PileupFilter, PileupFilterOnMismatch}
-import edu.berkeley.cs.amplab.avocado.filters.reads.{ReadFilter, ReadFilterOnComplexity}
-import edu.berkeley.cs.amplab.avocado.calls.reads.{ReadCall, ReadCallAssemblyPhaser, ReadCallUnspecified}
-import edu.berkeley.cs.amplab.avocado.calls.VariantCall
-import java.io.File
+import edu.berkeley.cs.amplab.avocado.calls.{VariantCall, VariantCaller}
+import edu.berkeley.cs.amplab.avocado.partitioners.Partitioner
+import edu.berkeley.cs.amplab.avocado.preprocessing.Preprocessor
+import edu.berkeley.cs.amplab.avocado.postprocessing.Postprocessor
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
 
 object Avocado extends AdamCommandCompanion {
 
   val commandName = "Avocado"
-  val commandDescription = "Call variants using the Avocado system."
+  val commandDescription = "Call variants using avocado and the ADAM preprocessing pipeline."
 
-  var coverage = 15
-  var reducePartitions = 15
-  
   def apply (args: Array[String]) = {
     new Avocado (Args4j[AvocadoArgs](args))
   }
@@ -55,47 +48,17 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
   @Argument (metaVar = "READS", required = true, usage = "ADAM read-oriented data", index = 0)
   var readInput: String = _
 
-  @Argument (metaVar = "VARIANTS", required = true, usage = "ADAM variant output", index = 1)
+  @Argument (metaVar = "REFERENCE", required = true, usage = "ADAM reference genome data", index = 1)
+  var referenceInput: String = _
+
+  @Argument (metaVar = "VARIANTS", required = true, usage = "ADAM variant output", index = 2)
   var variantOutput: String = _
 
-  @option (name = "-m", usage = "VCF formatted file containing MAFs as GMAF attribute")
-  var mafFileName: String = ""
+  @Argument (metaVar = "CONFIG", required = true, usage = "avocado configuration file", index = 3)
+  var configFile: String = _
 
-  @option (name = "-bqsrVcf", usage = "VCF file for BQSR. If not provided, BQSR is not run, unless a VCF for MAF is provided.")
-  var bqsrFile: File = null
-
-  @option (name = "-locallyAssembleHighComplexity", usage = "Use local assembly for high complexity regions.")
-  var locallyAssembleHighComplexity = false
-
-  @option (name = "-locallyAssembleAll", usage = "Use local assembly for all reads. Takes precident over high complexity.")
-  var locallyAssembleAll = false
-
-  @option (name = "-aggregatePileups", usage = "Aggregates pileups wherever possible.")
-  var aggregatePileups = false
-
-  @option (name = "-coverageTolerance", usage = "Coverage tolerance for complexity filter. Default value = 0.5 (50%)")
-  var coverageTolerance = 0.1
- 
-  @option (name = "-mappingThreshold", usage = "Mapping quality threshold for complexity filter. Default value = PHRED 30.")
-  var mappingThreshold = 30
-
-  @option (name = "-logCounts", usage = "If set, logs the count of operations during operation.")
-  var logCounts = false
-
-  @option (name = "-mpileup", usage = "If set, calls pileups on multiple samples.")
-  var mpileup = false
-
-  @option (name = "-nocall", usage = "Reports filtering statistics.")
-  var nocall = false
-
-  @option (name = "-noprocess", usage = "Perform no preprocessing.")
-  var noprocess = false
-
-  @option (name = "-cores", usage = "Number of threads to use.")
-  var cores = -1
-
-  @option (name = "-stripe", usage = "Striping for variant/genotypes.")
-  var stripe = 10000
+  @option (name = "-debug", usage = "If set, prints a higher level of debug output.")
+  var debug = false
 }
 
 class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [AvocadoArgs] with Logging {
@@ -104,259 +67,188 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
 
   // companion object to this class - needed for AdamCommand framework
   val companion = Avocado
+
+  // get config
+  val configFactory = new DefaultConfigurationBuilder(args.configFile)
+  val config: HierarchicalConfiguration = configFactory.getConfiguration(true)
+
+  val preprocessorNames = getStringArrayFromConfig("preprocessorNames")
+  val preprocessorAlgorithms = getStringArrayFromConfig("preprocessorAlgorithms")
+  assert(preprocessorNames.length == preprocessorAlgorithms.length,
+         "Must have a 1-to-1 mapping between preprocessor names and algorithms.")
+  val preprocessingStagesZippedWithNames = preprocessorNames.zip(preprocessorAlgorithms)
     
+  val callNames = getStringArrayFromConfig("callNames")
+  val callAlgorithms = getStringArrayFromConfig("callAlgorithms")
+  assert(callNames.length == callAlgorithms.length,
+         "Must have a 1-to-1 mapping between variant call names and algorithms.")
+  val callZipped = callNames.zip(callAlgorithms)
+
+  val partitionerNames = getStringArrayFromConfig("partitionerNames")
+  val partitionerAlgorithms = getStringArrayFromConfig("partitionerAlgorithms")
+  assert(partitionerNames.length == partitionerAlgorithms.length,
+         "Must have a 1-to-1 mapping between partitioner names and algorithms.")
+  val partitionsZipped = partitionerNames.zip(partitionerAlgorithms)
+
+  val postprocessorNames = getStringArrayFromConfig("postprocessorNames")
+  val postprocessorAlgorithms = getStringArrayFromConfig("postprocessorAlgorithms")
+  assert(postprocessorNames.length == postprocessorAlgorithms.length,
+         "Must have a 1-to-1 mapping between postprocessor names and algoritms.")
+  val postprocessorsZipped = postprocessorNames.zip(postprocessorAlgorithms)
+
+  assert(callZipped.length == partitionsZipped.length,
+         "Must have a 1-to-1 mapping between partitioners and calls.")
+  
+  private def getStringArrayFromConfig(name: String): Array[String] = {
+    config.getStringArray(name).map(_.toString)
+  }
+
   /**
    * Assigns reads to a variant calling algorithm.
    *
    * @param reads An RDD of raw reads.
    * @return A map that maps RDDs of reads to variant calling algorithms.
    */
-  def filterReads (reads: RDD[ADAMRecord]): Map[VariantCall, RDD[ADAMRecord]] = {
-    if (args.locallyAssembleAll) {
-      Map[VariantCall, RDD[ADAMRecord]](new ReadCallUnspecified -> reads)
-    } else if (args.locallyAssembleHighComplexity) {
-      // set coverage threshold
-      val coverageHigh = (Avocado.coverage * (1.0 + args.coverageTolerance)).toInt
-      val coverageLow = (Avocado.coverage * (1.0 - args.coverageTolerance)).toInt
+  def partitionReads (reads: RDD[ADAMRecord],
+                      stats: AvocadoConfigAndStats): Map[VariantCall, RDD[ADAMRecord]] = {
+    var rdd = reads.keyBy(r => ReferenceRegion(r))
+      .filter(kv => kv._1.isDefined)
+      .map(kv => (kv._1.get, kv._2))
+      .cache()
+    var callsets = List[(VariantCall, RDD[ADAMRecord])]()
+    val partitioners = partitionsZipped.map(p => Partitioner(reads, config, p._1, p._2, stats))
+    val partitionersZippedWithCalls = partitioners.zip(callZipped)
 
-      val filter = new ReadFilterOnComplexity (coverageHigh, coverageLow, args.mappingThreshold)
-      filter.filter (reads)
-    } else {
-      // no read based calls
-      Map[VariantCall, RDD[ADAMRecord]](new PileupCallUnspecified -> reads)
-    }
+    // loop over specified partitioner algorithms
+    partitionersZippedWithCalls.foreach(kv => {
+      // extract partitioner and call
+      val (p, (callName, callAlg)) = kv
+
+      // generate partition set from current read set
+      val partitions = p.computePartitions()
+      
+      // generate variant caller
+      val call = VariantCaller(callName, callAlg, stats, config)
+     
+      // filter reads that are in the partition into a new call set and add the call
+      callsets = (call, rdd.filter(kv => partitions.isInSet(kv._1)).map(kv => kv._2)) :: callsets
+
+      // filter out reads that are wholly contained in the last partitoner
+      rdd = rdd.filter(kv => partitions.isOutsideOfSet(kv._1))
+    })
+    
+    // filter out variant calls that are not actually callable
+    callsets.toMap.filterKeys(k => k.isCallable)
   }
 
   /**
    * Applies several pre-processing steps to the read pipeline. Currently, these are the default
    * steps in the ADAM processing pipeline.
    *
-   * @param[in] reads RDD of reads to process.
+   * @param reads RDD of reads to process.
    * @return RDD containing reads that have been sorted and deduped.
    */
-  def processReads (reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
-    
-    val dedupedReads = reads.adamMarkDuplicates ()
-    
-    // if vcf is provided for bqsr or maf, run bqsr - prefer bqsr argument
-    val bqsrReads = if (args.bqsrFile != null) {
-      dedupedReads.adamBQSR (args.bqsrFile)
-    } else if (args.mafFileName != "") {
-      dedupedReads.adamBQSR (new File (args.mafFileName))
-    } else {
-      dedupedReads
-    }
+  def preProcessReads (reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
+    var processedReads = reads.cache
 
-    // TODO: add in indel realignment
-    // Indel Realignment: waiting on algorithm in adam
-    
-    // must sort reads before deduping them
-    val sortedReads = bqsrReads.adamSortReadsByReferencePosition ()
+    // loop over preprocessing stages and apply
+    preprocessingStagesZippedWithNames.foreach(p => {
+      val (stageAlgorithm, stageName) = p
 
-    // dedupes reads across chromosomes
-    sortedReads
-  }
-
-  /**
-   * Function to pass over all pileups. Will either mark them for calling and provide a calling algorithm
-   * for them, or will discard them.
-   *
-   * @param[in] pileups A Spark RDD containing pileups which are ready for calling.
-   */
-  def filterPileups (pileupMap: Map[PileupCall,RDD[ADAMRod]]): Map [PileupCall, RDD [ADAMRod]] = {
-    // loop over callset
-    pileupMap.map(kv => {
-      val (call, pileups) = kv
-
-      if (call.isCallable) {
-        // if already assigned a viable pileup call, return
-        kv
-      } else {
-        // if not, then provide a new call - if -m use PileupCallVCF
-        val call = if (args.mpileup) {
-          new MPileupCallSimpleSNP
-        } else if (args.mafFileName == "") {
-          new PileupCallSimpleSNP
-        } else {
-          new PileupCallSNPVCFForMAF(pileups.context, args.mafFileName)
-        }
-        
-        val filter = new PileupFilterOnMismatch
-        
-        // run filter over input pileups, and assign a variant calling algorithm to them
-        val filteredPileups: RDD [ADAMRod] = filter.filter (pileups)
-        
-        (call, filteredPileups)
-      }
+      // run this preprocessing stage
+      processedReads = Preprocessor(processedReads, stageName, stageAlgorithm, config)
     })
+
+    // return processed reads
+    processedReads
   }
 
   /**
    * Applies variant calling algorithms to reads and pileups. Reduces down and returns called variants.
    *
-   * @param[in] reads Map containing read calling algorithm and RDD record pairs.
-   * @param[in] pileups Map containing pileup calling algorithm and RDD pileup pairs.
+   * @param callsets Map containing read calling algorithm and RDD record pairs.
    * @return Joined output of variant calling algorithms.
    */
-  def callVariants (reads: Map [ReadCall, RDD [ADAMRecord]],
-		    pileups: Map [PileupCall, RDD [ADAMRod]]): RDD [ADAMVariantContext] = {
-    
-    // filter out generic calls that are not callable
-    val readsFiltered = reads.filter (_._1.isCallable)
-    val pileupsFiltered = pileups.filter (_._1.isCallable)
+  def callVariants (callsets: Map[VariantCall, RDD[ADAMRecord]]): RDD[ADAMVariantContext] = {
+    // callset map must not be empty
+    assert(!callsets.isEmpty)
 
-    if (!readsFiltered.isEmpty && !pileupsFiltered.isEmpty) {
-      log.info (reads.size.toString + " read calls.")
-      log.info (pileups.size.toString + " pileup calls.")
+    // apply calls and take the union of variants called
+    callsets.map (pair => {
+      // get call and rdd pair
+      val (call, rdd) = pair
 
-      val readCalledVariants = reads.map (kv => {
-        log.info ("Calling variants on reads using: " + kv._1.callName)
-
-        kv._1.call (kv._2)
-      }).reduce (_ ++ _)
+      log.info("Running " + call.companion.callName)
       
-      val pileupCalledVariants = pileups.map (kv => {
-        log.info ("Calling variants on pileups using: " + kv._1.callName)
-
-        kv._1.call (kv._2)
-      }).reduce (_ ++ _)
-      
-      readCalledVariants ++ pileupCalledVariants
-    } else if (!readsFiltered.isEmpty) {
-      log.warn ("No pileups to call. Only calling reads.")
-      log.info (reads.size.toString + " read calls.")
-
-      reads.map (kv => {
-        log.info ("Calling variants on reads using: " + kv._1.callName)
-
-        kv._1.call (kv._2)
-      }).reduce (_ ++ _)
-    } else if (!pileupsFiltered.isEmpty) {
-      log.warn ("No reads to call. Only calling pileups.")
-      log.info (pileups.size.toString + " pileup calls.")
-
-      pileups.map (kv => {
-        log.info ("Calling variants on pileups using: " + kv._1.callName)
-
-        kv._1.call (kv._2)
-      }).reduce (_ ++ _)
-    } else {
-      throw new IllegalArgumentException ("Must have some inputs to call.")
-    }
+      // apply call
+      call.call (rdd)
+    }).reduce(_ ++ _)
   }
 
   /**
-   * Loops across all segregated calls. If call is a pileup based call, it converts its read set into pileups.
+   * Applies variant post-processing methods to called variants. Post-processing can
+   * include methods which modify the information in variant calls, or alternatively,
+   * methods that filter out spurious variant calls.
    *
-   * @param reads Map that maps variant calling algorithms to RDDs of reads.
-   * @return Tuple containing (Map of read based calls to RDDs of reads, Map of pileup based calls to RDDs of pileups).
+   * @param variants RDD of variants to process.
+   * @return Post-processed variants.
    */
-  def translateReadsToPileups (reads: Map[VariantCall,RDD[ADAMRecord]]): (Map[ReadCall,RDD[ADAMRecord]], Map[PileupCall,RDD[ADAMRod]]) = {
-    log.info ("Translating reads into pileups.")
+  def postProcessVariants (variants: RDD[ADAMVariantContext], stats: AvocadoConfigAndStats): RDD[ADAMVariantContext] = {
+    var rdd = variants.cache()
 
-    // separate out read and pileup calls
-    val readCalls: Map[ReadCall,RDD[ADAMRecord]] = reads.filter(_._1.isReadCall)
-      .map(kv => (kv._1.asInstanceOf[ReadCall], kv._2))
-    val pileupCallsPreTranslation: Map[PileupCall,RDD[ADAMRecord]] = reads.filter(_._1.isPileupCall)
-      .map(kv => (kv._1.asInstanceOf[PileupCall], kv._2))
+    // loop over post processing steps
+    postprocessorsZipped.foreach(p => {
+      val (ppStageName, ppAlgorithm) = p
 
-    // translate non-filtered reads into pileups
-    var pileupCalls: Map[PileupCall,RDD[ADAMRod]] = pileupCallsPreTranslation.map(kv => {
-      val (call, reads) = kv
-
-      log.info ("Performing read to pileup conversion for " + call.callName + ".")
-
-      val rods = reads.adamRecords2Rods ()
-
-      // aggregate pileups
-      val aggregatedRods = if (args.aggregatePileups) {
-        log.info ("Aggregating...")
-        rods.adamAggregateRods ()
-      } else {
-        rods
-      }
-
-      (call, aggregatedRods)
+      rdd = Postprocessor(rdd, ppStageName, ppAlgorithm, stats, config)
     })
 
-    (readCalls, pileupCalls)
-  }
-
-  /**
-   * Collects coverage statistics.
-   *
-   * @param reads RDD of reads.
-   * @return Coverage derived from read data.
-   */
-  def getCoverage (reads: RDD[ADAMRecord]): Int = {
-    // TODO: this is not accurate for exomes...
-    val genomeStart: Long = reads.map(_.getStart.toLong).reduce(_ min _)
-    val genomeEnd: Long = reads.map(_.end.get).reduce(_ max _)
-    val baseCount = reads.map(_.getSequence.length.toLong).reduce(_ + _)
-
-    val coverage = baseCount / (genomeEnd - genomeStart)
-
-    coverage.toInt
+    rdd
   }
 
   /**
    * Main method. Implements body of variant caller. SparkContext and Hadoop Job are provided
    * by the AdamSparkCommand shell.
    *
-   * @param[in] sc SparkContext for RDDs.
-   * @param[in] job Hadoop Job container for file I/O.
+   * @param sc SparkContext for RDDs.
+   * @param job Hadoop Job container for file I/O.
    */
   def run (sc: SparkContext, job: Job) {
 
-    log.info ("Starting avocado...")
-    log.info ("Loading reads in from " + args.readInput)
+    log.info("Starting avocado...")
+    log.info("Loading reads in from " + args.readInput)
     
     // load in reads from ADAM file
-    val reads: RDD[ADAMRecord] = sc.adamLoad (args.readInput, Some (classOf[LocusPredicate]))
+    val reads: RDD[ADAMRecord] = sc.adamLoad(args.readInput, Some(classOf[LocusPredicate]))
 
-    val coalesced = if (args.cores > reads.partitions.length) {
-      reads.coalesce(args.cores, true)
-    } else {
-      reads
-    }
+    // load in reference from ADAM file
+    val reference: RDD[ADAMFastaFragment] = sc.adamLoad(args.referenceInput)
 
-    Avocado.coverage = getCoverage (coalesced)
-
-    if (args.logCounts) {
-      val readCount = coalesced.count
-      log.info ("Read " + readCount + " reads from " + args.readInput + " at " + Avocado.coverage + "x coverage.")
-    } else {
-      log.info ("Coverage is " + Avocado.coverage + ".")
-    }
+    // create stats/config item
+    val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)
 
     // apply read translation steps
-    log.info ("Processing reads.")
-    val cleanedReads = if (args.noprocess) {
-      coalesced
-    } else {
-      processReads (coalesced)
-    }
+    log.info("Processing reads.")
+    val cleanedReads = preProcessReads(reads)
     
     // initial assignment of reads to variant calling algorithms
-    val filteredReads = filterReads (cleanedReads)
+    log.info("Partitioning reads.")
+    val partitionedReads = partitionReads(cleanedReads, stats)
 
-    // translate reads to pileups for pileup based algorithms
-    val (readsToCall, pileupCalls) = translateReadsToPileups (filteredReads)
-    
-    // apply filters to pileups 
-    val pileupsToCall = filterPileups (pileupCalls)
-    
     // call variants on filtered reads and pileups
-      val calledVariants = callVariants (readsToCall, pileupsToCall)
-
-    // TODO: clean up variant call filters and add filtering hook here
-    if (args.logCounts) {
-      val variantCount = calledVariants.count ()
-      
-      log.info ("Writing out " + variantCount + " variants.")
-    }
+    log.info("Calling variants.")
+    val calledVariants = callVariants(partitionedReads)
     
+    // post process variants
+    log.info("Post-processing variants.")
+    val processedVariants = postProcessVariants(calledVariants, stats)
+
     // save variants to output file
-    calledVariants.adamSave (args.variantOutput, args)
+    log.info("Writing calls to disk.")
+    processedVariants.adamSave(args.variantOutput,
+                               args.blockSize,
+                               args.pageSize,
+                               args.compressionCodec,
+                               args.disableDictionary)
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013. Regents of the University of California
+ * Copyright (c) 2014. Regents of the University of California
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,16 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.filters.reads
+package edu.berkeley.cs.amplab.avocado.preprocessing
 
-import org.apache.spark.{SparkContext, Logging}
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.avocado.calls.VariantCall
 
-/**
- * Abstract class for filtering reads.
- */
-abstract class ReadFilter extends Serializable with Logging {
+trait PreprocessingStage {
 
-  val filterName: String
+  val stageName: String
 
-  /**
-   * Method signature for filter operation.
-   *
-   * @param[in] reads An RDD containing reads.
-   * @return An RDD containing lists of reads.
-   */
-  def filter (reads: RDD [ADAMRecord]): Map[VariantCall, RDD [ADAMRecord]]
+  def apply (rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord]
+
 }

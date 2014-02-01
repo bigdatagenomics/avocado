@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013. Regents of the University of California
+ * Copyright (c) 2014. Regents of the University of California
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,19 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.filters.variants
+package edu.berkeley.cs.amplab.avocado.postprocessing
 
-import org.apache.spark.{SparkContext, Logging}
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant}
+import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
 
-/**
- * Abstract class for filtering called variants. 
- */
-abstract class VariantCallFilter extends Serializable with Logging {
+private[postprocessing] trait PostprocessingStage {
 
-  val filterName: String
+  val stageName: String
 
-  /**
-   * Method signature for filter operation.
-   *
-   * @param[in] variants An RDD containing variants.
-   * @return An RDD containing variants.
-   */
-  def filter (variants: RDD [ADAMVariant]): RDD [ADAMVariant]
+  def apply (rdd: RDD[ADAMVariantContext], 
+             stats: AvocadoConfigAndStats,
+             config: SubnodeConfiguration): RDD[ADAMVariantContext]
+
 }

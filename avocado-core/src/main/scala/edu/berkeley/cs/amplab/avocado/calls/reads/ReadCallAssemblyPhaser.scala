@@ -18,15 +18,29 @@ package edu.berkeley.cs.amplab.avocado.calls.reads
 
 import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMGenotype, VariantType}
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.adam.util.{MdTag}
-import edu.berkeley.cs.amplab.avocado.utils.{Phred}
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
+import edu.berkeley.cs.amplab.adam.util.{MdTag, PhredUtils}
+import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
 import net.sf.samtools.{Cigar, CigarOperator, CigarElement, TextCigarCodec}
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.{RDD}
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder}
 import scala.math._
+
+object ReadCallAssemblyPhaser extends VariantCallCompanion {
+
+  val callName = "AssemblyPhaser"
+
+  def apply (stats: AvocadoConfigAndStats,
+             config: SubnodeConfiguration): ReadCallAssemblyPhaser = {
+
+    new ReadCallAssemblyPhaser()
+  }
+  
+}
 
 /**
  * For our purposes, a read is a list of kmers.
@@ -795,7 +809,8 @@ object HaplotypePairOrdering extends Ordering[HaplotypePair] {
  * Phase (diploid) haplotypes with kmer assembly on active regions.
  */
 class ReadCallAssemblyPhaser extends ReadCall {
-  override val callName = "AssemblyPhaser"
+
+  val companion = ReadCallAssemblyPhaser
 
   val kmerLen = 20
   val regionWindow = 200
@@ -1134,7 +1149,7 @@ class ReadCallAssemblyPhaser extends ReadCall {
     } else {
       1.0
     }
-    val variantPhred = Phred.probabilityToPhred(variantErrorProb)
+    val variantPhred = PhredUtils.successProbabilityToPhred(variantErrorProb)
 
     // TODO(peter, 12/8) Call variants, _without_ incorporating phasing for now.
     if (calledHaplotypePair != null) {

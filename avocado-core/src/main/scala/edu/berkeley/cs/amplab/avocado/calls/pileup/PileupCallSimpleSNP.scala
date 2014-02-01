@@ -16,13 +16,29 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, Base, ADAMGenotype, VariantType}
 import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
-import edu.berkeley.cs.amplab.avocado.utils.Phred
+import edu.berkeley.cs.amplab.adam.util.PhredUtils
+import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.apache.commons.configuration.SubnodeConfiguration
+import org.apache.spark.rdd.RDD
+import org.apache.spark.SparkContext
 import scala.math.pow
 import scala.collection.JavaConversions._
+
+object PileupCallSimpleSNP extends VariantCallCompanion {
+
+  val callName = "SimpleSNP"
+
+  def apply (stats: AvocadoConfigAndStats,
+             config: SubnodeConfiguration): PileupCallSimpleSNP = {
+
+    val ploidy = config.getInt("ploidy", 2)
+
+    new PileupCallSimpleSNP(ploidy)
+  }
+}
 
 /**
  * Class to call SNPs. Implements the SNP genotyping methods described in:
@@ -34,13 +50,9 @@ import scala.collection.JavaConversions._
  * We only call the genotype if the likelihood has a phred score greater than or equal to 30.
  * At the current point in time, we assume that we are running on a diploid organism.
  */
-class PileupCallSimpleSNP extends PileupCall {
+class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
   
-  val callName = "SimpleSNP"
-
-  // at current point in time, assume human diploid
-  // TODO: extend to arbitrary ploidy
-  val ploidy = 2
+  val companion: VariantCallCompanion = PileupCallSimpleSNP
 
   /**
    * Takes pileup info and likelihoods and writes out to a variant list.
@@ -56,9 +68,9 @@ class PileupCallSimpleSNP extends PileupCall {
     assert(likelihood.length == 3)
 
     // get phred scores
-    val homozygousRefPhred = Phred.probabilityToPhred(likelihood(0))
-    val heterozygousPhred = Phred.probabilityToPhred(likelihood(1))
-    val homozygousNonPhred = Phred.probabilityToPhred(likelihood(2))
+    val homozygousRefPhred = PhredUtils.successProbabilityToPhred(likelihood(0))
+    val heterozygousPhred = PhredUtils.successProbabilityToPhred(likelihood(1))
+    val homozygousNonPhred = PhredUtils.successProbabilityToPhred(likelihood(2))
 
     // simplifying assumption - snps are biallelic
     val call = if (likelihood.indexOf(likelihood.max) != 0 &&
@@ -181,7 +193,7 @@ class PileupCallSimpleSNP extends PileupCall {
       val refBases = pileup.filter(v => v.getReadBase == v.getReferenceBase)
       val productMatch = if (refBases.length != 0) {
         refBases.map((base) => {
-          val epsilon = 1.0 - Phred.phredToProbability((base.getMapQuality + base.getSangerQuality) / 2)
+          val epsilon = 1.0 - PhredUtils.phredToSuccessProbability((base.getMapQuality + base.getSangerQuality) / 2)
         
 	  pow((ploidy - g) * epsilon + g * (1 - epsilon), base.getCountAtPosition.toDouble)
         }).reduce(_ * _)
@@ -201,7 +213,7 @@ class PileupCallSimpleSNP extends PileupCall {
 
       val productMismatch = if (mismatchBases.length != 0) {
         mismatchBases.map((base) => {
-          val epsilon = 1.0 - Phred.phredToProbability((base.getMapQuality + base.getSangerQuality) / 2)
+          val epsilon = 1.0 - PhredUtils.phredToSuccessProbability((base.getMapQuality + base.getSangerQuality) / 2)
           
 	  pow((ploidy - g) * (1 - epsilon) + g * epsilon, base.getCountAtPosition.toDouble)
         }).reduce(_ * _)
@@ -302,7 +314,7 @@ class PileupCallSimpleSNP extends PileupCall {
    * @param[in] pileupGroups An RDD containing lists of pileups.
    * @return An RDD containing called variants.
    */
-  override def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
+  override def callRods (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
     log.info("Calling SNPs on pileups and flattening.")
     pileups.map(_.pileups)
       .map(callSNP)

@@ -17,9 +17,22 @@
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
 import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
-import edu.berkeley.cs.amplab.avocado.Avocado
+import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
+
+object PileupCallUnspecified extends VariantCallCompanion {
+
+  val callName = "PileupUnspecified"
+
+  def apply (stats: AvocadoConfigAndStats,
+             config: SubnodeConfiguration): PileupCallUnspecified = {
+
+    new PileupCallUnspecified()
+  }
+}
 
 /**
  * Generic placeholder for calling variants on reads. Should be used to designate that a section of the genome
@@ -27,13 +40,13 @@ import org.apache.spark.rdd.RDD
  */
 class PileupCallUnspecified extends PileupCall {
 
-  val callName = "unspecifiedPileup"
+  val companion = PileupCallUnspecified
  
   /**
    * Empty calling method.
    */
-  override def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
-    throw new IllegalArgumentException (callName + " is not callable.")
+  override def callRods (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
+    throw new IllegalArgumentException (companion.callName + " is not callable.")
   }
 
   // Call is generic, so is not callable

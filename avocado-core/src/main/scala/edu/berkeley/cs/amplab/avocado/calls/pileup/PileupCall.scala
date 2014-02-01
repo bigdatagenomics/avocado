@@ -16,29 +16,39 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
+import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
+import edu.berkeley.cs.amplab.adam.rdd.AdamRDDFunctions
+import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.avocado.calls.VariantCall
 import edu.berkeley.cs.amplab.avocado.Avocado
-import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
-import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.{SparkContext, Logging}
 
 /**
  * Abstract class for calling variants on reads. 
  */
 abstract class PileupCall extends VariantCall {
 
-  val callName: String
-  val coverage = Avocado.coverage
-  val reducePartitions = Avocado.reducePartitions
-
   /**
    * Method signature for variant calling operation.
    *
-   * @param[in] pileups An RDD of pileups.
+   * @param pileups An RDD of pileups.
    * @return An RDD containing called variants.
    */
-  def call (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext]
+  def callRods (pileups: RDD[ADAMRod]): RDD[ADAMVariantContext]
 
+  /**
+   * Converts reads to rods, then calls rod based variant caller.
+   *
+   * @param reads An RDD of reads.
+   * @return An RDD containing called variants.
+   */
+  def call (reads: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+    val rods = reads.adamRecords2Rods()
+    callRods(rods)
+  }
+  
   override def isReadCall (): Boolean = false
   override def isPileupCall (): Boolean = true
 }

@@ -16,23 +16,37 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.reads
 
-import org.apache.spark.{SparkContext, Logging}
-import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
+import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.apache.commons.configuration.SubnodeConfiguration
+import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.rdd.RDD
+
+object ReadCallUnspecified extends VariantCallCompanion {
+
+  val callName = "ReadUnspecified"
+
+  def apply (stats: AvocadoConfigAndStats,
+             config: SubnodeConfiguration): ReadCallUnspecified = {
+
+    new ReadCallUnspecified()
+  }
+}
 
 /**
  * Abstract class for calling variants on reads. 
  */
 class ReadCallUnspecified extends ReadCall {
 
-  val callName = "unspecifiedRead"
+  val companion = ReadCallUnspecified
 
   /**
    * Empty calling method.
    */
   def call (pileupGroups: RDD [ADAMRecord]): RDD [ADAMVariantContext] = {
-    throw new IllegalArgumentException (callName + " is not callable.")
+    throw new IllegalArgumentException (companion.callName + " is not callable.")
   }
 
   // Call is generic, so is not callable

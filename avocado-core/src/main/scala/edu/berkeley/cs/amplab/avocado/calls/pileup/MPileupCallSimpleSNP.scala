@@ -16,14 +16,30 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, Base, ADAMGenotype, VariantType}
 import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
-import edu.berkeley.cs.amplab.avocado.utils.Phred
-import scala.math.pow
+import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.apache.commons.configuration.SubnodeConfiguration
+import org.apache.spark.rdd.RDD
+import org.apache.spark.SparkContext
 import scala.collection.mutable.MutableList
 import scala.collection.JavaConversions._
+import scala.math.pow
+
+object MPileupCallSimpleSNP extends VariantCallCompanion {
+
+  val callName = "MultipleSamplesSimpleSNP"
+
+  def apply (stats: AvocadoConfigAndStats,
+             config: SubnodeConfiguration): PileupCallSimpleSNP = {
+
+    val ploidy = config.getInt("ploidy", 2)
+    val minorAlleleFrequency = config.getDouble("minorAlleleFrequency", 0.1)
+
+    new MPileupCallSimpleSNP(ploidy, minorAlleleFrequency)
+  }
+}
 
 /**
  * Class to call SNPs. Implements the SNP genotyping methods described in:
@@ -34,11 +50,10 @@ import scala.collection.JavaConversions._
  * for multiple samples. At the current point in time, we assume that we are running on a diploid organism,
  * and that all sites are biallelic.
  */
-class MPileupCallSimpleSNP extends PileupCallSimpleSNP {
-  
-  override val callName = "MultipleSamplesSimpleSNP"
+class MPileupCallSimpleSNP (ploidy: Int, 
+                            minorAlleleFrequency: Double) extends PileupCallSimpleSNP(ploidy) {
 
-  val minorAlleleFrequency = 0.1
+  override val companion = MPileupCallSimpleSNP
 
   /**
    * Calls a SNP for a single pileup, if there is sufficient evidence of a mismatch from the reference.

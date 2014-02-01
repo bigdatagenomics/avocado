@@ -18,7 +18,7 @@
   <properties>
     <java.version>1.6</java.version>
     <scala.version>2.9.3</scala.version>
-    <adam.version>0.5.0-SNAPSHOT</adam.version>
+    <adam.version>0.6.1-SNAPSHOT</adam.version>
   </properties>
 
   <build>
@@ -157,7 +157,12 @@
     </dependency>
     <dependency>
       <groupId>edu.berkeley.cs.amplab.adam</groupId>
-      <artifactId>adam-commands</artifactId>
+      <artifactId>adam-core</artifactId>
+      <version>${adam.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <artifactId>adam-cli</artifactId>
       <version>${adam.version}</version>
     </dependency>
     <dependency>
