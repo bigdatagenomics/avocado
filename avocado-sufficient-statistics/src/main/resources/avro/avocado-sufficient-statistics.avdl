@@ -1,0 +1,10 @@
+@namespace("edu.berkeley.cs.amplab.avocado.avro")
+protocol avocado {
+
+record AvocadoStatisticEntry {
+  union { null, string } allele;
+  union { null, long } position;
+  union { null, double } alleleFrequency;
+}
+
+}

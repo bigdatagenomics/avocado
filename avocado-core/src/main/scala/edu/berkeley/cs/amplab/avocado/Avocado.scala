@@ -1,0 +1,254 @@
+/*
+ * Copyright (c) 2013-2014. Regents of the University of California
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package edu.berkeley.cs.amplab.avocado
+
+import org.apache.commons.configuration.{HierarchicalConfiguration, DefaultConfigurationBuilder}
+import org.apache.hadoop.mapreduce.Job
+import org.apache.spark.RangePartitioner
+import org.apache.spark.rdd.RDD
+import org.apache.spark.SparkContext._
+import org.apache.spark.{SparkContext, Logging}
+import org.kohsuke.args4j.{Option => option, Argument}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMRecord, ADAMVariant, ADAMGenotype, ADAMFastaFragment}
+import edu.berkeley.cs.amplab.adam.cli.{AdamSparkCommand, AdamCommandCompanion, ParquetArgs, SparkArgs, Args4j, Args4jBase}
+import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext, ReferenceRegion}
+import edu.berkeley.cs.amplab.adam.predicates.LocusPredicate
+import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
+import edu.berkeley.cs.amplab.avocado.calls.{VariantCall, VariantCaller}
+import edu.berkeley.cs.amplab.avocado.partitioners.Partitioner
+import edu.berkeley.cs.amplab.avocado.preprocessing.Preprocessor
+import edu.berkeley.cs.amplab.avocado.postprocessing.Postprocessor
+import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+
+object Avocado extends AdamCommandCompanion {
+
+  val commandName = "Avocado"
+  val commandDescription = "Call variants using avocado and the ADAM preprocessing pipeline."
+
+  def apply (args: Array[String]) = {
+    new Avocado (Args4j[AvocadoArgs](args))
+  }
+}
+
+class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
+  @Argument (metaVar = "READS", required = true, usage = "ADAM read-oriented data", index = 0)
+  var readInput: String = _
+
+  @Argument (metaVar = "REFERENCE", required = true, usage = "ADAM reference genome data", index = 1)
+  var referenceInput: String = _
+
+  @Argument (metaVar = "VARIANTS", required = true, usage = "ADAM variant output", index = 2)
+  var variantOutput: String = _
+
+  @Argument (metaVar = "CONFIG", required = true, usage = "avocado configuration file", index = 3)
+  var configFile: String = _
+
+  @option (name = "-debug", usage = "If set, prints a higher level of debug output.")
+  var debug = false
+}
+
+class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [AvocadoArgs] with Logging {
+  
+  initLogging ()
+
+  // companion object to this class - needed for AdamCommand framework
+  val companion = Avocado
+
+  // get config
+  val configFactory = new DefaultConfigurationBuilder(args.configFile)
+  val config: HierarchicalConfiguration = configFactory.getConfiguration(true)
+
+  val preprocessorNames = getStringArrayFromConfig("preprocessorNames")
+  val preprocessorAlgorithms = getStringArrayFromConfig("preprocessorAlgorithms")
+  assert(preprocessorNames.length == preprocessorAlgorithms.length,
+         "Must have a 1-to-1 mapping between preprocessor names and algorithms.")
+  val preprocessingStagesZippedWithNames = preprocessorNames.zip(preprocessorAlgorithms)
+    
+  val callNames = getStringArrayFromConfig("callNames")
+  val callAlgorithms = getStringArrayFromConfig("callAlgorithms")
+  assert(callNames.length == callAlgorithms.length,
+         "Must have a 1-to-1 mapping between variant call names and algorithms.")
+  val callZipped = callNames.zip(callAlgorithms)
+
+  val partitionerNames = getStringArrayFromConfig("partitionerNames")
+  val partitionerAlgorithms = getStringArrayFromConfig("partitionerAlgorithms")
+  assert(partitionerNames.length == partitionerAlgorithms.length,
+         "Must have a 1-to-1 mapping between partitioner names and algorithms.")
+  val partitionsZipped = partitionerNames.zip(partitionerAlgorithms)
+
+  val postprocessorNames = getStringArrayFromConfig("postprocessorNames")
+  val postprocessorAlgorithms = getStringArrayFromConfig("postprocessorAlgorithms")
+  assert(postprocessorNames.length == postprocessorAlgorithms.length,
+         "Must have a 1-to-1 mapping between postprocessor names and algoritms.")
+  val postprocessorsZipped = postprocessorNames.zip(postprocessorAlgorithms)
+
+  assert(callZipped.length == partitionsZipped.length,
+         "Must have a 1-to-1 mapping between partitioners and calls.")
+  
+  private def getStringArrayFromConfig(name: String): Array[String] = {
+    config.getStringArray(name).map(_.toString)
+  }
+
+  /**
+   * Assigns reads to a variant calling algorithm.
+   *
+   * @param reads An RDD of raw reads.
+   * @return A map that maps RDDs of reads to variant calling algorithms.
+   */
+  def partitionReads (reads: RDD[ADAMRecord],
+                      stats: AvocadoConfigAndStats): Map[VariantCall, RDD[ADAMRecord]] = {
+    var rdd = reads.keyBy(r => ReferenceRegion(r))
+      .filter(kv => kv._1.isDefined)
+      .map(kv => (kv._1.get, kv._2))
+      .cache()
+    var callsets = List[(VariantCall, RDD[ADAMRecord])]()
+    val partitioners = partitionsZipped.map(p => Partitioner(reads, config, p._1, p._2, stats))
+    val partitionersZippedWithCalls = partitioners.zip(callZipped)
+
+    // loop over specified partitioner algorithms
+    partitionersZippedWithCalls.foreach(kv => {
+      // extract partitioner and call
+      val (p, (callName, callAlg)) = kv
+
+      // generate partition set from current read set
+      val partitions = p.computePartitions()
+      
+      // generate variant caller
+      val call = VariantCaller(callName, callAlg, stats, config)
+     
+      // filter reads that are in the partition into a new call set and add the call
+      callsets = (call, rdd.filter(kv => partitions.isInSet(kv._1)).map(kv => kv._2)) :: callsets
+
+      // filter out reads that are wholly contained in the last partitoner
+      rdd = rdd.filter(kv => partitions.isOutsideOfSet(kv._1))
+    })
+    
+    // filter out variant calls that are not actually callable
+    callsets.toMap.filterKeys(k => k.isCallable)
+  }
+
+  /**
+   * Applies several pre-processing steps to the read pipeline. Currently, these are the default
+   * steps in the ADAM processing pipeline.
+   *
+   * @param reads RDD of reads to process.
+   * @return RDD containing reads that have been sorted and deduped.
+   */
+  def preProcessReads (reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
+    var processedReads = reads.cache
+
+    // loop over preprocessing stages and apply
+    preprocessingStagesZippedWithNames.foreach(p => {
+      val (stageAlgorithm, stageName) = p
+
+      // run this preprocessing stage
+      processedReads = Preprocessor(processedReads, stageName, stageAlgorithm, config)
+    })
+
+    // return processed reads
+    processedReads
+  }
+
+  /**
+   * Applies variant calling algorithms to reads and pileups. Reduces down and returns called variants.
+   *
+   * @param callsets Map containing read calling algorithm and RDD record pairs.
+   * @return Joined output of variant calling algorithms.
+   */
+  def callVariants (callsets: Map[VariantCall, RDD[ADAMRecord]]): RDD[ADAMVariantContext] = {
+    // callset map must not be empty
+    assert(!callsets.isEmpty)
+
+    // apply calls and take the union of variants called
+    callsets.map (pair => {
+      // get call and rdd pair
+      val (call, rdd) = pair
+
+      log.info("Running " + call.companion.callName)
+      
+      // apply call
+      call.call (rdd)
+    }).reduce(_ ++ _)
+  }
+
+  /**
+   * Applies variant post-processing methods to called variants. Post-processing can
+   * include methods which modify the information in variant calls, or alternatively,
+   * methods that filter out spurious variant calls.
+   *
+   * @param variants RDD of variants to process.
+   * @return Post-processed variants.
+   */
+  def postProcessVariants (variants: RDD[ADAMVariantContext], stats: AvocadoConfigAndStats): RDD[ADAMVariantContext] = {
+    var rdd = variants.cache()
+
+    // loop over post processing steps
+    postprocessorsZipped.foreach(p => {
+      val (ppStageName, ppAlgorithm) = p
+
+      rdd = Postprocessor(rdd, ppStageName, ppAlgorithm, stats, config)
+    })
+
+    rdd
+  }
+
+  /**
+   * Main method. Implements body of variant caller. SparkContext and Hadoop Job are provided
+   * by the AdamSparkCommand shell.
+   *
+   * @param sc SparkContext for RDDs.
+   * @param job Hadoop Job container for file I/O.
+   */
+  def run (sc: SparkContext, job: Job) {
+
+    log.info("Starting avocado...")
+    log.info("Loading reads in from " + args.readInput)
+    
+    // load in reads from ADAM file
+    val reads: RDD[ADAMRecord] = sc.adamLoad(args.readInput, Some(classOf[LocusPredicate]))
+
+    // load in reference from ADAM file
+    val reference: RDD[ADAMFastaFragment] = sc.adamLoad(args.referenceInput)
+
+    // create stats/config item
+    val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)
+
+    // apply read translation steps
+    log.info("Processing reads.")
+    val cleanedReads = preProcessReads(reads)
+    
+    // initial assignment of reads to variant calling algorithms
+    log.info("Partitioning reads.")
+    val partitionedReads = partitionReads(cleanedReads, stats)
+
+    // call variants on filtered reads and pileups
+    log.info("Calling variants.")
+    val calledVariants = callVariants(partitionedReads)
+    
+    // post process variants
+    log.info("Post-processing variants.")
+    val processedVariants = postProcessVariants(calledVariants, stats)
+
+    // save variants to output file
+    log.info("Writing calls to disk.")
+    processedVariants.adamSave(args.variantOutput,
+                               args.blockSize,
+                               args.pageSize,
+                               args.compressionCodec,
+                               args.disableDictionary)
+  }
+}
