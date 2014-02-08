@@ -41,7 +41,7 @@ class PileupCallSimpleSuite extends FunSuite {
                     .setReferenceBase(Base.C)
                     .build())
 
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
 
     val mb = call.getMaxNonRefBase(pl)
 
@@ -59,7 +59,7 @@ class PileupCallSimpleSuite extends FunSuite {
                     .setReferenceBase(Base.C)
                     .build())
 
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
 
     val mb = call.getMaxNonRefBase(pl)
 
@@ -81,7 +81,7 @@ class PileupCallSimpleSuite extends FunSuite {
                     .setReferenceBase(Base.C)
                     .build())
 
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
 
     val mb = call.getMaxNonRefBase(pl)
 
@@ -99,7 +99,7 @@ class PileupCallSimpleSuite extends FunSuite {
                     .setReferenceBase(Base.C)
                     .build())
 
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
 
     val mb = call.getMaxNonRefBase(pl)
 
@@ -107,7 +107,7 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("Default compensation method doesn't perform any compensation") {
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
     
     val l = List(0.0, 0.0, 0.0)
 
@@ -115,7 +115,7 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("score genotype for single sample, all bases ref") {
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
 
     val pl = List(ADAMPileup.newBuilder()
                     .setReadBase(Base.C)
@@ -153,7 +153,7 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("score genotype for single sample, mix of ref/non-ref bases") {
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
 
     val pl = List(ADAMPileup.newBuilder()
                     .setReadBase(Base.C)
@@ -192,7 +192,7 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("score genotype for single sample, all bases non-ref") {
-    val call = new PileupCallSimpleSNP
+    val call = new PileupCallSimpleSNP(2)
 
     val pl = List(ADAMPileup.newBuilder()
                     .setReadBase(Base.A)
