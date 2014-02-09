@@ -35,7 +35,7 @@ object DefaultPartitioner extends ReferencePartitionerCompanion {
   }
 }
 
-class DefaultPartitioner (contigLengths: List[Int]) extends ReferencePartitioner {
+class DefaultPartitioner (contigLengths: Map[Int, Long]) extends ReferencePartitioner {
 
   val companion = DefaultPartitioner
 
@@ -43,12 +43,14 @@ class DefaultPartitioner (contigLengths: List[Int]) extends ReferencePartitioner
     var counter = 0
     var partitions = SortedMap[ReferenceRegion, Int]()
     
-    for (i <- 0 until contigLengths.length) {
-      for (j <- 0 until (contigLengths(i) / 1000)) {
-        partitions += (ReferenceRegion(i, j * 1000, j * 1000 + 999) -> counter)
+    contigLengths.map(kv => {
+      val (id, len) = kv
+      
+      for (i <- 0 until (len / 1000).toInt) {
+        partitions += (ReferenceRegion(id, i * 1000, i * 1000 + 999) -> counter)
         counter += 1
       }
-    }
+    })
 
     new PartitionSet(partitions)
   }

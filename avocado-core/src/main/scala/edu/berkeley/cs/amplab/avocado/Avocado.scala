@@ -23,8 +23,17 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext._
 import org.apache.spark.{SparkContext, Logging}
 import org.kohsuke.args4j.{Option => option, Argument}
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, ADAMRecord, ADAMVariant, ADAMGenotype, ADAMFastaFragment}
-import edu.berkeley.cs.amplab.adam.cli.{AdamSparkCommand, AdamCommandCompanion, ParquetArgs, SparkArgs, Args4j, Args4jBase}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, 
+                                         ADAMRecord, 
+                                         ADAMVariant, 
+                                         ADAMGenotype, 
+                                         ADAMFastaNucleotideContig}
+import edu.berkeley.cs.amplab.adam.cli.{AdamSparkCommand, 
+                                        AdamCommandCompanion, 
+                                        ParquetArgs, 
+                                        SparkArgs, 
+                                        Args4j, 
+                                        Args4jBase}
 import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext, ReferenceRegion}
 import edu.berkeley.cs.amplab.adam.predicates.LocusPredicate
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
@@ -222,7 +231,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     val reads: RDD[ADAMRecord] = sc.adamLoad(args.readInput, Some(classOf[LocusPredicate]))
 
     // load in reference from ADAM file
-    val reference: RDD[ADAMFastaFragment] = sc.adamLoad(args.referenceInput)
+    val reference: RDD[ADAMFastaNucleotideContig] = sc.adamLoad(args.referenceInput)
 
     // create stats/config item
     val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)

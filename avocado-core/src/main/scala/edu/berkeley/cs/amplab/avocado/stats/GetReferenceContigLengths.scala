@@ -18,7 +18,7 @@ package edu.berkeley.cs.amplab.avocado.stats
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMFastaFragment}
+import edu.berkeley.cs.amplab.adam.avro.ADAMFastaNucleotideContig
 
 private[stats] object GetReferenceContigLengths {
   
@@ -28,8 +28,8 @@ private[stats] object GetReferenceContigLengths {
    * @param rdd RDD of reference contigs.
    * @return List of contig lengths.
    */
-  def apply (rdd: RDD[ADAMFastaFragment]): List[Int] = {
-    rdd.map(_.getSequence.length).collect.toList
+  def apply (rdd: RDD[ADAMFastaNucleotideContig]): Map[Int, Long] = {
+    rdd.map(c => (c.getContigId.toInt, c.getSequenceLength.toLong)).collect.toMap
   }
 
 }
