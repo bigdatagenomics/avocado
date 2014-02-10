@@ -34,12 +34,16 @@ class PartitionSet (protected val regionMapping: SortedMap[ReferenceRegion, Int]
    */
   private def mergeRegions (set: TreeSet[ReferenceRegion],
                             region: ReferenceRegion): TreeSet[ReferenceRegion] = {
-    val t = set.last
-
-    if (t.overlaps(region) || t.isAdjacent(region)) {
-      set.dropRight(1) + t.merge(region)
-    } else {
+    if (set.isEmpty) {
       set + region
+    } else {
+      val t = set.last
+      
+      if (t.overlaps(region) || t.isAdjacent(region)) {
+        set.dropRight(1) + t.merge(region)
+      } else {
+        set + region
+      }
     }
   }
 
@@ -77,7 +81,7 @@ class PartitionSet (protected val regionMapping: SortedMap[ReferenceRegion, Int]
    */
   final def isInSet (region: ReferenceRegion): Boolean = {
     !mergedPartitions.filter(_.refId == region.refId)
-      .forall(!_.contains(region))
+      .forall(r => !(r.contains(region) || r.overlaps(region)))
   }
 
   /**
@@ -88,7 +92,7 @@ class PartitionSet (protected val regionMapping: SortedMap[ReferenceRegion, Int]
    */
   final def isOutsideOfSet (region: ReferenceRegion): Boolean = {
     mergedPartitions.filter(_.refId == region.refId)
-      .forall(!_.contains(region))
+      .forall(r => !r.contains(region))
   }
 
 }
