@@ -16,27 +16,18 @@
 
 package edu.berkeley.cs.amplab.avocado.preprocessing
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import org.apache.commons.configuration.HierarchicalConfiguration
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
+import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 
-object Preprocessor {
-
-  private val stages = List(MarkDuplicates, RecalibrateBaseQualities, SortReads, CoalesceReads)
-
-  def apply (rdd: RDD[ADAMRecord], 
-             stageName: String, 
-             stageAlgorithm: String,
-             config: HierarchicalConfiguration): RDD[ADAMRecord] = {
-
-    // get configuration for this stage
-    val stageConfig = config.configurationAt(stageName)
-
-    // find and run stage
-    val stage = stages.find(_.stageName == stageAlgorithm)
-    
-    assert(stage.isDefined, "Could not find stage with name: " + stageName)
-    stage.get.apply(rdd, stageConfig)
-  }
+object CoalesceReads extends PreprocessingStage {
   
+  val stageName = "coalesceReads"
+
+  def apply (rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
+    val partitions = config.getInt("partitions")
+
+    rdd.coalesce(partitions, true)
+  }
+
 }

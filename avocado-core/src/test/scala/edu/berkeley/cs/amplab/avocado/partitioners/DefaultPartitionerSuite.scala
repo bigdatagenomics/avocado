@@ -67,8 +67,6 @@ class DefaultPartitionerSuite extends FunSuite {
 
   test ("throws exception for contigs not in reference") {
     val ctg3 = ReferenceRegion(3, 0, 100L)
-    assert(!partitions.isInSet(ctg3))
-    assert(partitions.isOutsideOfSet(ctg3))
 
     intercept [IllegalArgumentException] {
       partitions.getPartition(ctg3)
@@ -78,7 +76,6 @@ class DefaultPartitionerSuite extends FunSuite {
   test ("throws exception for contigs that extend past ends of reference contigs") {
     val ctg0 = ReferenceRegion(0, 900L, 1100L)
     assert(partitions.isInSet(ctg0))
-    assert(partitions.isOutsideOfSet(ctg0))
 
     intercept [IllegalArgumentException] {
       partitions.getPartition(ctg0)

@@ -36,7 +36,7 @@ object VariantCaller {
              callAlgorithm: String, 
              stats: AvocadoConfigAndStats, 
              config: HierarchicalConfiguration): VariantCall = {
-    val call = calls.find (_.callName == callName)
+    val call = calls.find (_.callName == callAlgorithm)
 
     call match {
       case Some(c) => {

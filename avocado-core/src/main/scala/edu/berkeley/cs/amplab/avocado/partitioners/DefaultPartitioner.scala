@@ -152,4 +152,19 @@ class DefaultPartitionSet (mapping: SortedMap[ReferenceRegion, Int],
     }
   }
 
+  /**
+   * Reads are always inside of the reference.
+   *
+   * @param region Reference region to check.
+   * @return Always returns true.
+   */
+  override def isInSet (region: ReferenceRegion): Boolean = true
+
+  /**
+   * Reads are never outside of the reference.
+   *
+   * @param region Reference region to check.
+   * @return Always returns true.
+   */
+  override def isOutsideOfSet (region: ReferenceRegion): Boolean = false
 }
