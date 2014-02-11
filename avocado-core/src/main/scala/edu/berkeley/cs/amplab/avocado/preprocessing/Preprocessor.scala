@@ -22,7 +22,11 @@ import org.apache.spark.rdd.RDD
 
 object Preprocessor {
 
-  private val stages = List(MarkDuplicates, RecalibrateBaseQualities, SortReads, CoalesceReads)
+  private val stages = List(MarkDuplicates,
+                            RecalibrateBaseQualities, 
+                            SortReads, 
+                            CoalesceReads,
+                            RealignIndels)
 
   def apply (rdd: RDD[ADAMRecord], 
              stageName: String, 
