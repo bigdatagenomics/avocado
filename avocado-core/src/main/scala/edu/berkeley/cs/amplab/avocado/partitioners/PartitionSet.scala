@@ -79,7 +79,7 @@ class PartitionSet (protected val regionMapping: SortedMap[ReferenceRegion, Int]
    * @param region Region of interest.
    * @return True if region overlaps with any region inside of this partition.
    */
-  final def isInSet (region: ReferenceRegion): Boolean = {
+  def isInSet (region: ReferenceRegion): Boolean = {
     !mergedPartitions.filter(_.refId == region.refId)
       .forall(r => !(r.contains(region) || r.overlaps(region)))
   }
@@ -90,7 +90,7 @@ class PartitionSet (protected val regionMapping: SortedMap[ReferenceRegion, Int]
    * @param region Region of interest.
    * @return True if region is not wholly contained inside of this set.
    */
-  final def isOutsideOfSet (region: ReferenceRegion): Boolean = {
+  def isOutsideOfSet (region: ReferenceRegion): Boolean = {
     mergedPartitions.filter(_.refId == region.refId)
       .forall(r => !r.contains(region))
   }

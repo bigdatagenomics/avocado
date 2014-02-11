@@ -33,9 +33,10 @@ trait ReferencePartitionerCompanion {
                    globalConfig: HierarchicalConfiguration,
                    partitionName: String,
                    stats: AvocadoConfigAndStats): ReferencePartitioner = {
+    
     val config: SubnodeConfiguration = globalConfig.configurationAt(partitionName)
 
-    apply(rdd, config, partitionName, stats)
+    apply(rdd, config, stats)
   }
 
 }

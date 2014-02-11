@@ -37,7 +37,7 @@ trait VariantCallCompanion {
                    callSetName: String): VariantCall = {
     val config: SubnodeConfiguration = globalConfig.configurationAt(callSetName)
     
-    apply (stats, config, callSetName)
+    apply (stats, config)
   }
   
 }
