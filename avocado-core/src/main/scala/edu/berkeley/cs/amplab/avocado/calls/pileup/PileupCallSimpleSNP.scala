@@ -155,7 +155,8 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
     }
 
     if (call.length != 0) {
-      log.info("Writing call info at " + pileupHead.getPosition)
+      assert(call.length == ploidy,
+             "Calls emitted must be consistent with ploidy.")
     }
 
     call
