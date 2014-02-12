@@ -659,7 +659,7 @@ class Haplotype (val sequence: String) {
         perReadLikelihoods += readLike
         readsLikelihood += readLike
       } catch {
-        case _ => {
+        case _ : Throwable => {
           perReadLikelihoods += 0.0
           readsLikelihood += 0.0
         }
