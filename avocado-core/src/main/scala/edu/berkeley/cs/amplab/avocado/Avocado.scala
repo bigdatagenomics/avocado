@@ -28,7 +28,7 @@ import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup,
                                          ADAMRecord, 
                                          ADAMVariant, 
                                          ADAMGenotype, 
-                                         ADAMNucleotideContig}
+                                         ADAMFastaNucleotideContig}
 import edu.berkeley.cs.amplab.adam.cli.{AdamSparkCommand, 
                                         AdamCommandCompanion, 
                                         ParquetArgs, 
@@ -73,6 +73,8 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
 
 class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [AvocadoArgs] with Logging {
   
+  initLogging ()
+
   // companion object to this class - needed for AdamCommand framework
   val companion = Avocado
 
@@ -235,7 +237,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     val reads: RDD[ADAMRecord] = sc.adamLoad(args.readInput, Some(classOf[LocusPredicate]))
 
     // load in reference from ADAM file
-    val reference: RDD[ADAMNucleotideContig] = sc.adamLoad(args.referenceInput)
+    val reference: RDD[ADAMFastaNucleotideContig] = sc.adamLoad(args.referenceInput)
 
     // create stats/config item
     val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)
