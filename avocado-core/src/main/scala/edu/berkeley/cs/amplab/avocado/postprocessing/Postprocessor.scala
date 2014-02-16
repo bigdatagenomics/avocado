@@ -23,7 +23,7 @@ import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
 
 object Postprocessor {
 
-  private val stages = List[PostprocessingStage]()
+  private val stages = List[PostprocessingStage](FilterStrandBias)
 
   assert(stages.map(_.stageName).length == stages.map(_.stageName).distinct.length,
          "Postprocessing stages have duplicated names.")
