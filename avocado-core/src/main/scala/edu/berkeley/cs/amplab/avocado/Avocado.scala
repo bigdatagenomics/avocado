@@ -73,8 +73,6 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
 
 class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [AvocadoArgs] with Logging {
   
-  initLogging ()
-
   // companion object to this class - needed for AdamCommand framework
   val companion = Avocado
 
