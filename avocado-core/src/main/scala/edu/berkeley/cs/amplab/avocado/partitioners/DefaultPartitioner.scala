@@ -147,8 +147,8 @@ class DefaultPartitionSet (mapping: SortedMap[ReferenceRegion, Int],
                                        " and end at " + region.end + " is outside of the reference contig.")
       }
     } catch {
-      case _ => throw new IllegalArgumentException("Received region with contig ID " + region.refId + 
-                                               ", but do not have a matching reference contig.")
+      case _ : Throwable => throw new IllegalArgumentException("Received region with contig ID " + region.refId + 
+                                                               ", but do not have a matching reference contig.")
     }
   }
 
