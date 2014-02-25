@@ -19,6 +19,9 @@ package edu.berkeley.cs.amplab.avocado.stats
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMNucleotideContigFragment}
+import edu.berkeley.cs.amplab.adam.models.SequenceDictionary
+import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
+import edu.berkeley.cs.amplab.adam.rdd.AdamRDDFunctions
 
 class AvocadoConfigAndStats (val sc: SparkContext,
                              val debug: Boolean, 
@@ -31,7 +34,10 @@ class AvocadoConfigAndStats (val sc: SparkContext,
   
   lazy val referenceSeq = reference.collect()
 
+  lazy val sequenceDict = reference.adamGetSequenceDictionary()
+
   lazy val samplesInDataset = inputDataset.map(_.getRecordGroupSample)
     .distinct()
     .collect()
+
 }

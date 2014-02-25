@@ -14,22 +14,28 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.stats
+package edu.berkeley.cs.amplab.avocado.input
 
+import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMNucleotideContigFragment}
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMNucleotideContigFragment
 
-private[stats] object GetReferenceContigLengths {
-  
+private[input] trait InputStage {
+
+  val stageName: String
+
   /**
-   * From a rdd of reference contigs, collects their lengths in an array.
+   * Sets up and loads data using this input stage.
    *
-   * @param rdd RDD of reference contigs.
-   * @return List of contig lengths.
+   * @param inputPath Path to input files.
+   * @param config Configuration for this input stage.
+   * @param reference RDD containing reference information.
+   * @return Returns an RDD of ADAM reads.
    */
-  def apply (rdd: RDD[ADAMNucleotideContigFragment]): Map[Int, Long] = {
-    rdd.map(c => (c.getContigId.toInt, c.getContigLength.toLong)).distinct.collect.toMap
-  }
+  def apply (sc: SparkContext,
+             inputPath: String,
+             config: SubnodeConfiguration,
+             reference: RDD[ADAMNucleotideContigFragment]): RDD[ADAMRecord]
 
 }

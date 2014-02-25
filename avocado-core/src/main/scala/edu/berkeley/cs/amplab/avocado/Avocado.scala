@@ -37,6 +37,7 @@ import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext, Referenc
 import edu.berkeley.cs.amplab.adam.predicates.LocusPredicate
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
 import edu.berkeley.cs.amplab.avocado.calls.{VariantCall, VariantCaller}
+import edu.berkeley.cs.amplab.avocado.input.Input
 import edu.berkeley.cs.amplab.avocado.partitioners.Partitioner
 import edu.berkeley.cs.amplab.avocado.preprocessing.Preprocessor
 import edu.berkeley.cs.amplab.avocado.postprocessing.Postprocessor
@@ -228,16 +229,16 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
 
     println("Starting avocado...")
     println("Loading reads in from " + args.readInput)
-    
-    // load in reads from ADAM file
-    val reads: RDD[ADAMRecord] = sc.adamLoad(args.readInput, Some(classOf[LocusPredicate]))
 
     // load in reference from ADAM file
     val reference: RDD[ADAMNucleotideContigFragment] = sc.adamLoad(args.referenceInput)
 
+    // load in reads from ADAM file
+    val reads : RDD[ADAMRecord] = Input(sc, args.readInput, reference, config)
+    
     // create stats/config item
     val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)
-
+    
     // apply read translation steps
     println("Processing reads.")
     val cleanedReads = preProcessReads(reads)
