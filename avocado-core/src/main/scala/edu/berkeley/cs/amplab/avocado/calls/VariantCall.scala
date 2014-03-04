@@ -22,7 +22,6 @@ import org.apache.spark.{SparkContext, Logging}
 import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype}
 import edu.berkeley.cs.amplab.adam.converters.GenotypesToVariantsConverter
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.adam.projections.ADAMVariantField
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
 
@@ -63,7 +62,8 @@ abstract class VariantCall extends Serializable with Logging {
   final def genotypesToVariantContext(genotypes: List[ADAMGenotype],
                                       samples: Int = 1): List[ADAMVariantContext] = {
     
-    val grouped = genotypes.groupBy(g => (g.getReferenceId, g.getAllele))
+    val grouped = genotypes.groupBy(
+      g => (g.getVariant.getContig.getContigId, g.getVariant.getVariantAllele))
       .map(kv => {
         val (k, g) = kv
 

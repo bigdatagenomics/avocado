@@ -11,7 +11,7 @@
   <properties>
     <java.version>1.6</java.version>
     <scala.version>2.10.3</scala.version>
-    <adam.version>0.7.0-SNAPSHOT</adam.version>
+    <adam.version>0.6.1-SNAPSHOT</adam.version>
     <avro.version>1.7.4</avro.version>
     <scala.version.prefix>2.10</scala.version.prefix>
   </properties>
@@ -71,6 +71,15 @@
     <outputDirectory>target/scala-${scala.version}/classes</outputDirectory>
     <testOutputDirectory>target/scala-${scala.version}/test-classes</testOutputDirectory>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.1</version>
+        <configuration>
+          <source>${java.version}</source>
+          <target>${java.version}</target>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>

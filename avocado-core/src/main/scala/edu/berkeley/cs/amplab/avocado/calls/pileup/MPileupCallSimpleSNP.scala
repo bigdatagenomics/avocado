@@ -16,7 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, Base, ADAMGenotype, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{Base, ADAMGenotype, ADAMPileup}
 import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
 import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
