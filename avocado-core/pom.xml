@@ -18,8 +18,9 @@
   <properties>
     <java.version>1.6</java.version>
     <scala.version>2.10.3</scala.version>
-    <adam.version>0.7.0-SNAPSHOT</adam.version>
+    <adam.version>0.6.1-SNAPSHOT</adam.version>
     <scala.version.prefix>2.10</scala.version.prefix>
+    <spark.version>0.9.0-incubating</spark.version>
   </properties>
 
   <build>
@@ -165,6 +166,11 @@
       <groupId>edu.berkeley.cs.amplab.adam</groupId>
       <artifactId>adam-cli</artifactId>
       <version>${adam.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_${scala.version.prefix}</artifactId>
+      <version>${spark.version}</version>
     </dependency>
     <dependency>
       <groupId>org.scalatest</groupId>

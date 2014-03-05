@@ -66,7 +66,7 @@ private[postprocessing] class DepthFilter (depth: Int) extends GenotypeFilter {
    * @return List of genotypes after filtering.
    */
   def filterGenotypes (genotypes: Seq[ADAMGenotype]): Seq[ADAMGenotype] = {
-    val keyed = genotypes.map(g => (Option(g.getDepth), g))
+    val keyed = genotypes.map(g => (Option(g.getReadDepth), g))
     
     val genotypesNoStats: Seq[ADAMGenotype] = keyed.filter(t => t._1.isEmpty)
       .map(t => t._2)

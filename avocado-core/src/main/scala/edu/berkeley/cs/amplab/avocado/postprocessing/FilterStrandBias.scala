@@ -58,7 +58,7 @@ private[postprocessing] class StrandBiasFilter (high: Double, low: Double) exten
    * @return List of genotypes after filtering.
    */
   def filterGenotypes (genotypes: Seq[ADAMGenotype]): Seq[ADAMGenotype] = {
-    val keyed = genotypes.map(g => (Option(g.getDepth), Option(g.getReadsMappedForwardStrand), g))
+    val keyed = genotypes.map(g => (Option(g.getReadDepth), Option(g.getReadsMappedForwardStrand), g))
     
     val genotypesNoStats: Seq[ADAMGenotype] = keyed.filter(t => t._1.isEmpty || t._2.isEmpty)
       .map(t => t._3)

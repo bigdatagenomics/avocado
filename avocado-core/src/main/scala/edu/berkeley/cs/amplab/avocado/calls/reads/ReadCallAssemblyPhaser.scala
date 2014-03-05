@@ -16,9 +16,11 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMGenotype, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, ADAMGenotype, ADAMRecord, ADAMVariant, VariantType}
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
+import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord
+import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord._
 import edu.berkeley.cs.amplab.adam.util.{MdTag, PhredUtils}
 import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
 import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
@@ -827,8 +829,8 @@ class ReadCallAssemblyPhaser extends ReadCall {
   def getReadReference (read: ADAMRecord): String = {
     val mdtag = MdTag(read.getMismatchingPositions.toString, read.getStart)
 
-    val readSeq = read.getSequence.toString
-    val cigar = read.samtoolsCigar
+    val readSeq = RichADAMRecord(read).getSequence.toString
+    val cigar = RichADAMRecord(read).samtoolsCigar
 
     var readPos = 0
     var refPos = 0
@@ -993,67 +995,55 @@ class ReadCallAssemblyPhaser extends ReadCall {
 
     if (heterozygousRef) {
       
-      val genotypeRef = ADAMGenotype.newBuilder ()
-        .setReferenceId(refId)
-        .setReferenceName(refName)
-        .setPosition(refPos)
-        .setSampleId (sampleName)
-        .setPloidy(2)
-        .setHaplotypeNumber(0)
-        .setGenotypeQuality(phred)
-        .setIsReference(true)
+      val contig = ADAMContig.newBuilder
+        .setContigId(refId)
+        .setContigName(refName)
+        .build
+      val variant = ADAMVariant.newBuilder
+        .setContig(contig)
         .setReferenceAllele(refAllele)
-        .setAllele(refAllele)
-        .setExpectedAlleleDosage(1.0)
-        .setAlleleVariantType(varType)
+        .setVariantAllele(altAllele)
+        .setPosition(refPos)
+        .setVariantType(varType)
+        .build
+      val genotypeRef = ADAMGenotype.newBuilder ()
+        .setVariant(variant)
+        .setSampleId (sampleName)
+        .setGenotypeQuality(phred)
+        .setExpectedAlleleDosage(1.0f)
 	.build()
       val genotypeNonRef = ADAMGenotype.newBuilder ()
-        .setReferenceId(refId)
-        .setReferenceName(refName)
-        .setPosition(refPos)
+        .setVariant(variant)
         .setSampleId (sampleName)
-        .setPloidy(2)
-        .setHaplotypeNumber(1)
         .setGenotypeQuality(phred)
-        .setIsReference(false)
-        .setReferenceAllele(refAllele)
-        .setAllele(altAllele)
-        .setExpectedAlleleDosage(1.0)
-        .setAlleleVariantType(varType)
+        .setExpectedAlleleDosage(1.0f)
 	.build()
 
       List(genotypeRef, genotypeNonRef)
     } else if (!heterozygousRef && !heterozygousNonref) {
       
-      val genotypeNonRef0 = ADAMGenotype.newBuilder ()
-        .setReferenceId(refId)
-        .setReferenceName(refName)
-        .setPosition(refPos)
-        .setSampleId (sampleName)
-        .setPosition(refPos)
-        .setSampleId (sampleName)
-        .setPloidy(2)
-        .setHaplotypeNumber(0)
-        .setGenotypeQuality(phred)
-        .setIsReference(false)
+      val contig = ADAMContig.newBuilder
+        .setContigId(refId)
+        .setContigName(refName)
+        .build
+      val variant = ADAMVariant.newBuilder
+        .setContig(contig)
         .setReferenceAllele(refAllele)
-        .setAllele(altAllele)
-        .setExpectedAlleleDosage(1.0)
-        .setAlleleVariantType(varType)
+        .setVariantAllele(altAllele)
+        .setPosition(refPos)
+        .setVariantType(varType)
+        .build
+      val genotypeNonRef0 = ADAMGenotype.newBuilder ()
+        .setVariant(variant)
+        .setSampleId (sampleName)
+        .setGenotypeQuality(phred)
+        .setExpectedAlleleDosage(1.0f)
 	.build()
       val genotypeNonRef1 = ADAMGenotype.newBuilder ()
-        .setReferenceId(refId)
-        .setReferenceName(refName)
-        .setPosition(refPos)
+        .setVariant(variant)
         .setSampleId (sampleName)
-        .setPloidy(2)
-        .setHaplotypeNumber(1)
         .setGenotypeQuality(phred)
-        .setIsReference(false)
-        .setReferenceAllele(refAllele)
-        .setAllele(altAllele)
-        .setExpectedAlleleDosage(1.0)
-        .setAlleleVariantType(varType)
+        .setExpectedAlleleDosage(1.0f)
 	.build()
 
       List(genotypeNonRef0, genotypeNonRef1)

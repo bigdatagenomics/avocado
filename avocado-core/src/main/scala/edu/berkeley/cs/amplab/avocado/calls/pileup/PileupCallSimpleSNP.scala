@@ -16,7 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, Base, ADAMGenotype, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{Base, ADAMContig, ADAMGenotype, ADAMPileup, ADAMVariant, VariantType}
 import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.adam.util.PhredUtils
 import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
@@ -56,6 +56,9 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
 
   /**
    * Takes pileup info and likelihoods and writes out to a variant list.
+   * TODO: under the new schema we don't need to return a list of
+   * ADAMGenotype, since each ADAMGenotype contains the same
+   * ADAMVariant.  Figure out what the best return interface is.
    *
    * @param pileupHead Single pileup that contains location and sample info.
    * @param likelihood List of likelihoods for homozygous ref/heterozygous/homozygous non ref.
@@ -84,34 +87,29 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
       assert(pileupHead.getReferenceBase != maxNonRefBase.get,
              "Cannot have reference be equal to non-ref base, @ " + pileupHead.getPosition + ".")
       
+      val contig = ADAMContig.newBuilder
+        .setContigId(pileupHead.getReferenceId)
+        .setContigName(pileupHead.getReferenceName)
+        .build
+      val variant = ADAMVariant.newBuilder
+        .setContig(contig)
+        .setPosition(pileupHead.getPosition)
+        .setReferenceAllele(pileupHead.getReferenceBase.toString)
+        .setVariantAllele(maxNonRefBase.get.toString)
+        .setVariantType(VariantType.SNP)
+        .build
       val genotypeRef = ADAMGenotype.newBuilder()
-        .setReferenceId(pileupHead.getReferenceId)
-        .setReferenceName(pileupHead.getReferenceName)
-        .setPosition(pileupHead.getPosition)
+        .setVariant(variant)
         .setSampleId(pileupHead.getRecordGroupSample)
-        .setAlleleVariantType(VariantType.SNP)
         .setGenotypeQuality(heterozygousPhred)
-        .setPloidy(2)
-        .setHaplotypeNumber(0)
-        .setIsReference(true)
-        .setReferenceAllele(pileupHead.getReferenceBase.toString)
-        .setAllele(pileupHead.getReferenceBase.toString)
-        .setExpectedAlleleDosage(1.0)
-	.build()
+        .setExpectedAlleleDosage(1.0f)
+        .build()
       val genotypeNonRef = ADAMGenotype.newBuilder()
-        .setReferenceId(pileupHead.getReferenceId)
-        .setReferenceName(pileupHead.getReferenceName)
-        .setPosition(pileupHead.getPosition)
+        .setVariant(variant)
         .setSampleId(pileupHead.getRecordGroupSample)
-        .setAlleleVariantType(VariantType.SNP)
         .setGenotypeQuality(heterozygousPhred)
-        .setPloidy(2)
-        .setHaplotypeNumber(1)
-        .setIsReference(false)
-        .setReferenceAllele(pileupHead.getReferenceBase.toString)
-        .setAllele(maxNonRefBase.get.toString)
-        .setExpectedAlleleDosage(1.0)
-	.build()
+        .setExpectedAlleleDosage(1.0f)
+        .build()
 
       List(genotypeRef, genotypeNonRef)
     } else if (likelihood.indexOf(likelihood.max) == 2) {
@@ -119,33 +117,28 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
       assert(pileupHead.getReferenceBase != maxNonRefBase.get,
              "Cannot have reference be equal to non-ref base, @ " + pileupHead.getPosition + ".")
             
-      val genotypeNonRef0 = ADAMGenotype.newBuilder()
-        .setReferenceId(pileupHead.getReferenceId)
-        .setReferenceName(pileupHead.getReferenceName)
+      val contig = ADAMContig.newBuilder
+        .setContigId(pileupHead.getReferenceId)
+        .setContigName(pileupHead.getReferenceName)
+        .build
+      val variant = ADAMVariant.newBuilder
+        .setContig(contig)
         .setPosition(pileupHead.getPosition)
-        .setSampleId(pileupHead.getRecordGroupSample)
-        .setAlleleVariantType(VariantType.SNP)
-        .setGenotypeQuality(homozygousNonPhred)
-        .setPloidy(2)
-        .setHaplotypeNumber(0)
-        .setIsReference(false)
         .setReferenceAllele(pileupHead.getReferenceBase.toString)
-        .setAllele(maxNonRefBase.get.toString)
-        .setExpectedAlleleDosage(2.0)
+        .setVariantAllele(maxNonRefBase.get.toString)
+        .setVariantType(VariantType.SNP)
+        .build
+      val genotypeNonRef0 = ADAMGenotype.newBuilder()
+        .setVariant(variant)
+        .setSampleId(pileupHead.getRecordGroupSample)
+        .setGenotypeQuality(homozygousNonPhred)
+        .setExpectedAlleleDosage(2.0f)
 	.build()
       val genotypeNonRef1 = ADAMGenotype.newBuilder()
-        .setReferenceId(pileupHead.getReferenceId)
-        .setReferenceName(pileupHead.getReferenceName)
-        .setPosition(pileupHead.getPosition)
+        .setVariant(variant)
         .setSampleId(pileupHead.getRecordGroupSample)
-        .setAlleleVariantType(VariantType.SNP)
         .setGenotypeQuality(homozygousNonPhred)
-        .setPloidy(2)
-        .setHaplotypeNumber(1)
-        .setIsReference(false)
-        .setReferenceAllele(pileupHead.getReferenceBase.toString)
-        .setAllele(maxNonRefBase.get.toString)
-        .setExpectedAlleleDosage(2.0)
+        .setExpectedAlleleDosage(2.0f)
 	.build()
 
       List(genotypeNonRef0, genotypeNonRef1)

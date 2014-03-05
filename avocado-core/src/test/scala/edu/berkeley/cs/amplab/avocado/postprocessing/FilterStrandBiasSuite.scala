@@ -16,7 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.postprocessing
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMGenotype
+import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, ADAMGenotype, ADAMVariant}
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
 import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
 import org.scalatest.FunSuite 
@@ -24,12 +24,18 @@ import org.scalatest.FunSuite
 class FilterStrandBiasSuite extends FunSuite {
 
   test("do not filter genotypes that have no strand biasing info") {
-    val gt1 = ADAMGenotype.newBuilder
-      .setReferenceId(0)
+    val contig = ADAMContig.newBuilder
+        .setContigId(0)
+        .setContigName("0")
+        .build
+    val variant = ADAMVariant.newBuilder
+      .setContig(contig)
       .setPosition(0)
-      .setIsReference(false)
-      .setAllele("A")
-      .setReferenceAllele("C")
+      .setReferenceAllele("A")
+      .setVariantAllele("C")
+      .build
+    val gt1 = ADAMGenotype.newBuilder
+      .setVariant(variant)
       .build()
 
     val seq = Seq(gt1, gt1, gt1)
@@ -39,13 +45,19 @@ class FilterStrandBiasSuite extends FunSuite {
   }
 
   test("do not filter genotypes that are inside bounds") {
-    val gt1 = ADAMGenotype.newBuilder
-      .setReferenceId(0)
+    val contig = ADAMContig.newBuilder
+        .setContigId(0)
+        .setContigName("0")
+        .build
+    val variant = ADAMVariant.newBuilder
+      .setContig(contig)
       .setPosition(0)
-      .setIsReference(false)
-      .setAllele("A")
-      .setReferenceAllele("C")
-      .setDepth(10)
+      .setReferenceAllele("A")
+      .setVariantAllele("C")
+      .build
+    val gt1 = ADAMGenotype.newBuilder
+      .setVariant(variant)
+      .setReadDepth(10)
       .setReadsMappedForwardStrand(3)
       .build()
 
@@ -56,13 +68,19 @@ class FilterStrandBiasSuite extends FunSuite {
   }
 
   test("filter genotypes that are outside bounds") {
-    val gt1 = ADAMGenotype.newBuilder
-      .setReferenceId(0)
+    val contig = ADAMContig.newBuilder
+        .setContigId(0)
+        .setContigName("0")
+        .build
+    val variant = ADAMVariant.newBuilder
+      .setContig(contig)
       .setPosition(0)
-      .setIsReference(false)
-      .setAllele("A")
-      .setReferenceAllele("C")
-      .setDepth(10)
+      .setReferenceAllele("A")
+      .setVariantAllele("C")
+      .build
+    val gt1 = ADAMGenotype.newBuilder
+      .setVariant(variant)
+      .setReadDepth(10)
       .setReadsMappedForwardStrand(2)
       .build()
 
@@ -73,22 +91,24 @@ class FilterStrandBiasSuite extends FunSuite {
   }
 
   test("do not filter genotypes that have no strand biasing info or that are inside bounds") {
-    val gt1 = ADAMGenotype.newBuilder
-      .setReferenceId(0)
+    val contig = ADAMContig.newBuilder
+        .setContigId(0)
+        .setContigName("0")
+        .build
+    val variant = ADAMVariant.newBuilder
+      .setContig(contig)
       .setPosition(0)
-      .setIsReference(false)
-      .setAllele("A")
-      .setReferenceAllele("C")
+      .setReferenceAllele("A")
+      .setVariantAllele("C")
+      .build
+    val gt1 = ADAMGenotype.newBuilder
+      .setVariant(variant)
       .setSampleId("me")
       .build()
     val gt2 = ADAMGenotype.newBuilder
-      .setReferenceId(0)
-      .setPosition(0)
-      .setIsReference(false)
-      .setAllele("A")
-      .setReferenceAllele("C")
+      .setVariant(variant)
       .setSampleId("you")
-      .setDepth(6)
+      .setReadDepth(6)
       .setReadsMappedForwardStrand(3)
       .build()
 
@@ -99,22 +119,23 @@ class FilterStrandBiasSuite extends FunSuite {
   }
 
   test("do not filter genotypes that have no strand biasing info but filter those that are outside bounds") {
-    val gt1 = ADAMGenotype.newBuilder
-      .setReferenceId(0)
+    val contig = ADAMContig.newBuilder
+        .setContigId(0)
+        .setContigName("0")
+        .build
+    val variant = ADAMVariant.newBuilder
+      .setContig(contig)
       .setPosition(0)
-      .setIsReference(false)
-      .setAllele("A")
-      .setReferenceAllele("C")
+      .setReferenceAllele("A")
+      .setVariantAllele("C")
+      .build
+    val gt1 = ADAMGenotype.newBuilder
+      .setVariant(variant)
       .setSampleId("me")
       .build()
     val gt2 = ADAMGenotype.newBuilder
-      .setReferenceId(0)
-      .setPosition(0)
-      .setIsReference(false)
-      .setAllele("A")
-      .setReferenceAllele("C")
-      .setSampleId("you")
-      .setDepth(6)
+      .setVariant(variant)
+      .setReadDepth(6)
       .setReadsMappedForwardStrand(1)
       .build()
 

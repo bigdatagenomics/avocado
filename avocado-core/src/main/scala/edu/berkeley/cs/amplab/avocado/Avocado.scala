@@ -252,7 +252,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     
     // post process variants
     println("Post-processing variants.")
-    val processedVariants = postProcessVariants(calledVariants, stats)
+    val processedVariants = postProcessVariants(calledVariants, stats).map(variantContext => variantContext.variant)
 
     // save variants to output file
     println("Writing calls to disk.")
