@@ -25,10 +25,12 @@ import org.scalatest.FunSuite
 import scala.math.abs
 
 class PileupCallSimpleSuite extends FunSuite {
-  
-  def assertFP(a: Double, b: Double) {
+
+  val floatingPointingThreshold = 1e-6
+
+  def assertAlmostEqual(a: Double, b: Double, epsilon : Double = floatingPointingThreshold) {
     assert((a * 0.99 < b && a * 1.01 > b) ||
-           abs(a - b) < 1e6)
+           abs(a - b) < epsilon)
   }
 
   test("Collect the max non-ref base for homozygous SNP") {
@@ -143,12 +145,12 @@ class PileupCallSimpleSuite extends FunSuite {
     val expected = List((8.0 * (0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999)) / 8.0,
                         ((0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999) +
                          (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999)) / 8.0,
-                        8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999) / 8.0)
+                        8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999) / 8.0).reverse
 
     val scored = call.scoreGenotypeLikelihoods(pl)
 
     for (i <- 0 to 2) {
-      assertFP(expected(i), scored(i))
+      assertAlmostEqual(expected(i), scored(i))
     }
   }
 
@@ -177,17 +179,17 @@ class PileupCallSimpleSuite extends FunSuite {
                     .setCountAtPosition(1)
                     .build()
                   )
+    //TODO(arahuja) test is not correct as multiplying probabilities is not exactly the same as averaging qual scores
+    val expected = List((8.0 * ((0.999 * 0.999) * (0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999))) / 8.0,
 
-    val expected = List((8.0 * (0.999 * 0.999 * 0.9999 * 0.9999 * (1.0 - 0.999 * 0.9999))) / 8.0,
-                        (((0.999 * 0.999 * 0.9999 * 0.9999) +
-                          (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999)) * 
-                         ((1.0 - 0.999 * 0.9999) + (0.999 * 0.9999))) / 8.0,
-                        8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (0.999 * 0.9999) / 8.0)
+      ((0.999 * 0.999 + (1.0 - 0.999 * 0.999)) *  (0.9999 * 0.9999 + (1.0 - 0.9999 * 0.9999))
+        *  ((1.0 - 0.999 * 0.9999) + (0.999 * 0.9999) )) / 8.0,
+      (8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (0.999 * 0.9999)) / 8.0).reverse
 
     val scored = call.scoreGenotypeLikelihoods(pl)
 
     for (i <- 0 to 2) {
-      assertFP(expected(i), scored(i))
+      assertAlmostEqual(expected(i), scored(i), 1e-3)
     }
   }
 
@@ -220,13 +222,13 @@ class PileupCallSimpleSuite extends FunSuite {
     val expected = List(8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999) / 8.0,
                         ((0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999) +
                          (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999)) / 8.0,
-                        (8.0 * (0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999)) / 8.0)
+                        (8.0 * (0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999)) / 8.0).reverse
    
 
     val scored = call.scoreGenotypeLikelihoods(pl)
 
     for (i <- 0 to 2) {
-      assertFP(expected(i), scored(i))
+      assertAlmostEqual(expected(i), scored(i))
     }
   }
 

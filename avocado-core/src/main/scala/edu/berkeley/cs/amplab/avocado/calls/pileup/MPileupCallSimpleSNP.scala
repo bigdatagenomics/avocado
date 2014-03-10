@@ -78,9 +78,9 @@ class MPileupCallSimpleSNP (ploidy: Int,
 
     def compensate (likelihood: Array[(Double, Double, Double)], maf: Double): List[Double] = {
       // compensate likelihoods by major allele frequency - eqn 19 from source
-      List(likelihood(0)._1 * pow((1.0 - maf), 2.0),
+      List(likelihood(0)._1 * pow(maf, 2.0),
            likelihood(0)._2 * 2.0 * maf * (1.0 - maf),
-           likelihood(0)._3 * pow(maf, 2.0))
+           likelihood(0)._3 * pow((1.0 - maf), 2.0))
     }
 
     // compensate genotypes by maf

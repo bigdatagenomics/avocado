@@ -71,9 +71,9 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
     assert(likelihood.length == 3)
 
     // get phred scores
-    val homozygousRefPhred = PhredUtils.successProbabilityToPhred(likelihood(0))
+    val homozygousRefPhred = PhredUtils.successProbabilityToPhred(likelihood(2))
     val heterozygousPhred = PhredUtils.successProbabilityToPhred(likelihood(1))
-    val homozygousNonPhred = PhredUtils.successProbabilityToPhred(likelihood(2))
+    val homozygousNonPhred = PhredUtils.successProbabilityToPhred(likelihood(0))
 
     // simplifying assumption - snps are biallelic
     val call = if (likelihood.indexOf(likelihood.max) != 0 &&
@@ -158,10 +158,10 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
    * Scores likelihoods for genotypes using equation from Li 2009.
    *
    * @param[in] pileup Rod containing pileup bases.
-   * @return List of doubles corresponding to likelihood of homozygous (0), heterozygous (1), and homozygous non-reference (2).
+   * @return List of doubles corresponding to likelihood of homozygous (2), heterozygous (1), and homozygous non-reference (0).
    */
   def scoreGenotypeLikelihoods (pileup: List[ADAMPileup]): List[Double] = {
-    
+
     // count bases in pileup
     val k = pileup.map(_.getCountAtPosition).reduce(_ + _)
 
@@ -175,40 +175,41 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
      *        product over j->l+1..k ((m - g) * (1 - e) + g * e)
      *
      * Where:
-     * - g in 0..2 is genotype --> homozygous reference, hetero, other
+     * - g in 0..2 is genotype -> g ==  # of reference bases in allele
      * - e is error probablity of nucleotide
      * - m is ploidy
      * - k is number of bases that match reference
      * - l is the number of bases that mismatch against reference
      */
+    val refBases = pileup.filter(v => v.getReadBase == v.getReferenceBase)
+    val mismatchBases = pileup.filter(v => {
+      val readBase = Option(v.getReadBase) match {
+        case Some(base) => base
+        case None => Base.N // TODO: add better exception handling code - this case shouldn't happen unless there is deletion evidence in the rod
+      }
+
+      ((readBase != v.getReferenceBase) && (v.getRangeLength == 0 || v.getRangeLength == null))
+    })
+
+
     val likelihoods = states.map(g => {
       // contribution of bases that match the reference
-      val refBases = pileup.filter(v => v.getReadBase == v.getReferenceBase)
       val productMatch = if (refBases.length != 0) {
         refBases.map((base) => {
-          val epsilon = 1.0 - PhredUtils.phredToSuccessProbability((base.getMapQuality + base.getSangerQuality) / 2)
-        
-	  pow((ploidy - g) * epsilon + g * (1 - epsilon), base.getCountAtPosition.toDouble)
+          val epsilon = PhredUtils.phredToErrorProbability((base.getMapQuality + base.getSangerQuality) / 2)
+
+          pow((ploidy - g) * epsilon + g * (1 - epsilon), base.getCountAtPosition.toDouble)
         }).reduce(_ * _)
       } else {
         1.0
       }
 
       // contribution of bases that do not match the base
-      val mismatchBases = pileup.filter(v => {
-	val readBase = Option(v.getReadBase) match {
-	  case Some(base) => base
-	  case None => Base.N // TODO: add better exception handling code - this case shouldn't happen unless there is deletion evidence in the rod
-	}
-
-	((readBase != v.getReferenceBase) && v.getRangeLength == 0)
-      })
-
       val productMismatch = if (mismatchBases.length != 0) {
         mismatchBases.map((base) => {
-          val epsilon = 1.0 - PhredUtils.phredToSuccessProbability((base.getMapQuality + base.getSangerQuality) / 2)
-          
-	  pow((ploidy - g) * (1 - epsilon) + g * epsilon, base.getCountAtPosition.toDouble)
+          val epsilon =  PhredUtils.phredToErrorProbability((base.getMapQuality + base.getSangerQuality) / 2)
+
+          pow((ploidy - g) * (1 - epsilon) + g * epsilon, base.getCountAtPosition.toDouble)
         }).reduce(_ * _)
       } else {
         1.0
@@ -216,7 +217,7 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
 
       productMatch * productMismatch / pow(ploidy.toDouble, k.toDouble)
     })
-    
+
     likelihoods
   }
 
@@ -229,12 +230,12 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
    * @return Option containing most recently seen non-reference base if found, else none.
    */
   def getMaxNonRefBase(pileup: List[ADAMPileup]): Option[Base] = {
-    
+
     // get a count of the total number of bases that are a mismatch with the reference
     val nonRefBaseCount = pileup.filter(r => r.getReadBase != r.getReferenceBase)
       .groupBy(_.getReadBase)
       .map(kv => (kv._1, kv._2.length))
-    
+
     /**
      * Out of two Base, Int pairs, picks the one with the higher count.
      *
@@ -244,9 +245,9 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
      */
     def pickMaxBase (kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
       if (kv1._2 > kv2._2) {
-	kv1
+        kv1
       } else {
-	kv2
+        kv2
       }
     }
     
