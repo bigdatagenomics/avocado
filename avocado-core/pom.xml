@@ -16,10 +16,6 @@
   <name>avocado-core: A Variant Caller, Distributed</name>
 
   <properties>
-    <java.version>1.6</java.version>
-    <scala.version>2.10.3</scala.version>
-    <adam.version>0.6.1-SNAPSHOT</adam.version>
-    <scala.version.prefix>2.10</scala.version.prefix>
     <spark.version>0.9.0-incubating</spark.version>
   </properties>
 
