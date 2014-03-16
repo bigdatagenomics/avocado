@@ -18,12 +18,12 @@ package edu.berkeley.cs.amplab.avocado.stats
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMNucleotideContig}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMNucleotideContigFragment}
 
 class AvocadoConfigAndStats (val sc: SparkContext,
                              val debug: Boolean, 
                              inputDataset: RDD[ADAMRecord],
-                             reference: RDD[ADAMNucleotideContig]) {
+                             reference: RDD[ADAMNucleotideContigFragment]) {
   
   lazy val coverage = ScoreCoverage(inputDataset)
 
