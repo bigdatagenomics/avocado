@@ -65,12 +65,10 @@ case class KmerPrefix (string: String) {
  *
  * @param prefix Prefix for kmer of length (k - 2)
  * @param suffix Last base of kmer
- * @param left Kmer graph connections into kmer
- * @param right Kmer graph connections out of kmer
  */
-case class Kmer (prefix: KmerPrefix, suffix: Char, var left: KmerVertex, var right: KmerVertex) {
+case class Kmer (prefix: KmerPrefix, suffix: Char) {
   var reads = new HashSet[AssemblyRead]
-  var mult: Int = 1
+  var mult: Int = 1 // TODO this is broken now
   var isCanon: Boolean = false
 
   def equals(e: Kmer): Boolean = {
@@ -85,17 +83,22 @@ case class Kmer (prefix: KmerPrefix, suffix: Char, var left: KmerVertex, var rig
 /**
  * Vertex for kmer graph.
  */
-class KmerVertex {
-  var left = new HashSet[Kmer]
-  var right = new HashSet[Kmer]
+case class KmerVertex(left: Option[Kmer], right: Option[KmerPrefix]) {
 
   def equals (kmer: Kmer): Boolean = {
-    kmer.left == this || kmer.right == this
+    left.forall(_ == kmer) || right.forall(_ == kmer)
+  }
+
+  def equals (kv: KmerVertex): Boolean = {
+    left.isDefined == kv.left.isDefined &&
+    (left.isDefined && left.get.equals(kv.left.get) &&
+    right.isDefined == kv.right.isDefined &&
+    (right.isDefined && right.get.equals(kv.right.get)
   }
 
   override def toString(): String = {
     "l:" + left.map(_.toString).fold("")(_ + "\n" + _) + "\n" +
-    "r:" + right.map(_.toString).fold("")(_ + "\n" + _) + "\n"
+    "r:" + right.map(_.string).fold("")(_ + "\n" + _) + "\n"
   }
 }
 
@@ -178,12 +181,10 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   val sinkKmer = new Kmer(new KmerPrefix(reference.dropRight(1).takeRight(kLen - 1)),
                           reference.last, 
                           source, sink)
-  println(sourceKmer)
-  println(sinkKmer)
 
   // Convenient to explicitly have the graph source and sink.
-  val source = new KmerVertex
-  val sink = new KmerVertex
+  val source = new KmerVertex(None, Some(sourceKmer.prefix))
+  val sink = new KmerVertex(Some(sinkKmer), None)
 
   // The actual kmer graph consists of unique K-1 prefixes and kmers connected
   // by vertices.
@@ -216,6 +217,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
       k
     })
 
+    /*
     // Add a vertex in between each adjacent pair of kmers.
     (ks, ks.drop(1)).zipped.map((k1, k2) => {
       var v = new KmerVertex
@@ -239,6 +241,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
       ks.last.right = new KmerVertex
     }
     ks.last.left.left.add(ks.last)
+    */
   }
 
   /**
@@ -249,29 +252,6 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   def insertReads (readGroup: Seq[ADAMRecord]): Unit = {
     reads = readGroup.map(x => new AssemblyRead(x))
     reads.foreach(r => insertReadKmers(r))
-  }
-
-  /**
-   * Merges two vertices.
-   *
-   * @param v1 First vertex to merge.
-   * @param v2 Second vertex to merge.
-   */
-  def mergeVertices (v1: KmerVertex, v2: KmerVertex): Unit = {
-    // Merge v2 into v1.
-    v2.left.map(k => v1.left.add(k))
-    v2.right.map(k => v1.right.add(k))
-  }
-
-  /**
-   * Removes a kmer from a vertex.
-   *
-   * @param v Vertex from which to remove kmer.
-   * @param k Kmer to remove.
-   */
-  def exciseVertexKmer (v: KmerVertex, k: Kmer): Unit = {
-    v.left.remove(k)
-    v.right.remove(k)
   }
 
   def exciseKmer (k: Kmer): Unit = {
@@ -286,6 +266,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
    * Builds graph.
    */
   def connectGraph (): Unit = {
+    /*
     // Consolidate equivalent kmers.
     for ((prefix, ks) <- kmers) {
       // Each equivalent (prefix, suffix) pair has an arbitrary "canonical" kmer.
@@ -324,6 +305,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
         }
       }
     }
+    */
   }
 
   /**
