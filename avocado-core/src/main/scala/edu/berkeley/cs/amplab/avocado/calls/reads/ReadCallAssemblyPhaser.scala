@@ -58,6 +58,8 @@ case class AssemblyRead (record: ADAMRecord) {
  * @param string Kmer base string.
  */
 case class KmerPrefix (string: String) {
+
+  def equals(kp: KmerPrefix): Boolean = string == kp.string
 }
 
 /**
@@ -68,8 +70,16 @@ case class KmerPrefix (string: String) {
  */
 case class Kmer (prefix: KmerPrefix, suffix: Char) {
   var reads = new HashSet[AssemblyRead]
-  var mult: Int = 1 // TODO this is broken now
+  var mult: Int = 0
   var isCanon: Boolean = false
+
+  def incrementMult() {
+    mult += 1
+  }
+
+  def nextPrefix(): KmerPrefix = {
+    KmerPrefix(prefix.string.drop(1) + suffix)
+  }
 
   def equals(e: Kmer): Boolean = {
     prefix == e.prefix && suffix == e.suffix
@@ -81,38 +91,13 @@ case class Kmer (prefix: KmerPrefix, suffix: Char) {
 }
 
 /**
- * Vertex for kmer graph.
- */
-case class KmerVertex(left: Option[Kmer], right: Option[KmerPrefix]) {
-
-  def equals (kmer: Kmer): Boolean = {
-    left.forall(_ == kmer) || right.forall(_ == kmer)
-  }
-
-  def equals (kv: KmerVertex): Boolean = {
-    left.isDefined == kv.left.isDefined &&
-    (left.isDefined && left.get.equals(kv.left.get) &&
-    right.isDefined == kv.right.isDefined &&
-    (right.isDefined && right.get.equals(kv.right.get)
-  }
-
-  override def toString(): String = {
-    "l:" + left.map(_.toString).fold("")(_ + "\n" + _) + "\n" +
-    "r:" + right.map(_.string).fold("")(_ + "\n" + _) + "\n"
-  }
-}
-
-/**
  *class representing a path made of kmers.
  *
  * @param edges Edges of kmer graph.
  */
 class KmerPath (val edges: Seq[Kmer]) {
 
-  var multSum: Int = 0
-  for (e <- edges) {
-    multSum += e.mult
-  }
+  val multSum: Int = edges.map(_.mult).fold(0)(_ + _)
 
   /**
    * Builds haplotype string from a kmer path using overlap between kmers.
@@ -121,7 +106,6 @@ class KmerPath (val edges: Seq[Kmer]) {
    */
   def asHaplotypeString (): String = {
     var sb = ""
-    println("vl: " + edges.length)
     if (edges.length > 0) {
       sb += edges(0).prefix.string
       for (e <- edges) {
@@ -176,15 +160,9 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   private var reads: Seq[AssemblyRead] = null
 
   // source/sink kmers
-  val sourceKmer = new Kmer(new KmerPrefix(reference.take(kLen - 1)), reference.drop(kLen - 1).head,
-                            source, sink)
+  val sourceKmer = new Kmer(new KmerPrefix(reference.take(kLen - 1)), reference.drop(kLen - 1).head)
   val sinkKmer = new Kmer(new KmerPrefix(reference.dropRight(1).takeRight(kLen - 1)),
-                          reference.last, 
-                          source, sink)
-
-  // Convenient to explicitly have the graph source and sink.
-  val source = new KmerVertex(None, Some(sourceKmer.prefix))
-  val sink = new KmerVertex(Some(sinkKmer), None)
+                          reference.last)
 
   // The actual kmer graph consists of unique K-1 prefixes and kmers connected
   // by vertices.
@@ -208,12 +186,20 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
       val prefixStr = readSeq.substring(idx, idx + kLen - 1)
       val prefix = prefixes.getOrElseUpdate(prefixStr, new KmerPrefix(prefixStr))
       val suffix = readSeq.charAt(idx + kLen - 1)
-      var k = new Kmer(prefix, suffix, source, sink)
-      k.reads.add(r)
+      var k = new Kmer(prefix, suffix)
+
+      // add kmer if seen
       val kmerSet = kmers.getOrElseUpdate(k.prefix, new HashSet[Kmer])
       if (kmerSet.forall(!_.equals(k))) {
         kmerSet += k
       }
+      
+      // increase multiplicity per kmer seen and attach read evidence
+      kmerSet.filter(_.equals(k)).foreach(km => {
+        km.incrementMult
+        km.reads.add(r)
+      })
+
       k
     })
 
@@ -255,10 +241,6 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   }
 
   def exciseKmer (k: Kmer): Unit = {
-    // TODO(peter, 11/27) for spur removal.
-  }
-
-  def exciseVertex (v: KmerVertex): Unit = {
     // TODO(peter, 11/27) for spur removal.
   }
 
@@ -316,7 +298,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
     // graph source and sink.
     // TODO(peter, 11/27) make sure the path lengths are initialized and
     // updated correctly!
-    for (sk <- source.right) {
+    /*for (sk <- source.right) {
       var pathLen = 0
       var k = sk
       while (k.right.right.size == 1) {
@@ -349,7 +331,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
           k = rk
         }
       }
-    }
+    }*/
   }
 
   /**
@@ -362,25 +344,20 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
     var edges = new ArrayBuffer[Kmer]
     var paths = List[KmerPath]()
 
-    def allPathsDFS (v: KmerVertex, depth: Int): Unit = {
-      println("In DFS, at:")
-      println(v)
-
-      if (v == sink) {
-        println("hit sink in DFS - " + edges.length)
+    def allPathsDFS (v: KmerPrefix, depth: Int): Unit = {
+      if (v.equals(sinkKmer.nextPrefix)) {
         val path = new KmerPath(edges.clone.toSeq)
         paths = path :: paths
-      }
-      else if (depth <= maxDepth) {
-        for (k <- v.right) {
+      } else if (depth <= maxDepth) {
+        for (k <- kmers.getOrElse(v, Set[Kmer]())) {
           edges += k
-          allPathsDFS(k.right, depth + 1)
+          allPathsDFS(k.nextPrefix, depth + 1)
           edges.remove(edges.length - 1)
         }
       }
     }
 
-    allPathsDFS(source, 0)
+    allPathsDFS(sourceKmer.prefix, 0)
 
     paths.foreach(p => allPaths.enqueue(p))
   }
@@ -645,8 +622,6 @@ class HMMAligner {
         revAlignedRefSeq += 'x'
         '.'
       }
-
-      //println(tr)
 
       tr match {
         case 'M' => {
@@ -1172,7 +1147,6 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     refHaplotype.scoreReadsLikelihood(hmm, region)
     var orderedHaplotypes = new PriorityQueue[Haplotype]()(HaplotypeOrdering)
     for (path <- kmerGraph.getAllPaths) {
-      println("haplo: " + path)
       val haplotype = new Haplotype(path.asHaplotypeString)
       haplotype.scoreReadsLikelihood(hmm, region)
       orderedHaplotypes.enqueue(haplotype)

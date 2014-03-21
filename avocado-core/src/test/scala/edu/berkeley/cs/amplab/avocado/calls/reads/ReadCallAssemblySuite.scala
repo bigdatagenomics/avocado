@@ -49,9 +49,9 @@ class ReadCallAssemblySuite extends FunSuite {
   }
 
   test("Test the creation of several haplotype strings.") {
-    val kms = ArrayBuffer[Kmer](new Kmer(new KmerPrefix("AC"), 'G', new KmerVertex, new KmerVertex),
-                                new Kmer(new KmerPrefix("CG"), 'A', new KmerVertex, new KmerVertex),
-                                new Kmer(new KmerPrefix("GA"), 'G', new KmerVertex, new KmerVertex))
+    val kms = ArrayBuffer[Kmer](new Kmer(new KmerPrefix("AC"), 'G'),
+                                new Kmer(new KmerPrefix("CG"), 'A'),
+                                new Kmer(new KmerPrefix("GA"), 'G'))
     val kp = new KmerPath(kms)
     
     assert(kp.asHaplotypeString === "ACGAG")
@@ -72,10 +72,11 @@ class ReadCallAssemblySuite extends FunSuite {
   }
 
   test("put kmers into graph for a single, simple read") {
+    val reference = "TACCAAT"
     val read = make_read("TACCAAT", 0L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
     val aread = AssemblyRead(read)
     
-    val graph = rcap_short.assemble(Seq(read), "TACCAAT")
+    val graph = rcap_short.assemble(Seq(read), reference)
 
     assert(graph.kmers.size === 4)
     assert(graph.prefixes.contains("TAC"))
@@ -85,9 +86,8 @@ class ReadCallAssemblySuite extends FunSuite {
     assert(graph.kmers.values.toList.flatMap(k => k).size == 4)
 
     assert(graph.allPaths.length === 1)
-    println("Kmer path:")
-    graph.allPaths.head.edges.foreach(println(_))
     assert(graph.allPaths.head.asHaplotypeString === "TACCAAT")
+    assert(graph.allPaths.head.multSum === (reference.length - 3))
   }
 
   test("put kmers into graph for a small set of reads without a polymorphism") {
@@ -128,9 +128,9 @@ class ReadCallAssemblySuite extends FunSuite {
     assert(kmerGraph.prefixes.contains("GTA"))
 
     assert(kmerGraph.allPaths.length === 1)
-    println("Kmer path:")
-    kmerGraph.allPaths.head.edges.foreach(println(_))
     assert(kmerGraph.allPaths.head.asHaplotypeString === "TACCAATGTAA")
+    // middle kmers are covered 4x, dropping off to 1x at ends
+    assert(kmerGraph.allPaths.head.multSum === (2 * 4 + 2 * 3 + 2 * 2 + 2 * 1))
   }
 
   test("put kmers into graph for a small set of reads with a polymorphism") {
@@ -175,10 +175,12 @@ class ReadCallAssemblySuite extends FunSuite {
     assert(kmerGraph.prefixes.contains("TGT"))
     assert(kmerGraph.prefixes.contains("GTA"))
 
-    kmerGraph.allPaths.map(_.asHaplotypeString).foreach(println)
-    println("Distinct:")
-    kmerGraph.allPaths.map(_.asHaplotypeString).toList.distinct.foreach(println)
     assert(kmerGraph.allPaths.length === 4)
+    val haplotypes = kmerGraph.allPaths.map(_.asHaplotypeString)
+    assert(haplotypes.contains("TACCAATGTAA"))
+    assert(haplotypes.contains("TACCCATGTAA"))
+    assert(haplotypes.contains("TACCCAATGTAA"))
+    assert(haplotypes.contains("TACCATGTAA"))
   }
 
   test("Call simple het SNP, 5x coverage") {
