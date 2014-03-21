@@ -16,7 +16,12 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, ADAMGenotype, ADAMRecord, ADAMVariant, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, 
+                                         ADAMGenotype, 
+                                         ADAMRecord, 
+                                         ADAMVariant, 
+                                         VariantType,
+                                         ADAMGenotypeAllele}
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord
@@ -35,6 +40,7 @@ import scala.math._
 object ReadCallAssemblyPhaser extends VariantCallCompanion {
 
   val callName = "AssemblyPhaser"
+  val debug = false
 
   def apply (stats: AvocadoConfigAndStats,
              config: SubnodeConfiguration): ReadCallAssemblyPhaser = {
@@ -542,16 +548,18 @@ class HMMAligner {
           s += "%2.2f" format a(idx)
           s += "\t"
         }
-        println(s)
+        if (ReadCallAssemblyPhaser.debug) println(s)
       }
     }
-
-    println("matches")
-    printArray(matches)
-    println("inserts")
-    printArray(inserts)
-    println("deletes")
-    printArray(deletes)
+    
+    if (ReadCallAssemblyPhaser.debug) {
+      println("matches")
+      printArray(matches)
+      println("inserts")
+      printArray(inserts)
+      println("deletes")
+      printArray(deletes)
+    }
 
     // Traceback to get the aligned sequences.
     var hasVariants = false
@@ -581,12 +589,16 @@ class HMMAligner {
     var i = paddedTestLen - 1
     var j = paddedRefLen - 1
     
-    println(i + ", " + j)
+    if (ReadCallAssemblyPhaser.debug)
+      println(i + ", " + j)
 
     while (i > 0 && j > 0) {
       val idx = i * stride + j
-      println(i + ", " + j + (": %1.1f" format matches(idx)) + (", %1.1f" format inserts(idx)) +
-              (", %1.1f" format deletes(idx)))
+      
+      if (ReadCallAssemblyPhaser.debug) {
+        println(i + ", " + j + (": %1.1f" format matches(idx)) + (", %1.1f" format inserts(idx)) +
+                (", %1.1f" format deletes(idx)))
+      }
               
       val bestScore = max(matches(idx), max(inserts(idx), deletes(idx)))
       // TODO(peter, 12/7) here, build the aligned sequences.
@@ -644,11 +656,13 @@ class HMMAligner {
     testAligned = revAlignedTestSeq.reverse
     refAligned = revAlignedRefSeq.reverse
 
-    println("ta: " + testAligned)
-    println("ra: " + refAligned)
-
+    if (ReadCallAssemblyPhaser.debug) {
+      println("ta: " + testAligned)
+      println("ra: " + refAligned)
+    }
+      
     var unitAlignment = revAlignment.reverse
-    println(unitAlignment)
+    if (ReadCallAssemblyPhaser.debug) println(unitAlignment)
     alignment = new ArrayBuffer[(Int, Char)]
     var alignSpan: Int = 0
     var alignMove: Char = '.'
@@ -671,7 +685,7 @@ class HMMAligner {
 
     // Compute the prior probability of the alignments, with the Dindel numbers.
     alignmentPrior = mismatchPrior * numSnps + indelPrior * numIndels
-    println("ap: " + alignmentPrior)
+    if (ReadCallAssemblyPhaser.debug) println("ap: " + alignmentPrior)
 
     // Returns whether the alignment has any SNPs or indels.
     hasVariants
@@ -731,7 +745,7 @@ class Haplotype (val sequence: String) {
     readsLikelihood = 0.0
     for (r <- reads) {
       try {
-        println(r.getSequence.toString + ", " + sequence)
+        if (ReadCallAssemblyPhaser.debug) println(r.getSequence.toString + ", " + sequence)
         hmm.alignSequences(sequence, r.getSequence.toString, null)
         val readLike = hmm.getLikelihood // - hmm.getPriora
         perReadLikelihoods += readLike
@@ -758,6 +772,10 @@ class Haplotype (val sequence: String) {
     hasVariants = hmm.alignSequences(refHaplotype.sequence, sequence, null)
     alignment = hmm.getAlignment
     hasVariants
+  }
+
+  override def toString(): String = {
+    sequence
   }
 }
 
@@ -795,6 +813,10 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
 class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
   var pairLikelihood = Double.NegativeInfinity
   var hasVariants = false
+
+  override def toString(): String = {
+    haplotype1.sequence + ", " + haplotype2.sequence + ", " + ("%1.3f" format pairLikelihood)
+  }
 
   /**
    * Exponentiates two numbers by base of 10, adds together, takes base 10 log, and returns.
@@ -1068,7 +1090,9 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     }
 
     if (heterozygousRef) {
-      
+      println("Calling het")
+      val alleles = List(ADAMGenotypeAllele.Ref, ADAMGenotypeAllele.Alt)
+
       val contig = ADAMContig.newBuilder
         .setContigId(refId)
         .setContigName(refName)
@@ -1077,25 +1101,22 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         .setContig(contig)
         .setReferenceAllele(refAllele)
         .setVariantAllele(altAllele)
-        .setPosition(refPos)
+        .setPosition(refPos + refOffset)
         .setVariantType(varType)
         .build
-      val genotypeRef = ADAMGenotype.newBuilder ()
+      val genotype = ADAMGenotype.newBuilder ()
         .setVariant(variant)
         .setSampleId (sampleName)
         .setGenotypeQuality(phred)
         .setExpectedAlleleDosage(1.0f)
-	.build()
-      val genotypeNonRef = ADAMGenotype.newBuilder ()
-        .setVariant(variant)
-        .setSampleId (sampleName)
-        .setGenotypeQuality(phred)
-        .setExpectedAlleleDosage(1.0f)
+        .setAlleles(alleles)
 	.build()
 
-      List(genotypeRef, genotypeNonRef)
+      List(genotype)
     } else if (!heterozygousRef && !heterozygousNonref) {
-      
+      println("Calling hom alt")
+      val alleles = List(ADAMGenotypeAllele.Alt, ADAMGenotypeAllele.Alt)
+
       val contig = ADAMContig.newBuilder
         .setContigId(refId)
         .setContigName(refName)
@@ -1104,24 +1125,20 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         .setContig(contig)
         .setReferenceAllele(refAllele)
         .setVariantAllele(altAllele)
-        .setPosition(refPos)
+        .setPosition(refPos + refOffset)
         .setVariantType(varType)
         .build
-      val genotypeNonRef0 = ADAMGenotype.newBuilder ()
+      val genotype = ADAMGenotype.newBuilder ()
         .setVariant(variant)
         .setSampleId (sampleName)
         .setGenotypeQuality(phred)
         .setExpectedAlleleDosage(1.0f)
-	.build()
-      val genotypeNonRef1 = ADAMGenotype.newBuilder ()
-        .setVariant(variant)
-        .setSampleId (sampleName)
-        .setGenotypeQuality(phred)
-        .setExpectedAlleleDosage(1.0f)
+        .setAlleles(alleles)
 	.build()
 
-      List(genotypeNonRef0, genotypeNonRef1)
+      List(genotype)
     } else {
+      print("not calling")
       List[ADAMGenotype]()
     }
   }
@@ -1165,7 +1182,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     var refHaplotypePair: HaplotypePair = null
     var orderedHaplotypePairs = new PriorityQueue[HaplotypePair]()(HaplotypePairOrdering)
     for (i <- 0 until bestHaplotypes.length) {
-      for (j <- 0 to (i)) {
+      for (j <- i until bestHaplotypes.length) {
         var pair = new HaplotypePair(bestHaplotypes(i), bestHaplotypes(j))
         pair.scorePairLikelihood(hmm, region)
         orderedHaplotypePairs.enqueue(pair)
@@ -1174,6 +1191,9 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         }
       }
     }
+    
+    println("After scoring, have:")
+    orderedHaplotypePairs.foreach(println)
 
     // Pick the best haplotype pairs with and without indels.
     val (calledHaplotypePair, uncalledHaplotypePair) = {
@@ -1227,10 +1247,14 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       var calledHaplotypes = new HashSet[Haplotype]
       val calledHaplotype1 = calledHaplotypePair.haplotype1
       val calledHaplotype2 = calledHaplotypePair.haplotype2
+      println("Called:")
+      println(calledHaplotype1 + ", " + calledHaplotype1.hasVariants + ", " + calledHaplotype1.alignment)
+      println(calledHaplotype2 + ", " + calledHaplotype2.hasVariants + ", " + calledHaplotype2.alignment)
       calledHaplotypes += calledHaplotypePair.haplotype1
       calledHaplotypes += calledHaplotypePair.haplotype2
-      val heterozygousRef = calledHaplotypes.map(!_.hasVariants).foldLeft(false)((z, x) => z | x)
-      val heterozygousNonref = calledHaplotypes.size > 1
+      // FIXME this isn't quite right...
+      val heterozygousRef = !calledHaplotypes.forall(_.hasVariants) && !calledHaplotypes.forall(!_.hasVariants)
+      val heterozygousNonref = calledHaplotypes.filter(_.hasVariants).size > 1
       for (haplotype <- calledHaplotypes) {
         if (haplotype.hasVariants) {
           var variantOffset = 0
@@ -1258,7 +1282,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                                             variantPhred,
                                             refPos,
                                             sampleName, refName, refId)
-              variants ::: variant
+              variants = variants ::: variant
             }
             if (move != 'D') {
               variantOffset += variantLength
