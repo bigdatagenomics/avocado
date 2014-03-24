@@ -16,7 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, ADAMGenotype, ADAMRecord, ADAMVariant, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, ADAMGenotype, ADAMRecord, ADAMVariant}
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord
@@ -31,6 +31,11 @@ import org.apache.spark.rdd.{RDD}
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder}
 import scala.math._
+
+object VariantType extends scala.Enumeration {
+  type VariantType = Value
+  val SNP, MNP, Insertion, Deletion = Value
+}
 
 object ReadCallAssemblyPhaser extends VariantCallCompanion {
 
@@ -967,7 +972,7 @@ class ReadCallAssemblyPhaser extends ReadCall {
    * @param refId ID for reference.
    * @return List of genotypes.
    */
-  def emitVariantCall (varType: VariantType, 
+  def emitVariantCall (varType: VariantType.VariantType,
                        varLength: Int, 
                        varOffset: Int, 
                        refOffset: Int, 

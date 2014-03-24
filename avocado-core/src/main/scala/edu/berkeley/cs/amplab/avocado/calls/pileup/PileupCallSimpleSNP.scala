@@ -16,7 +16,7 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.pileup
 
-import edu.berkeley.cs.amplab.adam.avro.{Base, ADAMContig, ADAMGenotype, ADAMPileup, ADAMVariant, VariantType}
+import edu.berkeley.cs.amplab.adam.avro.{Base, ADAMContig, ADAMGenotype, ADAMPileup, ADAMVariant}
 import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
 import edu.berkeley.cs.amplab.adam.util.PhredUtils
 import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
@@ -96,7 +96,6 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
         .setPosition(pileupHead.getPosition)
         .setReferenceAllele(pileupHead.getReferenceBase.toString)
         .setVariantAllele(maxNonRefBase.get.toString)
-        .setVariantType(VariantType.SNP)
         .build
       val genotypeRef = ADAMGenotype.newBuilder()
         .setVariant(variant)
@@ -126,7 +125,6 @@ class PileupCallSimpleSNP (ploidy: Int) extends PileupCall {
         .setPosition(pileupHead.getPosition)
         .setReferenceAllele(pileupHead.getReferenceBase.toString)
         .setVariantAllele(maxNonRefBase.get.toString)
-        .setVariantType(VariantType.SNP)
         .build
       val genotypeNonRef0 = ADAMGenotype.newBuilder()
         .setVariant(variant)
