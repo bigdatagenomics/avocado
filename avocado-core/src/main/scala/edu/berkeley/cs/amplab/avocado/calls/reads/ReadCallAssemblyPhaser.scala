@@ -1004,7 +1004,6 @@ class ReadCallAssemblyPhaser extends ReadCall {
         .setReferenceAllele(refAllele)
         .setVariantAllele(altAllele)
         .setPosition(refPos)
-        .setVariantType(varType)
         .build
       val genotypeRef = ADAMGenotype.newBuilder ()
         .setVariant(variant)
@@ -1031,7 +1030,6 @@ class ReadCallAssemblyPhaser extends ReadCall {
         .setReferenceAllele(refAllele)
         .setVariantAllele(altAllele)
         .setPosition(refPos)
-        .setVariantType(varType)
         .build
       val genotypeNonRef0 = ADAMGenotype.newBuilder ()
         .setVariant(variant)
