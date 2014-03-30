@@ -5,3 +5,11 @@
 *.adam*
 *.vcf*
 target
+
+# Intellij
+.idea/
+*.iml
+*.iws
+
+# Mac
+.DS_Store

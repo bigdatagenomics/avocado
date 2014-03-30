@@ -19,22 +19,17 @@ package edu.berkeley.cs.amplab.avocado
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.commons.configuration.plist.PropertyListConfiguration
 import org.apache.hadoop.mapreduce.Job
-import org.apache.spark.RangePartitioner
 import org.apache.spark.rdd.RDD
-import org.apache.spark.SparkContext._
 import org.apache.spark.{SparkContext, Logging}
 import org.kohsuke.args4j.{Option => option, Argument}
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, 
-                                         ADAMRecord,
-                                         ADAMNucleotideContigFragment}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant, ADAMRecord, ADAMNucleotideContigFragment}
 import edu.berkeley.cs.amplab.adam.cli.{AdamSparkCommand, 
                                         AdamCommandCompanion, 
                                         ParquetArgs, 
                                         SparkArgs, 
                                         Args4j, 
                                         Args4jBase}
-import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext, ReferenceRegion}
-import edu.berkeley.cs.amplab.adam.predicates.LocusPredicate
+import edu.berkeley.cs.amplab.adam.models.{ADAMVariantContext, ReferenceRegion}
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
 import edu.berkeley.cs.amplab.avocado.calls.{VariantCall, VariantCaller}
 import edu.berkeley.cs.amplab.avocado.input.Input
@@ -132,7 +127,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
       // extract partitioner and call
       val (p, (callName, callAlg)) = kv
 
-      println("Partition by: " + p.companion.partitionerName)
+      log.info("Partition by: " + p.companion.partitionerName)
 
       // generate partition set from current read set
       val partitions = p.computePartitions()
@@ -165,7 +160,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     preprocessingStagesZippedWithNames.foreach(p => {
       val (stageName, stageAlgorithm) = p
 
-      println ("Running " + stageName)
+      log.info ("Running " + stageName)
 
       // run this preprocessing stage
       processedReads = Preprocessor(processedReads, stageName, stageAlgorithm, config)
@@ -190,7 +185,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
       // get call and rdd pair
       val (call, rdd) = pair
 
-      println("Running " + call.companion.callName)
+      log.info("Running " + call.companion.callName)
       
       // apply call
       call.call (rdd)
@@ -227,12 +222,12 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
    */
   def run (sc: SparkContext, job: Job) {
 
-    println("Starting avocado...")
-    println("Loading reads in from " + args.readInput)
+    log.info("Starting avocado...")
 
     // load in reference from ADAM file
     val reference: RDD[ADAMNucleotideContigFragment] = sc.adamLoad(args.referenceInput)
 
+    log.info("Loading reads in from " + args.readInput)
     // load in reads from ADAM file
     val reads : RDD[ADAMRecord] = Input(sc, args.readInput, reference, config)
     
@@ -240,23 +235,23 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)
     
     // apply read translation steps
-    println("Processing reads.")
+    log.info("Processing reads.")
     val cleanedReads = preProcessReads(reads)
     
     // initial assignment of reads to variant calling algorithms
-    println("Partitioning reads.")
+    log.info("Partitioning reads.")
     val partitionedReads = partitionReads(cleanedReads, stats)
 
     // call variants on filtered reads and pileups
-    println("Calling variants.")
+    log.info("Calling variants.")
     val calledVariants = callVariants(partitionedReads)
     
     // post process variants
-    println("Post-processing variants.")
-    val processedVariants = postProcessVariants(calledVariants, stats).map(variantContext => variantContext.variant)
+    log.info("Post-processing variants.")
+    val processedVariants : RDD[ADAMVariant] = postProcessVariants(calledVariants, stats).map(variantContext => variantContext.variant)
 
     // save variants to output file
-    println("Writing calls to disk.")
+    log.info("Writing calls to disk.")
     processedVariants.adamSave(args.variantOutput,
                                args.blockSize,
                                args.pageSize,
