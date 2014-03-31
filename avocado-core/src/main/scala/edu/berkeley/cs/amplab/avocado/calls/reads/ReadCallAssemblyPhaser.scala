@@ -16,7 +16,11 @@
 
 package edu.berkeley.cs.amplab.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, ADAMGenotype, ADAMRecord, ADAMVariant}
+import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, 
+                                         ADAMGenotype,
+                                         ADAMGenotypeAllele,
+                                         ADAMRecord, 
+                                         ADAMVariant}
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord
@@ -40,6 +44,7 @@ object VariantType extends scala.Enumeration {
 object ReadCallAssemblyPhaser extends VariantCallCompanion {
 
   val callName = "AssemblyPhaser"
+  val debug = false
 
   def apply (stats: AvocadoConfigAndStats,
              config: SubnodeConfiguration): ReadCallAssemblyPhaser = {
@@ -63,6 +68,8 @@ case class AssemblyRead (record: ADAMRecord) {
  * @param string Kmer base string.
  */
 case class KmerPrefix (string: String) {
+
+  def equals(kp: KmerPrefix): Boolean = string == kp.string
 }
 
 /**
@@ -70,21 +77,27 @@ case class KmerPrefix (string: String) {
  *
  * @param prefix Prefix for kmer of length (k - 2)
  * @param suffix Last base of kmer
- * @param left Kmer graph connections into kmer
- * @param right Kmer graph connections out of kmer
  */
-case class Kmer (prefix: KmerPrefix, suffix: Char, var left: KmerVertex, var right: KmerVertex) {
+case class Kmer (prefix: KmerPrefix, suffix: Char) {
   var reads = new HashSet[AssemblyRead]
-  var mult: Int = 1
+  var mult: Int = 0
   var isCanon: Boolean = false
-}
 
-/**
- * Vertex for kmer graph.
- */
-class KmerVertex {
-  var left = new HashSet[Kmer]
-  var right = new HashSet[Kmer]
+  def incrementMult() {
+    mult += 1
+  }
+
+  def nextPrefix(): KmerPrefix = {
+    KmerPrefix(prefix.string.drop(1) + suffix)
+  }
+
+  def equals(e: Kmer): Boolean = {
+    prefix == e.prefix && suffix == e.suffix
+  }
+
+  override def toString(): String = {
+    prefix.string + "[" + suffix + "]"
+  }
 }
 
 /**
@@ -92,12 +105,9 @@ class KmerVertex {
  *
  * @param edges Edges of kmer graph.
  */
-class KmerPath (edges: ArrayBuffer[Kmer]) {
+class KmerPath (val edges: Seq[Kmer]) {
 
-  var multSum: Int = 0
-  for (e <- edges) {
-    multSum += e.mult
-  }
+  val multSum: Int = edges.map(_.mult).fold(0)(_ + _)
 
   /**
    * Builds haplotype string from a kmer path using overlap between kmers.
@@ -105,14 +115,20 @@ class KmerPath (edges: ArrayBuffer[Kmer]) {
    * @return String representing haplotype from kmers.
    */
   def asHaplotypeString (): String = {
-    var sb = new StringBuilder
-    for (i <- Array.range(0, edges(0).prefix.string.length)) {
-      sb += edges(0).prefix.string.charAt(i)
+    var sb = ""
+    if (edges.length > 0) {
+      sb += edges(0).prefix.string
+      for (e <- edges) {
+        sb += e.suffix
+      }
+      sb
+    } else {
+      "" // TODO should throw exception
     }
-    for (e <- edges) {
-      sb += e.suffix
-    }
-    sb.toString
+  }
+
+  def equals(kp: KmerPath): Boolean = {
+    this.asHaplotypeString == kp.asHaplotypeString
   }
 }
 
@@ -147,23 +163,25 @@ object KmerPathOrdering extends Ordering[KmerPath] {
  * @param readLen Read length.
  * @param regionLen Length of the active region.
  */
-class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
+class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   val spurThreshold = kLen // TODO(peter, 11/26) how to choose thresh?
 
   //var reads: HashMap[String,AssemblyRead] = null
-  private var reads: ArrayBuffer[AssemblyRead] = null
+  private var reads: Seq[AssemblyRead] = null
 
-  // Convenient to explicitly have the graph source and sink.
-  private val source = new KmerVertex
-  private val sink = new KmerVertex
+  // source/sink kmers
+  val sourceKmer = new Kmer(new KmerPrefix(reference.take(kLen - 1)), reference.drop(kLen - 1).head)
+  val sinkKmer = new Kmer(new KmerPrefix(reference.dropRight(1).takeRight(kLen - 1)),
+                          reference.last)
 
   // The actual kmer graph consists of unique K-1 prefixes and kmers connected
   // by vertices.
-  private var prefixes = new HashMap[String,KmerPrefix]
-  private var kmers = new HashMap[KmerPrefix,HashSet[Kmer]]
+  // TODO: Remove KmerPrefix class 
+  var prefixes = new HashMap[String,KmerPrefix]
+  var kmers = new HashMap[KmerPrefix,HashSet[Kmer]]
 
   // Paths through the kmer graph are in order of decreasing total mult.
-  private var allPaths = new PriorityQueue[KmerPath]()(KmerPathOrdering)
+  var allPaths = new PriorityQueue[KmerPath]()(KmerPathOrdering)
 
   /**
    * From a read, adds kmers to the graph.
@@ -173,17 +191,29 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
   def insertReadKmers (r: AssemblyRead): Unit = {
     // Construct L - K + 1 kmers, initially connected to the source and sink.
     val readSeq = r.record.getSequence.toString
-    val offsets = ArrayBuffer.range(0, readLen - kLen + 1)
+    val offsets = 0 until readLen - kLen + 1
     val ks = offsets.map(idx => {
       val prefixStr = readSeq.substring(idx, idx + kLen - 1)
       val prefix = prefixes.getOrElseUpdate(prefixStr, new KmerPrefix(prefixStr))
       val suffix = readSeq.charAt(idx + kLen - 1)
-      var k = new Kmer(prefix, suffix, source, sink)
-      k.reads.add(r)
-      kmers.getOrElseUpdate(k.prefix, new HashSet[Kmer]) += k
+      var k = new Kmer(prefix, suffix)
+
+      // add kmer if seen
+      val kmerSet = kmers.getOrElseUpdate(k.prefix, new HashSet[Kmer])
+      if (kmerSet.forall(!_.equals(k))) {
+        kmerSet += k
+      }
+      
+      // increase multiplicity per kmer seen and attach read evidence
+      kmerSet.filter(_.equals(k)).foreach(km => {
+        km.incrementMult
+        km.reads.add(r)
+      })
+
       k
     })
 
+    /*
     // Add a vertex in between each adjacent pair of kmers.
     (ks, ks.drop(1)).zipped.map((k1, k2) => {
       var v = new KmerVertex
@@ -195,10 +225,19 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
     })
 
     // Add vertices at the ends.
-    ks.head.left = new KmerVertex
+    if (ks.head.equals(sourceKmer)) {
+      ks.head.left = source
+    } else {
+      ks.head.left = new KmerVertex
+    }
     ks.head.left.right.add(ks.head)
-    ks.last.right = new KmerVertex
+    if (ks.last.equals(sinkKmer)) {
+      ks.last.right = sink
+    } else {
+      ks.last.right = new KmerVertex
+    }
     ks.last.left.left.add(ks.last)
+    */
   }
 
   /**
@@ -207,38 +246,11 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
    * @param readGroup Sequence of reads to add.
    */
   def insertReads (readGroup: Seq[ADAMRecord]): Unit = {
-    reads = ArrayBuffer(readGroup.map(x => new AssemblyRead(x)) : _*)
-    reads.map(r => insertReadKmers(r))
-  }
-
-  /**
-   * Merges two vertices.
-   *
-   * @param v1 First vertex to merge.
-   * @param v2 Second vertex to merge.
-   */
-  def mergeVertices (v1: KmerVertex, v2: KmerVertex): Unit = {
-    // Merge v2 into v1.
-    v2.left.map(k => v1.left.add(k))
-    v2.right.map(k => v1.right.add(k))
-  }
-
-  /**
-   * Removes a kmer from a vertex.
-   *
-   * @param v Vertex from which to remove kmer.
-   * @param k Kmer to remove.
-   */
-  def exciseVertexKmer (v: KmerVertex, k: Kmer): Unit = {
-    v.left.remove(k)
-    v.right.remove(k)
+    reads = readGroup.map(x => new AssemblyRead(x))
+    reads.foreach(r => insertReadKmers(r))
   }
 
   def exciseKmer (k: Kmer): Unit = {
-    // TODO(peter, 11/27) for spur removal.
-  }
-
-  def exciseVertex (v: KmerVertex): Unit = {
     // TODO(peter, 11/27) for spur removal.
   }
 
@@ -246,6 +258,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
    * Builds graph.
    */
   def connectGraph (): Unit = {
+    /*
     // Consolidate equivalent kmers.
     for ((prefix, ks) <- kmers) {
       // Each equivalent (prefix, suffix) pair has an arbitrary "canonical" kmer.
@@ -284,6 +297,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
         }
       }
     }
+    */
   }
 
   /**
@@ -294,7 +308,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
     // graph source and sink.
     // TODO(peter, 11/27) make sure the path lengths are initialized and
     // updated correctly!
-    for (sk <- source.right) {
+    /*for (sk <- source.right) {
       var pathLen = 0
       var k = sk
       while (k.right.right.size == 1) {
@@ -303,7 +317,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
       }
       if (pathLen <= spurThreshold) {
         k = k.left.left.head
-        while (k != source) {
+        while (!source.equals(k)) {
           val lk = k.left.left.head
           exciseVertex(k.left)
           exciseKmer(k)
@@ -320,14 +334,14 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
       }
       if (pathLen <= spurThreshold) {
         k = k.right.right.head
-        while (k != source) {
+        while (!source.equals(k)) {
           val rk = k.right.right.head
           exciseVertex(k.right)
           exciseKmer(k)
           k = rk
         }
       }
-    }
+    }*/
   }
 
   /**
@@ -335,24 +349,27 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int) {
    */
   def enumerateAllPaths (): Unit = {
     // TODO(peter, 12/9) arbitrary max assembly bound.
+    //TODO change to use list cons
     val maxDepth = regionLen + readLen - kLen + 1
     var edges = new ArrayBuffer[Kmer]
+    var paths = List[KmerPath]()
 
-    def allPathsDFS (v: KmerVertex, depth: Int): Unit = {
-      if (v == sink) {
-        val path = new KmerPath(edges)
-        allPaths.enqueue(path)
-      }
-      else if (depth <= maxDepth) {
-        for (k <- v.right) {
+    def allPathsDFS (v: KmerPrefix, depth: Int): Unit = {
+      if (v.equals(sinkKmer.nextPrefix)) {
+        val path = new KmerPath(edges.clone.toSeq)
+        paths = path :: paths
+      } else if (depth <= maxDepth) {
+        for (k <- kmers.getOrElse(v, Set[Kmer]())) {
           edges += k
-          allPathsDFS(k.right, depth + 1)
+          allPathsDFS(k.nextPrefix, depth + 1)
           edges.remove(edges.length - 1)
         }
       }
     }
 
-    allPathsDFS(source, 0)
+    allPathsDFS(sourceKmer.prefix, 0)
+
+    paths.foreach(p => allPaths.enqueue(p))
   }
 
   /**
@@ -393,13 +410,13 @@ class HMMAligner {
   val indelToMatchPrior = -4.0
   val indelToIndelPrior = -4.0
 
-  private var matches: ArrayBuffer[Double] = ArrayBuffer(0.0)
-  private var inserts: ArrayBuffer[Double] = ArrayBuffer(0.0)
-  private var deletes: ArrayBuffer[Double] = ArrayBuffer(0.0)
+  private var matches: Array[Double] = Array(0.0)
+  private var inserts: Array[Double] = Array(0.0)
+  private var deletes: Array[Double] = Array(0.0)
 
-  private var traceMatches: ArrayBuffer[Char] = ArrayBuffer('\0')
-  private var traceInserts: ArrayBuffer[Char] = ArrayBuffer('\0')
-  private var traceDeletes: ArrayBuffer[Char] = ArrayBuffer('\0')
+  private var traceMatches: Array[Char] = Array('\0')
+  private var traceInserts: Array[Char] = Array('\0')
+  private var traceDeletes: Array[Char] = Array('\0')
 
   private var alignment: ArrayBuffer[(Int, Char)] = null
 
@@ -415,25 +432,28 @@ class HMMAligner {
    * @return True if sequence has variants.
    */
   def alignSequences (refSequence: String, testSequence: String, testQualities: String): Boolean = {
+
+    def fpCompare(a: Double, b: Double, eps: Double): Boolean = abs(a - b) <= eps
+
     paddedRefLen = refSequence.length + 1
     paddedTestLen = testSequence.length + 1
     stride = paddedRefLen
     val oldMatSize = matSize
     matSize = max(matSize, paddedTestLen * paddedRefLen)
     if (matSize > oldMatSize && matSize > 0) {
-      matches = new ArrayBuffer[Double](matSize)
-      inserts = new ArrayBuffer[Double](matSize)
-      deletes = new ArrayBuffer[Double](matSize)
-      traceMatches = new ArrayBuffer[Char](matSize)
-      traceInserts = new ArrayBuffer[Char](matSize)
-      traceDeletes = new ArrayBuffer[Char](matSize)
-    } else if (oldMatSize == 0 && matSize == 0) {
-      matches = new ArrayBuffer[Double](1)
-      inserts = new ArrayBuffer[Double](1)
-      deletes = new ArrayBuffer[Double](1)
-      traceMatches = new ArrayBuffer[Char](1)
-      traceInserts = new ArrayBuffer[Char](1)
-      traceDeletes = new ArrayBuffer[Char](1)
+      matches = new Array[Double](matSize)
+      inserts = new Array[Double](matSize)
+      deletes = new Array[Double](matSize)
+      traceMatches = new Array[Char](matSize)
+      traceInserts = new Array[Char](matSize)
+      traceDeletes = new Array[Char](matSize)
+    } else if (matSize <= 1 || oldMatSize <= 1) {
+      matches = new Array[Double](1)
+      inserts = new Array[Double](1)
+      deletes = new Array[Double](1)
+      traceMatches = new Array[Char](1)
+      traceInserts = new Array[Char](1)
+      traceDeletes = new Array[Char](1)
     }
 
     // Note: want to use the _test_ haplotype length here, not the ref length.
@@ -445,12 +465,12 @@ class HMMAligner {
     matches(0) = 2.0 * eta
     inserts(0) = Double.NegativeInfinity
     deletes(0) = Double.NegativeInfinity
-    for (i <- 0 to paddedTestLen) {
-      for (j <- 0 to paddedRefLen) {
+    for (i <- 0 until paddedTestLen) {
+      for (j <- 0 until paddedRefLen) {
         if (i > 0 || j > 0) {
           val (m, trM) = if (i >= 1 && j >= 1) {
-            val testBase = testSequence(i-1)
-            val refBase = refSequence(j-1)
+            val testBase = testSequence(i - 1)
+            val refBase = refSequence(j - 1)
             // TODO(peter, 12/7) there is a second constant term to the prior...
             val prior = if (testBase == refBase) {
               matchPrior / (indelPrior * indelPrior)
@@ -461,17 +481,17 @@ class HMMAligner {
             val mMatch = matches(idx)
             val mInsert = inserts(idx)
             val mDelete = deletes(idx)
-            val m = max(mMatch, max(mInsert, mDelete)) + prior
-            val t = if (m == mMatch) {
+            val mMax = max(mMatch, max(mInsert, mDelete)) + prior
+            val t = if (fpCompare(mMax, mMatch, 0.01)) {
               'M'
-            } else if (m == mInsert) {
+            } else if (fpCompare(mMax, mInsert, 0.01)) {
               'I'
-            } else if (m == mDelete) {
+            } else if (fpCompare(mMax, mDelete, 0.01)) {
               'D'
             } else {
               '.'
             }
-            (m, t)
+            (mMax, t)
           } else {
             (Double.NegativeInfinity, '.')
           }
@@ -479,15 +499,15 @@ class HMMAligner {
             val idx = (i-1) * stride + j
             val insMatch = matches(idx) + indelToMatchPrior
             val insInsert = inserts(idx) + indelToIndelPrior
-            val ins = max(insMatch, insInsert)
-            val t = if (ins == insMatch) {
+            val insMax = max(insMatch, insInsert)
+            val t = if (fpCompare(insMax, insMatch, 0.01)) {
               'M'
-            } else if (ins == insInsert) {
+            } else if (fpCompare(insMax, insInsert, 0.01)) {
               'I'
             } else {
               '.'
             }
-            (ins, t)
+            (insMax, t)
           } else {
             (Double.NegativeInfinity, '.')
           }
@@ -495,15 +515,15 @@ class HMMAligner {
             val idx = i * stride + (j - 1)
             val delMatch = matches(idx) + indelToMatchPrior
             val delDelete = deletes(idx) + indelToIndelPrior
-            val del = max(delMatch, delDelete)
-            val t = if (del == delMatch) {
+            val delMax = max(delMatch, delDelete)
+            val t = if (fpCompare(delMax, delMatch, 0.01)) {
               'M'
-            } else if (del == delDelete) {
+            } else if (fpCompare(delMax, delDelete, 0.01)) {
               'D'
             } else {
               '.'
             }
-            (del, t)
+            (delMax, t)
           } else {
             (Double.NegativeInfinity, '.')
           }
@@ -517,10 +537,32 @@ class HMMAligner {
         }
       }
     }
+
     if (matSize > 0) {
       alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
     } else {
       alignmentLikelihood = max(matches(0), max(inserts(0), deletes(0)))
+    }
+
+    def printArray(a: Array[Double]) {
+      for (i <- 0 until paddedTestLen) {
+        var s = ""
+        for (j <- 0 until paddedRefLen) {
+          val idx = i * stride + j
+          s += "%2.2f" format a(idx)
+          s += "\t"
+        }
+        if (ReadCallAssemblyPhaser.debug) println(s)
+      }
+    }
+    
+    if (ReadCallAssemblyPhaser.debug) {
+      println("matches")
+      printArray(matches)
+      println("inserts")
+      printArray(inserts)
+      println("deletes")
+      printArray(deletes)
     }
 
     // Traceback to get the aligned sequences.
@@ -530,13 +572,41 @@ class HMMAligner {
     var revAlignment = ""
     var revAlignedTestSeq = ""
     var revAlignedRefSeq = ""
+
+    def indexMax(a: (Double, Int), b: (Double, Int)): (Double, Int) = {
+      if (a._1 > b._1) {
+        a
+      } else {
+        b
+      }
+    }
+    
+    def getArrayMax(array: Array[Double]): (Double, Int) = {
+      array.zipWithIndex.reduce(indexMax)
+    }
+
+    val highestM = getArrayMax(matches)
+    val highestI = getArrayMax(inserts)
+    val highestD = getArrayMax(deletes)
+    val highestIdx = indexMax(highestM, indexMax(highestI, highestD))._2
+
     var i = paddedTestLen - 1
     var j = paddedRefLen - 1
+    
+    if (ReadCallAssemblyPhaser.debug)
+      println(i + ", " + j)
+
     while (i > 0 && j > 0) {
       val idx = i * stride + j
+      
+      if (ReadCallAssemblyPhaser.debug) {
+        println(i + ", " + j + (": %1.1f" format matches(idx)) + (", %1.1f" format inserts(idx)) +
+                (", %1.1f" format deletes(idx)))
+      }
+              
       val bestScore = max(matches(idx), max(inserts(idx), deletes(idx)))
       // TODO(peter, 12/7) here, build the aligned sequences.
-      val tr = if (bestScore == matches(idx)) {
+      val tr = if (fpCompare(bestScore, matches(idx), 0.0001)) {
         revAlignedTestSeq += testSequence(i - 1)
         revAlignedRefSeq += refSequence(j - 1)
         if (testSequence(i - 1) != refSequence(j - 1)) {
@@ -547,22 +617,28 @@ class HMMAligner {
         else {
           revAlignment += '='
         }
+        // FIXME
         traceMatches(idx)
-      } else if (bestScore == inserts(idx)) {
+      } else if (fpCompare(bestScore, inserts(idx), 0.0001)) {
         revAlignedTestSeq += testSequence(i - 1)
+        revAlignedRefSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'I'
         traceInserts(idx)
-      } else if (bestScore == deletes(idx)) {
+      } else if (fpCompare(bestScore, deletes(idx), 0.0001)) {
         revAlignedRefSeq += refSequence(j - 1)
+        revAlignedTestSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'D'
         traceDeletes(idx)
       } else {
+        revAlignedTestSeq += 'x'
+        revAlignedRefSeq += 'x'
         '.'
       }
+
       tr match {
         case 'M' => {
           i -= 1
@@ -574,16 +650,27 @@ class HMMAligner {
         case 'D' => {
           j -= 1
         }
-        case _ => {} // TODO(peter, 12/8) the alignment is bad (probably a bug).
+        case _ => {
+          i -= 1
+          j -= 1
+        } // TODO(peter, 12/8) the alignment is bad (probably a bug).
       }
     }
+    
     testAligned = revAlignedTestSeq.reverse
     refAligned = revAlignedRefSeq.reverse
+
+    if (ReadCallAssemblyPhaser.debug) {
+      println("ta: " + testAligned)
+      println("ra: " + refAligned)
+    }
+      
     var unitAlignment = revAlignment.reverse
+    if (ReadCallAssemblyPhaser.debug) println(unitAlignment)
     alignment = new ArrayBuffer[(Int, Char)]
     var alignSpan: Int = 0
     var alignMove: Char = '.'
-    for (i <- 0 to unitAlignment.length) {
+    for (i <- 0 until unitAlignment.length) {
       val move = unitAlignment(i)
       if (move != alignMove) {
         if (alignSpan > 0) {
@@ -602,6 +689,7 @@ class HMMAligner {
 
     // Compute the prior probability of the alignments, with the Dindel numbers.
     alignmentPrior = mismatchPrior * numSnps + indelPrior * numIndels
+    if (ReadCallAssemblyPhaser.debug) println("ap: " + alignmentPrior)
 
     // Returns whether the alignment has any SNPs or indels.
     hasVariants
@@ -661,6 +749,7 @@ class Haplotype (val sequence: String) {
     readsLikelihood = 0.0
     for (r <- reads) {
       try {
+        if (ReadCallAssemblyPhaser.debug) println(r.getSequence.toString + ", " + sequence)
         hmm.alignSequences(sequence, r.getSequence.toString, null)
         val readLike = hmm.getLikelihood // - hmm.getPriora
         perReadLikelihoods += readLike
@@ -687,6 +776,10 @@ class Haplotype (val sequence: String) {
     hasVariants = hmm.alignSequences(refHaplotype.sequence, sequence, null)
     alignment = hmm.getAlignment
     hasVariants
+  }
+
+  override def toString(): String = {
+    sequence
   }
 }
 
@@ -725,6 +818,10 @@ class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
   var pairLikelihood = Double.NegativeInfinity
   var hasVariants = false
 
+  override def toString(): String = {
+    haplotype1.sequence + ", " + haplotype2.sequence + ", " + ("%1.3f" format pairLikelihood)
+  }
+
   /**
    * Exponentiates two numbers by base of 10, adds together, takes base 10 log, and returns.
    *
@@ -760,7 +857,7 @@ class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
    */
   def scorePairLikelihood (hmm: HMMAligner, reads: Seq[ADAMRecord]): Double = {
     var readsProb = 0.0
-    for (i <- 0 to reads.length) {
+    for (i <- 0 until reads.length) {
       val readLikelihood1 = haplotype1.perReadLikelihoods(i)
       val readLikelihood2 = haplotype2.perReadLikelihoods(i)
       readsProb += exactLogSumExp10(readLikelihood1, readLikelihood2) - log10(2.0)
@@ -815,12 +912,10 @@ object HaplotypePairOrdering extends Ordering[HaplotypePair] {
 /**
  * Phase (diploid) haplotypes with kmer assembly on active regions.
  */
-class ReadCallAssemblyPhaser extends ReadCall {
+class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
+                             val regionWindow: Int = 200) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
-
-  val kmerLen = 20
-  val regionWindow = 200
 
   /**
    * From a read, returns the reference sequence.
@@ -947,7 +1042,7 @@ class ReadCallAssemblyPhaser extends ReadCall {
   def assemble (region: Seq[ADAMRecord], ref: String): KmerGraph = {
     val readLen = region(0).getSequence.length
     val regionLen = min(regionWindow + readLen - 1, ref.length)
-    var kmerGraph = new KmerGraph(kmerLen, readLen, regionLen)
+    var kmerGraph = new KmerGraph(kmerLen, readLen, regionLen, ref)
     kmerGraph.insertReads(region)
     kmerGraph.connectGraph
     //kmer_graph.removeSpurs // TODO(peter, 11/27) debug: not doing spur removal atm.
@@ -999,7 +1094,8 @@ class ReadCallAssemblyPhaser extends ReadCall {
     }
 
     if (heterozygousRef) {
-      
+      val alleles = List(ADAMGenotypeAllele.Ref, ADAMGenotypeAllele.Alt)
+
       val contig = ADAMContig.newBuilder
         .setContigId(refId)
         .setContigName(refName)
@@ -1008,24 +1104,20 @@ class ReadCallAssemblyPhaser extends ReadCall {
         .setContig(contig)
         .setReferenceAllele(refAllele)
         .setVariantAllele(altAllele)
-        .setPosition(refPos)
+        .setPosition(refPos + refOffset)
         .build
-      val genotypeRef = ADAMGenotype.newBuilder ()
+      val genotype = ADAMGenotype.newBuilder ()
         .setVariant(variant)
         .setSampleId (sampleName)
         .setGenotypeQuality(phred)
         .setExpectedAlleleDosage(1.0f)
-	.build()
-      val genotypeNonRef = ADAMGenotype.newBuilder ()
-        .setVariant(variant)
-        .setSampleId (sampleName)
-        .setGenotypeQuality(phred)
-        .setExpectedAlleleDosage(1.0f)
+        .setAlleles(alleles)
 	.build()
 
-      List(genotypeRef, genotypeNonRef)
+      List(genotype)
     } else if (!heterozygousRef && !heterozygousNonref) {
-      
+      val alleles = List(ADAMGenotypeAllele.Alt, ADAMGenotypeAllele.Alt)
+
       val contig = ADAMContig.newBuilder
         .setContigId(refId)
         .setContigName(refName)
@@ -1034,23 +1126,19 @@ class ReadCallAssemblyPhaser extends ReadCall {
         .setContig(contig)
         .setReferenceAllele(refAllele)
         .setVariantAllele(altAllele)
-        .setPosition(refPos)
+        .setPosition(refPos + refOffset)
         .build
-      val genotypeNonRef0 = ADAMGenotype.newBuilder ()
+      val genotype = ADAMGenotype.newBuilder ()
         .setVariant(variant)
         .setSampleId (sampleName)
         .setGenotypeQuality(phred)
         .setExpectedAlleleDosage(1.0f)
-	.build()
-      val genotypeNonRef1 = ADAMGenotype.newBuilder ()
-        .setVariant(variant)
-        .setSampleId (sampleName)
-        .setGenotypeQuality(phred)
-        .setExpectedAlleleDosage(1.0f)
+        .setAlleles(alleles)
 	.build()
 
-      List(genotypeNonRef0, genotypeNonRef1)
+      List(genotype)
     } else {
+      print("not calling")
       List[ADAMGenotype]()
     }
   }
@@ -1093,8 +1181,8 @@ class ReadCallAssemblyPhaser extends ReadCall {
     // Score the haplotypes pairwise inclusively.
     var refHaplotypePair: HaplotypePair = null
     var orderedHaplotypePairs = new PriorityQueue[HaplotypePair]()(HaplotypePairOrdering)
-    for (i <- 0 to bestHaplotypes.length) {
-      for (j <- 0 to (i + 1)) {
+    for (i <- 0 until bestHaplotypes.length) {
+      for (j <- i until bestHaplotypes.length) {
         var pair = new HaplotypePair(bestHaplotypes(i), bestHaplotypes(j))
         pair.scorePairLikelihood(hmm, region)
         orderedHaplotypePairs.enqueue(pair)
@@ -1102,6 +1190,11 @@ class ReadCallAssemblyPhaser extends ReadCall {
           refHaplotypePair = pair
         }
       }
+    }
+
+    if (ReadCallAssemblyPhaser.debug) {
+      println("After scoring, have:")
+      orderedHaplotypePairs.foreach(println)
     }
 
     // Pick the best haplotype pairs with and without indels.
@@ -1156,10 +1249,16 @@ class ReadCallAssemblyPhaser extends ReadCall {
       var calledHaplotypes = new HashSet[Haplotype]
       val calledHaplotype1 = calledHaplotypePair.haplotype1
       val calledHaplotype2 = calledHaplotypePair.haplotype2
+      if (ReadCallAssemblyPhaser.debug) {
+        println("Called:")
+        println(calledHaplotype1 + ", " + calledHaplotype1.hasVariants + ", " + calledHaplotype1.alignment)
+        println(calledHaplotype2 + ", " + calledHaplotype2.hasVariants + ", " + calledHaplotype2.alignment)
+      }
       calledHaplotypes += calledHaplotypePair.haplotype1
       calledHaplotypes += calledHaplotypePair.haplotype2
-      val heterozygousRef = calledHaplotypes.map(!_.hasVariants).foldLeft(false)((z, x) => z | x)
-      val heterozygousNonref = calledHaplotypes.size > 1
+      // FIXME this isn't quite right...
+      val heterozygousRef = !calledHaplotypes.forall(_.hasVariants) && !calledHaplotypes.forall(!_.hasVariants)
+      val heterozygousNonref = calledHaplotypes.filter(_.hasVariants).size > 1
       for (haplotype <- calledHaplotypes) {
         if (haplotype.hasVariants) {
           var variantOffset = 0
@@ -1187,7 +1286,7 @@ class ReadCallAssemblyPhaser extends ReadCall {
                                             variantPhred,
                                             refPos,
                                             sampleName, refName, refId)
-              variants ::: variant
+              variants = variants ::: variant
             }
             if (move != 'D') {
               variantOffset += variantLength
