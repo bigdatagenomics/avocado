@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013. Regents of the University of California
+ * Copyright (c) 2013-2014. Regents of the University of California
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package edu.berkeley.cs.amplab.avocado.calls.reads
 
 import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMGenotypeAllele}
 import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
+import edu.berkeley.cs.amplab.avocado.algorithms.debrujin._
+import edu.berkeley.cs.amplab.avocado.algorithms.hmm._
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.scalatest.FunSuite
