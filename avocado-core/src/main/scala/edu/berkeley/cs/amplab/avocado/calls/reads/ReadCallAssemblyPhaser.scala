@@ -14,28 +14,30 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls.reads
+package org.bdgenomics.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMContig, 
-                                         ADAMGenotype,
-                                         ADAMGenotypeAllele,
-                                         ADAMRecord, 
-                                         ADAMVariant}
-import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
-import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord
-import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord._
-import edu.berkeley.cs.amplab.adam.util.{MdTag, PhredUtils}
-import edu.berkeley.cs.amplab.avocado.algorithms.debrujin._
-import edu.berkeley.cs.amplab.avocado.algorithms.hmm._
-import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
-import net.sf.samtools.{Cigar, CigarOperator, CigarElement, TextCigarCodec}
+import org.bdgenomics.adam.avro.{
+  ADAMContig,
+  ADAMGenotype,
+  ADAMGenotypeAllele,
+  ADAMRecord,
+  ADAMVariant
+}
+import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.rich.RichADAMRecord._
+import org.bdgenomics.adam.util.{ MdTag, PhredUtils }
+import org.bdgenomics.avocado.algorithms.debrujin._
+import org.bdgenomics.avocado.algorithms.hmm._
+import org.bdgenomics.avocado.calls.VariantCallCompanion
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
+import net.sf.samtools.{ Cigar, CigarOperator, CigarElement, TextCigarCodec }
 import org.apache.commons.configuration.SubnodeConfiguration
-import org.apache.spark.{SparkContext, Logging}
-import org.apache.spark.rdd.{RDD}
+import org.apache.spark.{ SparkContext, Logging }
+import org.apache.spark.rdd.{ RDD }
 import scala.collection.JavaConversions._
-import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder}
+import scala.collection.mutable.{ ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder }
 import scala.math._
 
 object VariantType extends scala.Enumeration {
@@ -48,12 +50,12 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
   val callName = "AssemblyPhaser"
   val debug = false
 
-  def apply (stats: AvocadoConfigAndStats,
-             config: SubnodeConfiguration): ReadCallAssemblyPhaser = {
+  def apply(stats: AvocadoConfigAndStats,
+            config: SubnodeConfiguration): ReadCallAssemblyPhaser = {
 
     new ReadCallAssemblyPhaser()
   }
-  
+
 }
 
 /**
@@ -69,11 +71,11 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    *
    * @param read Read from which to return sequence.
    * @return String containing reference sequence over this read.
-   * 
+   *
    * @see https://github.com/bigdatagenomics/adam/blob/indel-realign/adam-commands/src/main/scala/edu/berkeley/cs/amplab/adam/util/MdTag.scala
    * @see getReference
    */
-  def getReadReference (read: ADAMRecord): String = {
+  def getReadReference(read: ADAMRecord): String = {
     val mdtag = MdTag(read.getMismatchingPositions.toString, read.getStart)
 
     val readSeq = RichADAMRecord(read).getSequence.toString
@@ -90,7 +92,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
           for (i <- (0 until el.getLength)) {
             mdtag.mismatchedBase(refPos) match {
               case Some(b) => reference += b
-              case None => reference += readSeq(readPos)
+              case None    => reference += readSeq(readPos)
             }
             readPos += 1
             refPos += 1
@@ -100,7 +102,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
           for (i <- (0 until el.getLength)) {
             mdtag.deletedBase(refPos) match {
               case Some(b) => reference += b
-              case None => {}
+              case None    => {}
             }
             refPos += 1
           }
@@ -124,7 +126,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    *
    * @see getReadReference
    */
-  def getReference (region: Seq[ADAMRecord]): String = {
+  def getReference(region: Seq[ADAMRecord]): String = {
     // TODO(peter, 12/5) currently, get the reference subsequence from the
     // MD tags of the ADAM records. Not entirely correct, because a region may
     // not be completely covered by reads, in which case the MD tags are
@@ -151,12 +153,14 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       if (offset >= 0 && offset < ref.length) {
         try {
           reference += ref.substring(offset)
-        } catch {
+        }
+        catch {
           case (e: StringIndexOutOfBoundsException) => {
             log.warn("String index out of bounds at: " + reference + ", " + ref + ", " + offset)
           }
         }
-      } else if (offset < 0) {
+      }
+      else if (offset < 0) {
         return ""
       }
     }
@@ -170,7 +174,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param ref Reference sequence over which to test.
    * @return True if region is active.
    */
-  def isRegionActive (region: Seq[ADAMRecord], ref: String): Boolean = {
+  def isRegionActive(region: Seq[ADAMRecord], ref: String): Boolean = {
     // TODO(peter, 12/6) a very naive active region criterion. Upgrade asap!
     val activeLikelihoodThresh = -2.0
     var refHaplotype = new Haplotype(ref)
@@ -186,7 +190,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param ref String representing reference over the region.
    * @return Kmer graph corresponding to region.
    */
-  def assemble (region: Seq[ADAMRecord], ref: String): KmerGraph = {
+  def assemble(region: Seq[ADAMRecord], ref: String): KmerGraph = {
     val readLen = region(0).getSequence.length
     val regionLen = min(regionWindow + readLen - 1, ref.length)
     var kmerGraph = new KmerGraph(kmerLen, readLen, regionLen, ref)
@@ -214,29 +218,31 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param refId ID for reference.
    * @return List of genotypes.
    */
-  def emitVariantCall (varType: VariantType.VariantType,
-                       varLength: Int, 
-                       varOffset: Int, 
-                       refOffset: Int, 
-                       varSequence: String, 
-                       refSequence: String, 
-                       heterozygousRef: Boolean, 
-                       heterozygousNonref: Boolean, 
-                       phred: Int, 
-                       refPos: Long, 
-                       sampleName: String, 
-                       refName: String, 
-                       refId: Int): List[ADAMGenotype] = {
+  def emitVariantCall(varType: VariantType.VariantType,
+                      varLength: Int,
+                      varOffset: Int,
+                      refOffset: Int,
+                      varSequence: String,
+                      refSequence: String,
+                      heterozygousRef: Boolean,
+                      heterozygousNonref: Boolean,
+                      phred: Int,
+                      refPos: Long,
+                      sampleName: String,
+                      refName: String,
+                      refId: Int): List[ADAMGenotype] = {
     assert(!(heterozygousRef && heterozygousNonref))
 
     val refAllele = if (varType != VariantType.Insertion) {
       refSequence.substring(refOffset, refOffset + varLength)
-    } else {
+    }
+    else {
       ""
     }
     val altAllele = if (varType != VariantType.Deletion) {
       varSequence.substring(varOffset, varOffset + varLength)
-    } else {
+    }
+    else {
       ""
     }
 
@@ -253,16 +259,17 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         .setVariantAllele(altAllele)
         .setPosition(refPos + refOffset)
         .build
-      val genotype = ADAMGenotype.newBuilder ()
+      val genotype = ADAMGenotype.newBuilder()
         .setVariant(variant)
-        .setSampleId (sampleName)
+        .setSampleId(sampleName)
         .setGenotypeQuality(phred)
         .setExpectedAlleleDosage(1.0f)
         .setAlleles(alleles)
-	.build()
+        .build()
 
       List(genotype)
-    } else if (!heterozygousRef && !heterozygousNonref) {
+    }
+    else if (!heterozygousRef && !heterozygousNonref) {
       val alleles = List(ADAMGenotypeAllele.Alt, ADAMGenotypeAllele.Alt)
 
       val contig = ADAMContig.newBuilder
@@ -275,16 +282,17 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         .setVariantAllele(altAllele)
         .setPosition(refPos + refOffset)
         .build
-      val genotype = ADAMGenotype.newBuilder ()
+      val genotype = ADAMGenotype.newBuilder()
         .setVariant(variant)
-        .setSampleId (sampleName)
+        .setSampleId(sampleName)
         .setGenotypeQuality(phred)
         .setExpectedAlleleDosage(1.0f)
         .setAlleles(alleles)
-	.build()
+        .build()
 
       List(genotype)
-    } else {
+    }
+    else {
       print("not calling")
       List[ADAMGenotype]()
     }
@@ -301,9 +309,9 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param ref String for reference in the region.
    * @return List of variant contexts found in the region.
    */
-  def phaseAssembly (region: Seq[ADAMRecord], 
-                     kmerGraph: KmerGraph, 
-                     ref: String): List[ADAMVariantContext] = {
+  def phaseAssembly(region: Seq[ADAMRecord],
+                    kmerGraph: KmerGraph,
+                    ref: String): List[ADAMVariantContext] = {
     var refHaplotype = new Haplotype(ref)
 
     // Score all haplotypes against the reads.
@@ -379,7 +387,8 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val calledProbability = pow(10.0, calledHaplotypePair.pairLikelihood)
       val uncalledProbability = pow(10.0, uncalledHaplotypePair.pairLikelihood)
       uncalledProbability / (calledProbability + uncalledProbability)
-    } else {
+    }
+    else {
       1.0
     }
     val variantPhred = PhredUtils.successProbabilityToPhred(variantErrorProb)
@@ -418,7 +427,8 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                 case 'X' => {
                   if (variantLength > 1) {
                     VariantType.MNP
-                  } else {
+                  }
+                  else {
                     VariantType.SNP
                   }
                 }
@@ -426,13 +436,13 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                 case 'D' => VariantType.Deletion
               }
               val variant = emitVariantCall(variantType, variantLength,
-                                            variantOffset, refOffset,
-                                            haplotype.sequence, refHaplotype.sequence,
-                                            heterozygousRef,
-                                            heterozygousNonref,
-                                            variantPhred,
-                                            refPos,
-                                            sampleName, refName, refId)
+                variantOffset, refOffset,
+                haplotype.sequence, refHaplotype.sequence,
+                heterozygousRef,
+                heterozygousNonref,
+                variantPhred,
+                refPos,
+                sampleName, refName, refId)
               variants = variants ::: variant
             }
             if (move != 'D') {
@@ -457,7 +467,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param[in] pileupGroups An RDD containing reads.
    * @return An RDD containing called variants.
    */
-  override def call (reads: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+  override def call(reads: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
     log.info("Grouping reads into active regions.")
     val activeRegions = reads.groupBy(r => r.getStart / regionWindow)
       .map(x => (getReference(x._2), x._2))
@@ -478,5 +488,5 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     })
   }
 
-  override def isCallable (): Boolean = true
+  override def isCallable(): Boolean = true
 }

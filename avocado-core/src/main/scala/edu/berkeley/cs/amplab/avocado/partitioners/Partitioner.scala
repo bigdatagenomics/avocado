@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.partitioners
+package org.bdgenomics.avocado.partitioners
 
-import org.apache.commons.configuration.{HierarchicalConfiguration, SubnodeConfiguration}
+import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object Partitioner {
 
   val partitioners = List(DefaultPartitioner)
 
-  def apply (rdd: RDD[ADAMRecord],
-             globalConfig: HierarchicalConfiguration,
-             partitionName: String,
-             partitionerAlgorithm: String,
-             stats: AvocadoConfigAndStats): ReferencePartitioner = {
+  def apply(rdd: RDD[ADAMRecord],
+            globalConfig: HierarchicalConfiguration,
+            partitionName: String,
+            partitionerAlgorithm: String,
+            stats: AvocadoConfigAndStats): ReferencePartitioner = {
     val partitioner = partitioners.find(_.partitionerName == partitionerAlgorithm)
-    
+
     assert(partitioner.isDefined, "Could not find partitioner: " + partitionerAlgorithm)
     partitioner.get.apply(rdd, globalConfig, partitionName, stats)
   }

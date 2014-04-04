@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.stats
+package org.bdgenomics.avocado.stats
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
-import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rich.RichADAMRecord
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
@@ -26,22 +26,22 @@ private[stats] object ScoreCoverage {
 
   // TODO: correct for whole genome without gaps, incorrect if gaps are present
   def apply(rdd: RDD[ADAMRecord]): Double = {
-    
-    def coverageReducer (t1: (Long, Long, Long), t2: (Long, Long, Long)): (Long, Long, Long) = {
+
+    def coverageReducer(t1: (Long, Long, Long), t2: (Long, Long, Long)): (Long, Long, Long) = {
       (t1._1 min t2._1,
-       t1._2 max t2._1,
-       t1._3 +   t2._3)
+        t1._2 max t2._1,
+        t1._3 + t2._3)
     }
-    
-    def readToParams (r: ADAMRecord): (Long, Long, Long) = {
+
+    def readToParams(r: ADAMRecord): (Long, Long, Long) = {
       val s = r.getStart
       val e = r.end.get
       (s, e, e - s + 1)
     }
-    
+
     val (start, end, bases) = rdd.filter(_.getReadMapped).map(readToParams)
       .reduce(coverageReducer(_, _))
-    
+
     bases.toDouble / (end - start).toDouble
   }
 

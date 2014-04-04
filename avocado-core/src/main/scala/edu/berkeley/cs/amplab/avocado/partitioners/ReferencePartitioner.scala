@@ -14,26 +14,26 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.partitioners
+package org.bdgenomics.avocado.partitioners
 
-import org.apache.commons.configuration.{HierarchicalConfiguration, SubnodeConfiguration}
+import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 trait ReferencePartitionerCompanion {
 
   val partitionerName: String
 
-  protected def apply (rdd: RDD[ADAMRecord], 
-                       subnodeConfiguration: SubnodeConfiguration,
-                       stats: AvocadoConfigAndStats): ReferencePartitioner 
+  protected def apply(rdd: RDD[ADAMRecord],
+                      subnodeConfiguration: SubnodeConfiguration,
+                      stats: AvocadoConfigAndStats): ReferencePartitioner
 
-  final def apply (rdd: RDD[ADAMRecord], 
-                   globalConfig: HierarchicalConfiguration,
-                   partitionName: String,
-                   stats: AvocadoConfigAndStats): ReferencePartitioner = {
-    
+  final def apply(rdd: RDD[ADAMRecord],
+                  globalConfig: HierarchicalConfiguration,
+                  partitionName: String,
+                  stats: AvocadoConfigAndStats): ReferencePartitioner = {
+
     val config: SubnodeConfiguration = globalConfig.configurationAt(partitionName)
 
     apply(rdd, config, stats)
@@ -42,9 +42,9 @@ trait ReferencePartitionerCompanion {
 }
 
 trait ReferencePartitioner {
-  
+
   val companion: ReferencePartitionerCompanion
 
-  def computePartitions (): PartitionSet
-  
+  def computePartitions(): PartitionSet
+
 }

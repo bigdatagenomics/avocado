@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.postprocessing
+package org.bdgenomics.avocado.postprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMGenotype
-import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.avro.ADAMGenotype
+import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 private[postprocessing] object FilterStrandBias extends PostprocessingStage {
 
@@ -36,20 +36,20 @@ private[postprocessing] object FilterStrandBias extends PostprocessingStage {
    * @param config Config from which to pull config data.
    * @return A filtered RDD.
    */
-  def apply (rdd: RDD[ADAMVariantContext], 
-             stats: AvocadoConfigAndStats,
-             config: SubnodeConfiguration): RDD[ADAMVariantContext] = {
+  def apply(rdd: RDD[ADAMVariantContext],
+            stats: AvocadoConfigAndStats,
+            config: SubnodeConfiguration): RDD[ADAMVariantContext] = {
 
     val high = config.getDouble("highLimit", 0.75)
     val low = config.getDouble("lowLimit", 0.25)
-    
+
     val genotypeFilter = new StrandBiasFilter(high, low)
 
     genotypeFilter.filter(rdd)
   }
 }
 
-private[postprocessing] class StrandBiasFilter (high: Double, low: Double) extends GenotypeFilter {
+private[postprocessing] class StrandBiasFilter(high: Double, low: Double) extends GenotypeFilter {
 
   /**
    * Filters genotypes that have a strand bias outside of acceptable range.
@@ -57,9 +57,9 @@ private[postprocessing] class StrandBiasFilter (high: Double, low: Double) exten
    * @param genotypes List of genotypes called at this site.
    * @return List of genotypes after filtering.
    */
-  def filterGenotypes (genotypes: Seq[ADAMGenotype]): Seq[ADAMGenotype] = {
+  def filterGenotypes(genotypes: Seq[ADAMGenotype]): Seq[ADAMGenotype] = {
     val keyed = genotypes.map(g => (Option(g.getReadDepth), Option(g.getReadsMappedForwardStrand), g))
-    
+
     val genotypesNoStats: Seq[ADAMGenotype] = keyed.filter(t => t._1.isEmpty || t._2.isEmpty)
       .map(t => t._3)
     val genotypesWithStats: Seq[ADAMGenotype] = keyed.filter(t => t._1.isDefined && t._2.isDefined)

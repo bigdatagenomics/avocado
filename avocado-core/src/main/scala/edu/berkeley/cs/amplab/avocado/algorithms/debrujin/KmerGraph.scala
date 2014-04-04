@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.algorithms.debrujin
+package org.bdgenomics.avocado.algorithms.debrujin
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, PriorityQueue}
+import org.bdgenomics.adam.avro.ADAMRecord
+import scala.collection.mutable.{ ArrayBuffer, HashMap, HashSet, PriorityQueue }
 
 /**
  * For our purposes, a read is a list of kmers.
  *
  * @param record Read to build assembly read from.
  */
-case class AssemblyRead (record: ADAMRecord) {
+case class AssemblyRead(record: ADAMRecord) {
 }
 
 /**
@@ -32,7 +32,7 @@ case class AssemblyRead (record: ADAMRecord) {
  *
  * @param string Kmer base string.
  */
-case class KmerPrefix (string: String) {
+case class KmerPrefix(string: String) {
 
   def equals(kp: KmerPrefix): Boolean = string == kp.string
 }
@@ -43,7 +43,7 @@ case class KmerPrefix (string: String) {
  * @param prefix Prefix for kmer of length (k - 2)
  * @param suffix Last base of kmer
  */
-case class Kmer (prefix: KmerPrefix, suffix: Char) {
+case class Kmer(prefix: KmerPrefix, suffix: Char) {
   var reads = new HashSet[AssemblyRead]
   var mult: Int = 0
   var isCanon: Boolean = false
@@ -66,11 +66,11 @@ case class Kmer (prefix: KmerPrefix, suffix: Char) {
 }
 
 /**
- *class representing a path made of kmers.
+ * class representing a path made of kmers.
  *
  * @param edges Edges of kmer graph.
  */
-class KmerPath (val edges: Seq[Kmer]) {
+class KmerPath(val edges: Seq[Kmer]) {
 
   val multSum: Int = edges.map(_.mult).fold(0)(_ + _)
 
@@ -79,7 +79,7 @@ class KmerPath (val edges: Seq[Kmer]) {
    *
    * @return String representing haplotype from kmers.
    */
-  def asHaplotypeString (): String = {
+  def asHaplotypeString(): String = {
     var sb = ""
     if (edges.length > 0) {
       sb += edges(0).prefix.string
@@ -87,7 +87,8 @@ class KmerPath (val edges: Seq[Kmer]) {
         sb += e.suffix
       }
       sb
-    } else {
+    }
+    else {
       "" // TODO should throw exception
     }
   }
@@ -110,12 +111,14 @@ object KmerPathOrdering extends Ordering[KmerPath] {
    * @param path2 Kmer path to evaluate.
    * @return (-1, 0, 1) if path1 has mult sum (less than, equal, greater than) path2.
    */
-  def compare (path1: KmerPath, path2: KmerPath): Int = {
+  def compare(path1: KmerPath, path2: KmerPath): Int = {
     if (path1.multSum < path2.multSum) {
       -1
-    } else if (path1.multSum > path2.multSum) {
+    }
+    else if (path1.multSum > path2.multSum) {
       1
-    } else {
+    }
+    else {
       0
     }
   }
@@ -128,7 +131,7 @@ object KmerPathOrdering extends Ordering[KmerPath] {
  * @param readLen Read length.
  * @param regionLen Length of the active region.
  */
-class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
+class KmerGraph(kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   val spurThreshold = kLen // TODO(peter, 11/26) how to choose thresh?
 
   //var reads: HashMap[String,AssemblyRead] = null
@@ -137,13 +140,13 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   // source/sink kmers
   val sourceKmer = new Kmer(new KmerPrefix(reference.take(kLen - 1)), reference.drop(kLen - 1).head)
   val sinkKmer = new Kmer(new KmerPrefix(reference.dropRight(1).takeRight(kLen - 1)),
-                          reference.last)
+    reference.last)
 
   // The actual kmer graph consists of unique K-1 prefixes and kmers connected
   // by vertices.
-  // TODO: Remove KmerPrefix class 
-  var prefixes = new HashMap[String,KmerPrefix]
-  var kmers = new HashMap[KmerPrefix,HashSet[Kmer]]
+  // TODO: Remove KmerPrefix class
+  var prefixes = new HashMap[String, KmerPrefix]
+  var kmers = new HashMap[KmerPrefix, HashSet[Kmer]]
 
   // Paths through the kmer graph are in order of decreasing total mult.
   var allPaths = new PriorityQueue[KmerPath]()(KmerPathOrdering)
@@ -153,7 +156,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
    *
    * @param r Read to add kmers from.
    */
-  def insertReadKmers (r: AssemblyRead): Unit = {
+  def insertReadKmers(r: AssemblyRead): Unit = {
     // Construct L - K + 1 kmers, initially connected to the source and sink.
     val readSeq = r.record.getSequence.toString
     val offsets = 0 until readLen - kLen + 1
@@ -168,7 +171,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
       if (kmerSet.forall(!_.equals(k))) {
         kmerSet += k
       }
-      
+
       // increase multiplicity per kmer seen and attach read evidence
       kmerSet.filter(_.equals(k)).foreach(km => {
         km.incrementMult
@@ -210,19 +213,19 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
    *
    * @param readGroup Sequence of reads to add.
    */
-  def insertReads (readGroup: Seq[ADAMRecord]): Unit = {
+  def insertReads(readGroup: Seq[ADAMRecord]): Unit = {
     reads = readGroup.map(x => new AssemblyRead(x))
     reads.foreach(r => insertReadKmers(r))
   }
 
-  def exciseKmer (k: Kmer): Unit = {
+  def exciseKmer(k: Kmer): Unit = {
     // TODO(peter, 11/27) for spur removal.
   }
 
   /**
    * Builds graph.
    */
-  def connectGraph (): Unit = {
+  def connectGraph(): Unit = {
     /*
     // Consolidate equivalent kmers.
     for ((prefix, ks) <- kmers) {
@@ -268,7 +271,7 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   /**
    * Removes spurs from graph.
    */
-  def removeSpurs (): Unit = {
+  def removeSpurs(): Unit = {
     // Remove all kmer paths with length <= spurThreshold, connected to the
     // graph source and sink.
     // TODO(peter, 11/27) make sure the path lengths are initialized and
@@ -312,18 +315,19 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
   /**
    * Performs depth first search and scores all paths through the final graph.
    */
-  def enumerateAllPaths (): Unit = {
+  def enumerateAllPaths(): Unit = {
     // TODO(peter, 12/9) arbitrary max assembly bound.
     //TODO change to use list cons
     val maxDepth = regionLen + readLen - kLen + 1
     var edges = new ArrayBuffer[Kmer]
     var paths = List[KmerPath]()
 
-    def allPathsDFS (v: KmerPrefix, depth: Int): Unit = {
+    def allPathsDFS(v: KmerPrefix, depth: Int): Unit = {
       if (v.equals(sinkKmer.nextPrefix)) {
         val path = new KmerPath(edges.clone.toSeq)
         paths = path :: paths
-      } else if (depth <= maxDepth) {
+      }
+      else if (depth <= maxDepth) {
         for (k <- kmers.getOrElse(v, Set[Kmer]())) {
           edges += k
           allPathsDFS(k.nextPrefix, depth + 1)
@@ -342,5 +346,5 @@ class KmerGraph (kLen: Int, readLen: Int, regionLen: Int, reference: String) {
    *
    * @return Sorted priority queue of paths in the graph.
    */
-  def getAllPaths (): PriorityQueue[KmerPath] = allPaths
+  def getAllPaths(): PriorityQueue[KmerPath] = allPaths
 }

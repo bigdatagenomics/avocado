@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.preprocessing
+package org.bdgenomics.avocado.preprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import org.bdgenomics.adam.avro.ADAMRecord
 
 trait PreprocessingStage {
 
   val stageName: String
 
-  def apply (rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord]
+  def apply(rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord]
 
 }

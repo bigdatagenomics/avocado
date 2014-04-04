@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.stats
+package org.bdgenomics.avocado.stats
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMNucleotideContigFragment}
-import edu.berkeley.cs.amplab.adam.models.SequenceDictionary
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
-import edu.berkeley.cs.amplab.adam.rdd.AdamRDDFunctions
+import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
+import org.bdgenomics.adam.models.SequenceDictionary
+import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.ADAMRDDFunctions
 
-class AvocadoConfigAndStats (val sc: SparkContext,
-                             val debug: Boolean, 
-                             inputDataset: RDD[ADAMRecord],
-                             reference: RDD[ADAMNucleotideContigFragment]) {
-  
+class AvocadoConfigAndStats(val sc: SparkContext,
+                            val debug: Boolean,
+                            inputDataset: RDD[ADAMRecord],
+                            reference: RDD[ADAMNucleotideContigFragment]) {
+
   lazy val coverage = ScoreCoverage(inputDataset)
 
   lazy val contigLengths = GetReferenceContigLengths(reference)
-  
+
   lazy val referenceSeq = reference.collect()
 
   lazy val sequenceDict = reference.adamGetSequenceDictionary()

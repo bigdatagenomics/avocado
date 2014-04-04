@@ -14,27 +14,28 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.preprocessing
+package org.bdgenomics.avocado.preprocessing
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.adam.models.SnpTable
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
+import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.adam.models.SnpTable
+import org.bdgenomics.adam.rdd.ADAMContext._
 import java.io.File
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 
 object RecalibrateBaseQualities extends PreprocessingStage {
-  
+
   val stageName = "recalibrateBaseQualities"
 
-  def apply (rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
+  def apply(rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
     // check for snp table
     val snpTable = if (config.containsKey("snpTable")) {
       SnpTable(new File(config.getString("snpTable")))
-    } else {
+    }
+    else {
       SnpTable()
     }
-    
+
     // run bqsr with snp table loaded
     rdd.adamBQSR(snpTable)
   }

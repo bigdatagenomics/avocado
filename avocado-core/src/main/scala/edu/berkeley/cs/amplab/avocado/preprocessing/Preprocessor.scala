@@ -14,33 +14,33 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.preprocessing
+package org.bdgenomics.avocado.preprocessing
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import org.bdgenomics.adam.avro.ADAMRecord
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
 
 object Preprocessor {
 
   private val stages = List(MarkDuplicates,
-                            RecalibrateBaseQualities, 
-                            SortReads, 
-                            CoalesceReads,
-                            RealignIndels)
+    RecalibrateBaseQualities,
+    SortReads,
+    CoalesceReads,
+    RealignIndels)
 
-  def apply (rdd: RDD[ADAMRecord], 
-             stageName: String, 
-             stageAlgorithm: String,
-             config: HierarchicalConfiguration): RDD[ADAMRecord] = {
+  def apply(rdd: RDD[ADAMRecord],
+            stageName: String,
+            stageAlgorithm: String,
+            config: HierarchicalConfiguration): RDD[ADAMRecord] = {
 
     // get configuration for this stage
     val stageConfig = config.configurationAt(stageName)
 
     // find and run stage
     val stage = stages.find(_.stageName == stageAlgorithm)
-    
+
     assert(stage.isDefined, "Could not find stage with name: " + stageName)
     stage.get.apply(rdd, stageConfig)
   }
-  
+
 }

@@ -14,29 +14,29 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls.reads
+package org.bdgenomics.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.avocado.calls.VariantCallCompanion
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
-import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.{ SparkContext, Logging }
 import org.apache.spark.rdd.RDD
 
 object ReadCallUnspecified extends VariantCallCompanion {
 
   val callName = "ReadUnspecified"
 
-  def apply (stats: AvocadoConfigAndStats,
-             config: SubnodeConfiguration): ReadCallUnspecified = {
+  def apply(stats: AvocadoConfigAndStats,
+            config: SubnodeConfiguration): ReadCallUnspecified = {
 
     new ReadCallUnspecified()
   }
 }
 
 /**
- * Abstract class for calling variants on reads. 
+ * Abstract class for calling variants on reads.
  */
 class ReadCallUnspecified extends ReadCall {
 
@@ -45,10 +45,10 @@ class ReadCallUnspecified extends ReadCall {
   /**
    * Empty calling method.
    */
-  def call (pileupGroups: RDD [ADAMRecord]): RDD [ADAMVariantContext] = {
-    throw new IllegalArgumentException (companion.callName + " is not callable.")
+  def call(pileupGroups: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+    throw new IllegalArgumentException(companion.callName + " is not callable.")
   }
 
   // Call is generic, so is not callable
-  override def isCallable () = false
+  override def isCallable() = false
 }

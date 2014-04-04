@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.input
+package org.bdgenomics.avocado.input
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMNucleotideContigFragment}
+import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
@@ -33,9 +33,9 @@ private[input] trait InputStage {
    * @param reference RDD containing reference information.
    * @return Returns an RDD of ADAM reads.
    */
-  def apply (sc: SparkContext,
-             inputPath: String,
-             config: SubnodeConfiguration,
-             reference: RDD[ADAMNucleotideContigFragment]): RDD[ADAMRecord]
+  def apply(sc: SparkContext,
+            inputPath: String,
+            config: SubnodeConfiguration,
+            reference: RDD[ADAMNucleotideContigFragment]): RDD[ADAMRecord]
 
 }

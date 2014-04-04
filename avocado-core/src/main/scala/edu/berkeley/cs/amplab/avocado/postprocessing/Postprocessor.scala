@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.postprocessing
+package org.bdgenomics.avocado.postprocessing
 
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object Postprocessor {
 
   private val stages = List[PostprocessingStage](FilterStrandBias,
-                                                 FilterDepth)
+    FilterDepth)
 
   assert(stages.map(_.stageName).length == stages.map(_.stageName).distinct.length,
-         "Postprocessing stages have duplicated names.")
+    "Postprocessing stages have duplicated names.")
 
-  def apply (rdd: RDD[ADAMVariantContext],
-             stageName: String,
-             stageAlgorithm: String,
-             stats: AvocadoConfigAndStats,
-             config: HierarchicalConfiguration): RDD[ADAMVariantContext] = {
-    
+  def apply(rdd: RDD[ADAMVariantContext],
+            stageName: String,
+            stageAlgorithm: String,
+            stats: AvocadoConfigAndStats,
+            config: HierarchicalConfiguration): RDD[ADAMVariantContext] = {
+
     val stage = stages.find(_.stageName == stageAlgorithm)
 
     stage match {
@@ -45,6 +45,6 @@ object Postprocessor {
       }
       case None => throw new IllegalArgumentException("Postprocessing stage " + stageAlgorithm + "does not exist.")
     }
-  }        
+  }
 
 }

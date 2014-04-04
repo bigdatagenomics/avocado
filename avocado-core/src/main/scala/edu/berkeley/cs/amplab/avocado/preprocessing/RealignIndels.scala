@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.preprocessing
+package org.bdgenomics.avocado.preprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
+import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.adam.rdd.ADAMContext._
 
 object RealignIndels extends PreprocessingStage {
-  
+
   val stageName = "realignIndels"
 
-  def apply (rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
+  def apply(rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
     // no configuration needed, simply call indel realigner
     rdd.adamRealignIndels()
   }

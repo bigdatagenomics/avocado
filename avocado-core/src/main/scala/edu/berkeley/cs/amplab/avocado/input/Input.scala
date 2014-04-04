@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.input
+package org.bdgenomics.avocado.input
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMNucleotideContigFragment}
-import org.apache.commons.configuration.{HierarchicalConfiguration, SubnodeConfiguration}
+import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
+import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
@@ -36,19 +36,19 @@ object Input {
    * @param stats Global stat and configuration data.
    * @return Returns an RDD of read data.
    */
-  def apply (sc: SparkContext,
-             inputPath: String,
-             reference: RDD[ADAMNucleotideContigFragment],
-             config: HierarchicalConfiguration): RDD[ADAMRecord] = {
+  def apply(sc: SparkContext,
+            inputPath: String,
+            reference: RDD[ADAMNucleotideContigFragment],
+            config: HierarchicalConfiguration): RDD[ADAMRecord] = {
     // get input stage to use; if none is specified, default to input being aligned reads
     val stageName: String = config.getString("inputStage", "AlignedReads")
 
     val stage = stages.find(_.stageName == stageName)
-    
+
     stage match {
       case Some(s: InputStage) => {
         val stageConfig = config.configurationAt(stageName)
-        
+
         s.apply(sc, inputPath, stageConfig, reference)
       }
       case None => {

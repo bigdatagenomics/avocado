@@ -14,54 +14,54 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls
+package org.bdgenomics.avocado.calls
 
-import org.apache.commons.configuration.{HierarchicalConfiguration, SubnodeConfiguration}
+import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, Logging}
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype}
-import edu.berkeley.cs.amplab.adam.converters.GenotypesToVariantsConverter
-import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.apache.spark.{ SparkContext, Logging }
+import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype }
+import org.bdgenomics.adam.converters.GenotypesToVariantsConverter
+import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 trait VariantCallCompanion {
 
   val callName: String
-  
-  protected def apply (stats: AvocadoConfigAndStats, config: SubnodeConfiguration): VariantCall
 
-  final def apply (stats: AvocadoConfigAndStats,
-                   globalConfig: HierarchicalConfiguration, 
-                   callSetName: String): VariantCall = {
+  protected def apply(stats: AvocadoConfigAndStats, config: SubnodeConfiguration): VariantCall
+
+  final def apply(stats: AvocadoConfigAndStats,
+                  globalConfig: HierarchicalConfiguration,
+                  callSetName: String): VariantCall = {
     val config: SubnodeConfiguration = globalConfig.configurationAt(callSetName)
-    
-    apply (stats, config)
+
+    apply(stats, config)
   }
-  
+
 }
 
 /**
- * Abstract class for calling variants on reads. 
+ * Abstract class for calling variants on reads.
  */
 abstract class VariantCall extends Serializable with Logging {
 
   val companion: VariantCallCompanion
 
-  def process (rdd: RDD[ADAMRecord]): RDD[ADAMRecord] = {
+  def process(rdd: RDD[ADAMRecord]): RDD[ADAMRecord] = {
     var readsToProcess = rdd.cache
 
     readsToProcess
   }
 
-  def processAndCall (rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+  def processAndCall(rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
     val processedReads = process(rdd)
     call(rdd)
   }
 
   final def genotypesToVariantContext(genotypes: List[ADAMGenotype],
                                       samples: Int = 1): List[ADAMVariantContext] = {
-    
+
     val grouped = genotypes.groupBy(
       g => (g.getVariant.getContig.getContigId, g.getVariant.getVariantAllele))
       .map(kv => {
@@ -69,14 +69,14 @@ abstract class VariantCall extends Serializable with Logging {
 
         ADAMVariantContext.buildFromGenotypes(g)
       })
-    
+
     grouped.toList
   }
 
-  def call (rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext]
+  def call(rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext]
 
-  def isReadCall (): Boolean
-  def isPileupCall (): Boolean
-  def isCallable (): Boolean
+  def isReadCall(): Boolean
+  def isPileupCall(): Boolean
+  def isCallable(): Boolean
 }
 

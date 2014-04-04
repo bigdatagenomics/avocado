@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.partitioners
+package org.bdgenomics.avocado.partitioners
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
-import edu.berkeley.cs.amplab.adam.models.ReferenceRegion
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.adam.models.ReferenceRegion
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import scala.collection.immutable.{SortedMap, TreeSet, SortedSet}
+import scala.collection.immutable.{ SortedMap, TreeSet, SortedSet }
 
 /**
  * Configuration object for a default partitioner. The default partitioner performs no region
@@ -44,9 +44,9 @@ object DefaultPartitioner extends ReferencePartitionerCompanion {
    * @param stats Statistics module for configuring partitioner.
    * @return Returns a default partitioner.
    */
-  def apply (rdd: RDD[ADAMRecord],
-             subnodeConfiguration: SubnodeConfiguration,
-             stats: AvocadoConfigAndStats): ReferencePartitioner = {
+  def apply(rdd: RDD[ADAMRecord],
+            subnodeConfiguration: SubnodeConfiguration,
+            stats: AvocadoConfigAndStats): ReferencePartitioner = {
 
     val bucketSize = subnodeConfiguration.getInt("bucketSize", 1000)
 
@@ -61,8 +61,8 @@ object DefaultPartitioner extends ReferencePartitionerCompanion {
  * @param contigLengths A map that maps a reference ID to the length of that reference contig.
  * @param bucketSize The size (in reference positions) of a single bucket.
  */
-class DefaultPartitioner (contigLengths: Map[Int, Long],
-                          bucketSize: Int) extends ReferencePartitioner {
+class DefaultPartitioner(contigLengths: Map[Int, Long],
+                         bucketSize: Int) extends ReferencePartitioner {
 
   val companion = DefaultPartitioner
 
@@ -71,16 +71,17 @@ class DefaultPartitioner (contigLengths: Map[Int, Long],
    *
    * @return Partition set containing equally sized reference partitions.
    */
-  def computePartitions (): PartitionSet = {
+  def computePartitions(): PartitionSet = {
     var bucketCount: SortedMap[ReferenceRegion, Int] = SortedMap[ReferenceRegion, Int]()
-    
+
     contigLengths.foreach(kv => {
       val (id, len) = kv
-      
+
       // if contig doesn't divide perfectly by bucket size, then add an extra bucket
       val buckets = if (len % bucketSize == 0) {
         len / bucketSize
-      } else {
+      }
+      else {
         len / bucketSize + 1
       }
 
@@ -91,7 +92,7 @@ class DefaultPartitioner (contigLengths: Map[Int, Long],
     val offsets = bucketCount.values.scan(0)((a: Int, b: Int) => a + b).dropRight(1)
     val keys = bucketCount.keys
     val partitionOffsets = SortedMap[ReferenceRegion, Int]() ++ keys.zip(offsets)
-    
+
     new DefaultPartitionSet(partitionOffsets, bucketSize)
   }
 
@@ -104,9 +105,9 @@ class DefaultPartitioner (contigLengths: Map[Int, Long],
  * @param mapping Mapping of contigs to the first bucket ID in that set.
  * @param bucketSize Size of a single bucket.
  */
-class DefaultPartitionSet (mapping: SortedMap[ReferenceRegion, Int],
-                           bucketSize: Int) extends PartitionSet(mapping) {
-  
+class DefaultPartitionSet(mapping: SortedMap[ReferenceRegion, Int],
+                          bucketSize: Int) extends PartitionSet(mapping) {
+
   // maps contig ID to the id of the first bucket in that contig
   val contigIdMap: Map[Int, Int] = mapping.map(kv => (kv._1.refId, kv._2))
 
@@ -121,13 +122,13 @@ class DefaultPartitionSet (mapping: SortedMap[ReferenceRegion, Int],
    * @param region Reference region to find partition for.
    * @return IDs of all partitions the region maps to.
    */
-  override def getPartition (region: ReferenceRegion): List[Int] = {
+  override def getPartition(region: ReferenceRegion): List[Int] = {
     try {
       // check that this region is inside of our reference contig
       if (contigRegions(region.refId).contains(region)) {
         val offset = contigIdMap(region.refId)
         var ids = List[Int]()
-        
+
         // step across region by bucket size
         for (i <- region.start to region.end by bucketSize.toLong) {
           val bucket = i.toInt / bucketSize + offset
@@ -142,13 +143,15 @@ class DefaultPartitionSet (mapping: SortedMap[ReferenceRegion, Int],
         }
 
         ids
-      } else {
-        throw new IllegalArgumentException("Region on contig " + region.refId + " with start at " + region.start +
-                                       " and end at " + region.end + " is outside of the reference contig.")
       }
-    } catch {
-      case _ : Throwable => throw new IllegalArgumentException("Received region with contig ID " + region.refId + 
-                                                               ", but do not have a matching reference contig.")
+      else {
+        throw new IllegalArgumentException("Region on contig " + region.refId + " with start at " + region.start +
+          " and end at " + region.end + " is outside of the reference contig.")
+      }
+    }
+    catch {
+      case _: Throwable => throw new IllegalArgumentException("Received region with contig ID " + region.refId +
+        ", but do not have a matching reference contig.")
     }
   }
 
@@ -158,7 +161,7 @@ class DefaultPartitionSet (mapping: SortedMap[ReferenceRegion, Int],
    * @param region Reference region to check.
    * @return Always returns true.
    */
-  override def isInSet (region: ReferenceRegion): Boolean = true
+  override def isInSet(region: ReferenceRegion): Boolean = true
 
   /**
    * Reads are never outside of the reference.
@@ -166,5 +169,5 @@ class DefaultPartitionSet (mapping: SortedMap[ReferenceRegion, Int],
    * @param region Reference region to check.
    * @return Always returns true.
    */
-  override def isOutsideOfSet (region: ReferenceRegion): Boolean = false
+  override def isOutsideOfSet(region: ReferenceRegion): Boolean = false
 }

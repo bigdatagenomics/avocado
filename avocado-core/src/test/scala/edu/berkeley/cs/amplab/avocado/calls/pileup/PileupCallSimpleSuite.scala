@@ -14,34 +14,34 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls.pileup
+package org.bdgenomics.avocado.calls.pileup
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMPileup, Base}
-import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
+import org.bdgenomics.adam.avro.{ ADAMPileup, Base }
+import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
 import scala.collection.JavaConversions._
-import org.scalatest.FunSuite 
+import org.scalatest.FunSuite
 import scala.math.abs
 
 class PileupCallSimpleSuite extends FunSuite {
 
   val floatingPointingThreshold = 1e-6
 
-  def assertAlmostEqual(a: Double, b: Double, epsilon : Double = floatingPointingThreshold) {
+  def assertAlmostEqual(a: Double, b: Double, epsilon: Double = floatingPointingThreshold) {
     assert((a * 0.99 < b && a * 1.01 > b) ||
-           abs(a - b) < epsilon)
+      abs(a - b) < epsilon)
   }
 
   test("Collect the max non-ref base for homozygous SNP") {
     val pl = List(ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .build())
+      .setReadBase(Base.A)
+      .setReferenceBase(Base.C)
+      .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.A)
+        .setReferenceBase(Base.C)
+        .build())
 
     val call = new PileupCallSimpleSNP(2)
 
@@ -53,13 +53,13 @@ class PileupCallSimpleSuite extends FunSuite {
 
   test("Collect the max non-ref base for hetereozygous SNP") {
     val pl = List(ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .build())
+      .setReadBase(Base.C)
+      .setReferenceBase(Base.C)
+      .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.A)
+        .setReferenceBase(Base.C)
+        .build())
 
     val call = new PileupCallSimpleSNP(2)
 
@@ -71,17 +71,17 @@ class PileupCallSimpleSuite extends FunSuite {
 
   test("Collect the max non-ref base for homozygous SNP that is not biallelic") {
     val pl = List(ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.T)
-                    .setReferenceBase(Base.C)
-                    .build())
+      .setReadBase(Base.A)
+      .setReferenceBase(Base.C)
+      .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.A)
+        .setReferenceBase(Base.C)
+        .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.T)
+        .setReferenceBase(Base.C)
+        .build())
 
     val call = new PileupCallSimpleSNP(2)
 
@@ -93,13 +93,13 @@ class PileupCallSimpleSuite extends FunSuite {
 
   test("Do not collect the max non-ref base for homozygous ref.") {
     val pl = List(ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .build())
+      .setReadBase(Base.C)
+      .setReferenceBase(Base.C)
+      .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.C)
+        .setReferenceBase(Base.C)
+        .build())
 
     val call = new PileupCallSimpleSNP(2)
 
@@ -110,7 +110,7 @@ class PileupCallSimpleSuite extends FunSuite {
 
   test("Default compensation method doesn't perform any compensation") {
     val call = new PileupCallSimpleSNP(2)
-    
+
     val l = List(0.0, 0.0, 0.0)
 
     assert(l === call.compensate(l, List[ADAMPileup]()))
@@ -120,32 +120,31 @@ class PileupCallSimpleSuite extends FunSuite {
     val call = new PileupCallSimpleSNP(2)
 
     val pl = List(ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(30)
-                    .setSangerQuality(30)
-                    .setCountAtPosition(1)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(40)
-                    .setSangerQuality(40)
-                    .setCountAtPosition(1)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(40)
-                    .setSangerQuality(30)
-                    .setCountAtPosition(1)
-                    .build()
-                  )
+      .setReadBase(Base.C)
+      .setReferenceBase(Base.C)
+      .setMapQuality(30)
+      .setSangerQuality(30)
+      .setCountAtPosition(1)
+      .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.C)
+        .setReferenceBase(Base.C)
+        .setMapQuality(40)
+        .setSangerQuality(40)
+        .setCountAtPosition(1)
+        .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.C)
+        .setReferenceBase(Base.C)
+        .setMapQuality(40)
+        .setSangerQuality(30)
+        .setCountAtPosition(1)
+        .build())
 
     val expected = List((8.0 * (0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999)) / 8.0,
-                        ((0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999) +
-                         (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999)) / 8.0,
-                        8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999) / 8.0).reverse
+      ((0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999) +
+        (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999)) / 8.0,
+      8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999) / 8.0).reverse
 
     val scored = call.scoreGenotypeLikelihoods(pl)
 
@@ -158,32 +157,31 @@ class PileupCallSimpleSuite extends FunSuite {
     val call = new PileupCallSimpleSNP(2)
 
     val pl = List(ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(30)
-                    .setSangerQuality(30)
-                    .setCountAtPosition(1)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.C)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(40)
-                    .setSangerQuality(40)
-                    .setCountAtPosition(1)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(40)
-                    .setSangerQuality(30)
-                    .setCountAtPosition(1)
-                    .build()
-                  )
+      .setReadBase(Base.C)
+      .setReferenceBase(Base.C)
+      .setMapQuality(30)
+      .setSangerQuality(30)
+      .setCountAtPosition(1)
+      .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.C)
+        .setReferenceBase(Base.C)
+        .setMapQuality(40)
+        .setSangerQuality(40)
+        .setCountAtPosition(1)
+        .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.A)
+        .setReferenceBase(Base.C)
+        .setMapQuality(40)
+        .setSangerQuality(30)
+        .setCountAtPosition(1)
+        .build())
     //TODO(arahuja) test is not correct as multiplying probabilities is not exactly the same as averaging qual scores
     val expected = List((8.0 * ((0.999 * 0.999) * (0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999))) / 8.0,
 
-      ((0.999 * 0.999 + (1.0 - 0.999 * 0.999)) *  (0.9999 * 0.9999 + (1.0 - 0.9999 * 0.9999))
-        *  ((1.0 - 0.999 * 0.9999) + (0.999 * 0.9999) )) / 8.0,
+      ((0.999 * 0.999 + (1.0 - 0.999 * 0.999)) * (0.9999 * 0.9999 + (1.0 - 0.9999 * 0.9999))
+        * ((1.0 - 0.999 * 0.9999) + (0.999 * 0.9999))) / 8.0,
       (8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (0.999 * 0.9999)) / 8.0).reverse
 
     val scored = call.scoreGenotypeLikelihoods(pl)
@@ -197,33 +195,31 @@ class PileupCallSimpleSuite extends FunSuite {
     val call = new PileupCallSimpleSNP(2)
 
     val pl = List(ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(30)
-                    .setSangerQuality(30)
-                    .setCountAtPosition(1)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(40)
-                    .setSangerQuality(40)
-                    .setCountAtPosition(1)
-                    .build(),
-                  ADAMPileup.newBuilder()
-                    .setReadBase(Base.A)
-                    .setReferenceBase(Base.C)
-                    .setMapQuality(40)
-                    .setSangerQuality(30)
-                    .setCountAtPosition(1)
-                    .build()
-                  )
+      .setReadBase(Base.A)
+      .setReferenceBase(Base.C)
+      .setMapQuality(30)
+      .setSangerQuality(30)
+      .setCountAtPosition(1)
+      .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.A)
+        .setReferenceBase(Base.C)
+        .setMapQuality(40)
+        .setSangerQuality(40)
+        .setCountAtPosition(1)
+        .build(),
+      ADAMPileup.newBuilder()
+        .setReadBase(Base.A)
+        .setReferenceBase(Base.C)
+        .setMapQuality(40)
+        .setSangerQuality(30)
+        .setCountAtPosition(1)
+        .build())
 
     val expected = List(8.0 * (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999) / 8.0,
-                        ((0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999) +
-                         (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999)) / 8.0,
-                        (8.0 * (0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999)) / 8.0).reverse
-   
+      ((0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999) +
+        (1.0 - 0.999 * 0.999) * (1.0 - 0.9999 * 0.9999) * (1.0 - 0.999 * 0.9999)) / 8.0,
+      (8.0 * (0.999 * 0.999 * 0.9999 * 0.9999 * 0.999 * 0.9999)) / 8.0).reverse
 
     val scored = call.scoreGenotypeLikelihoods(pl)
 
