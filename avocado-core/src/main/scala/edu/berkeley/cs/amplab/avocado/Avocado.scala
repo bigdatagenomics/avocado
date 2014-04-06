@@ -14,60 +14,62 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado
+package org.bdgenomics.avocado
 
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.commons.configuration.plist.PropertyListConfiguration
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, Logging}
-import org.kohsuke.args4j.{Option => option, Argument}
-import edu.berkeley.cs.amplab.adam.avro.{ADAMVariant, ADAMRecord, ADAMNucleotideContigFragment}
-import edu.berkeley.cs.amplab.adam.cli.{AdamSparkCommand, 
-                                        AdamCommandCompanion, 
-                                        ParquetArgs, 
-                                        SparkArgs, 
-                                        Args4j, 
-                                        Args4jBase}
-import edu.berkeley.cs.amplab.adam.models.{ADAMVariantContext, ReferenceRegion}
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._ 
-import edu.berkeley.cs.amplab.avocado.calls.{VariantCall, VariantCaller}
-import edu.berkeley.cs.amplab.avocado.input.Input
-import edu.berkeley.cs.amplab.avocado.partitioners.Partitioner
-import edu.berkeley.cs.amplab.avocado.preprocessing.Preprocessor
-import edu.berkeley.cs.amplab.avocado.postprocessing.Postprocessor
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.apache.spark.{ SparkContext, Logging }
+import org.kohsuke.args4j.{ Option => option, Argument }
+import org.bdgenomics.adam.avro.{ ADAMVariant, ADAMRecord, ADAMNucleotideContigFragment }
+import org.bdgenomics.adam.cli.{
+  ADAMSparkCommand,
+  ADAMCommandCompanion,
+  ParquetArgs,
+  SparkArgs,
+  Args4j,
+  Args4jBase
+}
+import org.bdgenomics.adam.models.{ ADAMVariantContext, ReferenceRegion }
+import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.avocado.calls.{ VariantCall, VariantCaller }
+import org.bdgenomics.avocado.input.Input
+import org.bdgenomics.avocado.partitioners.Partitioner
+import org.bdgenomics.avocado.preprocessing.Preprocessor
+import org.bdgenomics.avocado.postprocessing.Postprocessor
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
-object Avocado extends AdamCommandCompanion {
+object Avocado extends ADAMCommandCompanion {
 
   val commandName = "Avocado"
   val commandDescription = "Call variants using avocado and the ADAM preprocessing pipeline."
 
-  def apply (args: Array[String]) = {
-    new Avocado (Args4j[AvocadoArgs](args))
+  def apply(args: Array[String]) = {
+    new Avocado(Args4j[AvocadoArgs](args))
   }
 }
 
 class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
-  @Argument (metaVar = "READS", required = true, usage = "ADAM read-oriented data", index = 0)
+  @Argument(metaVar = "READS", required = true, usage = "ADAM read-oriented data", index = 0)
   var readInput: String = _
 
-  @Argument (metaVar = "REFERENCE", required = true, usage = "ADAM reference genome data", index = 1)
+  @Argument(metaVar = "REFERENCE", required = true, usage = "ADAM reference genome data", index = 1)
   var referenceInput: String = _
 
-  @Argument (metaVar = "VARIANTS", required = true, usage = "ADAM variant output", index = 2)
+  @Argument(metaVar = "VARIANTS", required = true, usage = "ADAM variant output", index = 2)
   var variantOutput: String = _
 
-  @Argument (metaVar = "CONFIG", required = true, usage = "avocado configuration file", index = 3)
+  @Argument(metaVar = "CONFIG", required = true, usage = "avocado configuration file", index = 3)
   var configFile: String = _
 
-  @option (name = "-debug", usage = "If set, prints a higher level of debug output.")
+  @option(name = "-debug", usage = "If set, prints a higher level of debug output.")
   var debug = false
 }
 
-class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [AvocadoArgs] with Logging {
-  
-  // companion object to this class - needed for AdamCommand framework
+class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoArgs] with Logging {
+
+  // companion object to this class - needed for ADAMCommand framework
   val companion = Avocado
 
   // get config
@@ -76,30 +78,30 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
   val preprocessorNames = getStringArrayFromConfig("preprocessorNames")
   val preprocessorAlgorithms = getStringArrayFromConfig("preprocessorAlgorithms")
   assert(preprocessorNames.length == preprocessorAlgorithms.length,
-         "Must have a 1-to-1 mapping between preprocessor names and algorithms.")
+    "Must have a 1-to-1 mapping between preprocessor names and algorithms.")
   val preprocessingStagesZippedWithNames = preprocessorNames.zip(preprocessorAlgorithms)
-    
+
   val callNames = getStringArrayFromConfig("callNames")
   val callAlgorithms = getStringArrayFromConfig("callAlgorithms")
   assert(callNames.length == callAlgorithms.length,
-         "Must have a 1-to-1 mapping between variant call names and algorithms.")
+    "Must have a 1-to-1 mapping between variant call names and algorithms.")
   val callZipped = callNames.zip(callAlgorithms)
 
   val partitionerNames = getStringArrayFromConfig("partitionerNames")
   val partitionerAlgorithms = getStringArrayFromConfig("partitionerAlgorithms")
   assert(partitionerNames.length == partitionerAlgorithms.length,
-         "Must have a 1-to-1 mapping between partitioner names and algorithms.")
+    "Must have a 1-to-1 mapping between partitioner names and algorithms.")
   val partitionsZipped = partitionerNames.zip(partitionerAlgorithms)
 
   val postprocessorNames = getStringArrayFromConfig("postprocessorNames")
   val postprocessorAlgorithms = getStringArrayFromConfig("postprocessorAlgorithms")
   assert(postprocessorNames.length == postprocessorAlgorithms.length,
-         "Must have a 1-to-1 mapping between postprocessor names and algoritms.")
+    "Must have a 1-to-1 mapping between postprocessor names and algoritms.")
   val postprocessorsZipped = postprocessorNames.zip(postprocessorAlgorithms)
 
   assert(callZipped.length == partitionsZipped.length,
-         "Must have a 1-to-1 mapping between partitioners and calls.")
-  
+    "Must have a 1-to-1 mapping between partitioners and calls.")
+
   private def getStringArrayFromConfig(name: String): Array[String] = {
     config.getStringArray(name).map(_.toString)
   }
@@ -110,8 +112,8 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
    * @param reads An RDD of raw reads.
    * @return A map that maps RDDs of reads to variant calling algorithms.
    */
-  def partitionReads (reads: RDD[ADAMRecord],
-                      stats: AvocadoConfigAndStats): Map[VariantCall, RDD[ADAMRecord]] = {
+  def partitionReads(reads: RDD[ADAMRecord],
+                     stats: AvocadoConfigAndStats): Map[VariantCall, RDD[ADAMRecord]] = {
 
     var rdd = reads.keyBy(r => ReferenceRegion(r))
       .filter(kv => kv._1.isDefined)
@@ -131,7 +133,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
 
       // generate partition set from current read set
       val partitions = p.computePartitions()
-      
+
       // generate variant caller
       val call = VariantCaller(callName, callAlg, stats, config)
 
@@ -141,7 +143,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
       // filter out reads that are wholly contained in the last partitoner
       rdd = rdd.filter(kv => partitions.isOutsideOfSet(kv._1))
     })
-    
+
     // filter out variant calls that are not actually callable
     callsets.toMap.filterKeys(k => k.isCallable)
   }
@@ -153,14 +155,14 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
    * @param reads RDD of reads to process.
    * @return RDD containing reads that have been sorted and deduped.
    */
-  def preProcessReads (reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
+  def preProcessReads(reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
     var processedReads = reads.cache
 
     // loop over preprocessing stages and apply
     preprocessingStagesZippedWithNames.foreach(p => {
       val (stageName, stageAlgorithm) = p
 
-      log.info ("Running " + stageName)
+      log.info("Running " + stageName)
 
       // run this preprocessing stage
       processedReads = Preprocessor(processedReads, stageName, stageAlgorithm, config)
@@ -176,19 +178,19 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
    * @param callsets Map containing read calling algorithm and RDD record pairs.
    * @return Joined output of variant calling algorithms.
    */
-  def callVariants (callsets: Map[VariantCall, RDD[ADAMRecord]]): RDD[ADAMVariantContext] = {
+  def callVariants(callsets: Map[VariantCall, RDD[ADAMRecord]]): RDD[ADAMVariantContext] = {
     // callset map must not be empty
     assert(!callsets.isEmpty)
 
     // apply calls and take the union of variants called
-    callsets.map (pair => {
+    callsets.map(pair => {
       // get call and rdd pair
       val (call, rdd) = pair
 
       log.info("Running " + call.companion.callName)
-      
+
       // apply call
-      call.call (rdd)
+      call.call(rdd)
     }).reduce(_ ++ _)
   }
 
@@ -200,7 +202,7 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
    * @param variants RDD of variants to process.
    * @return Post-processed variants.
    */
-  def postProcessVariants (variants: RDD[ADAMVariantContext], stats: AvocadoConfigAndStats): RDD[ADAMVariantContext] = {
+  def postProcessVariants(variants: RDD[ADAMVariantContext], stats: AvocadoConfigAndStats): RDD[ADAMVariantContext] = {
     var rdd = variants.cache()
 
     // loop over post processing steps
@@ -215,12 +217,12 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
 
   /**
    * Main method. Implements body of variant caller. SparkContext and Hadoop Job are provided
-   * by the AdamSparkCommand shell.
+   * by the ADAMSparkCommand shell.
    *
    * @param sc SparkContext for RDDs.
    * @param job Hadoop Job container for file I/O.
    */
-  def run (sc: SparkContext, job: Job) {
+  def run(sc: SparkContext, job: Job) {
 
     log.info("Starting avocado...")
 
@@ -229,15 +231,15 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
 
     log.info("Loading reads in from " + args.readInput)
     // load in reads from ADAM file
-    val reads : RDD[ADAMRecord] = Input(sc, args.readInput, reference, config)
-    
+    val reads: RDD[ADAMRecord] = Input(sc, args.readInput, reference, config)
+
     // create stats/config item
     val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)
-    
+
     // apply read translation steps
     log.info("Processing reads.")
     val cleanedReads = preProcessReads(reads)
-    
+
     // initial assignment of reads to variant calling algorithms
     log.info("Partitioning reads.")
     val partitionedReads = partitionReads(cleanedReads, stats)
@@ -245,17 +247,17 @@ class Avocado (protected val args: AvocadoArgs) extends AdamSparkCommand [Avocad
     // call variants on filtered reads and pileups
     log.info("Calling variants.")
     val calledVariants = callVariants(partitionedReads)
-    
+
     // post process variants
     log.info("Post-processing variants.")
-    val processedVariants : RDD[ADAMVariant] = postProcessVariants(calledVariants, stats).map(variantContext => variantContext.variant)
+    val processedVariants: RDD[ADAMVariant] = postProcessVariants(calledVariants, stats).map(variantContext => variantContext.variant)
 
     // save variants to output file
     log.info("Writing calls to disk.")
     processedVariants.adamSave(args.variantOutput,
-                               args.blockSize,
-                               args.pageSize,
-                               args.compressionCodec,
-                               args.disableDictionary)
+      args.blockSize,
+      args.pageSize,
+      args.compressionCodec,
+      args.disableDictionary)
   }
 }

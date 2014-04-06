@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>edu.berkeley.cs.amplab.avocado</groupId>
+    <groupId>org.bdgenomics.avocado</groupId>
     <artifactId>avocado</artifactId>
     <version>0.0.2</version>
     <relativePath>../pom.xml</relativePath>
@@ -29,7 +29,7 @@
           <transformers>
             <transformer
                implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-              <mainClass>edu.berkeley.cs.amplab.avocado.Avocado</mainClass>
+              <mainClass>org.bdgenomics.avocado.Avocado</mainClass>
             </transformer>
             <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
               <resource>reference.conf</resource>
@@ -149,17 +149,17 @@
 
   <dependencies>
     <dependency>
-      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <groupId>org.bdgenomics.adam</groupId>
       <artifactId>adam-format</artifactId>
       <version>${adam.version}</version>
     </dependency>
     <dependency>
-      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <groupId>org.bdgenomics.adam</groupId>
       <artifactId>adam-core</artifactId>
       <version>${adam.version}</version>
     </dependency>
     <dependency>
-      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <groupId>org.bdgenomics.adam</groupId>
       <artifactId>adam-cli</artifactId>
       <version>${adam.version}</version>
     </dependency>

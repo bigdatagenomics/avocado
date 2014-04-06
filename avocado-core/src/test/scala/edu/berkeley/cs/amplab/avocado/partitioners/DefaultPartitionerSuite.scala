@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.partitioners
+package org.bdgenomics.avocado.partitioners
 
-import edu.berkeley.cs.amplab.adam.models.ReferenceRegion
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.scalatest.FunSuite
 import scala.collection.immutable.SortedMap
 
@@ -26,7 +26,7 @@ class DefaultPartitionerSuite extends FunSuite {
   val partitioner = new DefaultPartitioner(contigs, 100)
   val partitions = partitioner.computePartitions()
 
-  test ("build a single partiton per contig") {
+  test("build a single partiton per contig") {
     val regions = contigs.toList.map(kv => ReferenceRegion(kv._1, 0, kv._2))
 
     regions.foreach(r => {
@@ -35,7 +35,7 @@ class DefaultPartitionerSuite extends FunSuite {
     })
   }
 
-  test ("check that offsets are correct") {
+  test("check that offsets are correct") {
     val ctg0 = ReferenceRegion(0, 0, 99L)
     assert(partitions.isInSet(ctg0))
     assert(!partitions.isOutsideOfSet(ctg0))
@@ -55,7 +55,7 @@ class DefaultPartitionerSuite extends FunSuite {
     assert(partitions.getPartition(ctg2).head === 15)
   }
 
-  test ("default partition set properly handles regions that span buckets") {
+  test("default partition set properly handles regions that span buckets") {
     val ctg0 = ReferenceRegion(0, 0, 299L)
     assert(partitions.isInSet(ctg0))
     assert(!partitions.isOutsideOfSet(ctg0))
@@ -65,19 +65,19 @@ class DefaultPartitionerSuite extends FunSuite {
     assert(partitions.getPartition(ctg0).contains(2))
   }
 
-  test ("throws exception for contigs not in reference") {
+  test("throws exception for contigs not in reference") {
     val ctg3 = ReferenceRegion(3, 0, 100L)
 
-    intercept [IllegalArgumentException] {
+    intercept[IllegalArgumentException] {
       partitions.getPartition(ctg3)
     }
   }
 
-  test ("throws exception for contigs that extend past ends of reference contigs") {
+  test("throws exception for contigs that extend past ends of reference contigs") {
     val ctg0 = ReferenceRegion(0, 900L, 1100L)
     assert(partitions.isInSet(ctg0))
 
-    intercept [IllegalArgumentException] {
+    intercept[IllegalArgumentException] {
       partitions.getPartition(ctg0)
     }
   }

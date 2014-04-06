@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.stats
+package org.bdgenomics.avocado.stats
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.ADAMNucleotideContigFragment
+import org.bdgenomics.adam.avro.ADAMNucleotideContigFragment
 
 private[stats] object GetReferenceContigLengths {
-  
+
   /**
    * From a rdd of reference contigs, collects their lengths in an array.
    *
    * @param rdd RDD of reference contigs.
    * @return List of contig lengths.
    */
-  def apply (rdd: RDD[ADAMNucleotideContigFragment]): Map[Int, Long] = {
+  def apply(rdd: RDD[ADAMNucleotideContigFragment]): Map[Int, Long] = {
     rdd.map(c => (c.getContigId.toInt, c.getContigLength.toLong)).distinct.collect.toMap
   }
 

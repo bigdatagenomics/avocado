@@ -14,29 +14,29 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls.reads
+package org.bdgenomics.avocado.calls.reads
 
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMGenotypeAllele}
-import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.avocado.algorithms.debrujin._
-import edu.berkeley.cs.amplab.avocado.algorithms.hmm._
+import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMGenotypeAllele }
+import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.avocado.algorithms.debrujin._
+import org.bdgenomics.avocado.algorithms.hmm._
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
-import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder}
+import scala.collection.mutable.{ ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder }
 
 class ReadCallAssemblySuite extends FunSuite {
 
   val rcap_short = new ReadCallAssemblyPhaser(4, 0)
-  
-  def make_read(sequence: String, 
-                start : Long, 
-                cigar : String, 
-                mdtag : String, 
-                length : Int,
+
+  def make_read(sequence: String,
+                start: Long,
+                cigar: String,
+                mdtag: String,
+                length: Int,
                 qualities: Seq[Int],
-                id : Int = 0) : ADAMRecord = {
+                id: Int = 0): ADAMRecord = {
     ADAMRecord.newBuilder()
       .setReadName("read" + id.toString)
       .setStart(start)
@@ -55,32 +55,32 @@ class ReadCallAssemblySuite extends FunSuite {
 
   test("Test the creation of several haplotype strings.") {
     val kms = ArrayBuffer[Kmer](new Kmer(new KmerPrefix("AC"), 'G'),
-                                new Kmer(new KmerPrefix("CG"), 'A'),
-                                new Kmer(new KmerPrefix("GA"), 'G'))
+      new Kmer(new KmerPrefix("CG"), 'A'),
+      new Kmer(new KmerPrefix("GA"), 'G'))
     val kp = new KmerPath(kms)
-    
+
     assert(kp.asHaplotypeString === "ACGAG")
   }
 
   test("Test log sum for similar values") {
     val hp = new HaplotypePair(null, null)
     val sum = hp.exactLogSumExp10(1.0, 1.0)
-    
+
     assert(1.3 * 0.99 < sum && 1.3 * 1.01 > sum)
   }
 
   test("Test log sum for dissimilar values") {
     val hp = new HaplotypePair(null, null)
     val sum = hp.exactLogSumExp10(1.0, -3.0)
-    
+
     assert(1.00004342 * 0.99 < sum && 1.00004342 * 1.01 > sum)
   }
 
   test("put kmers into graph for a single, simple read") {
     val reference = "TACCAAT"
-    val read = make_read("TACCAAT", 0L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
     val aread = AssemblyRead(read)
-    
+
     val graph = rcap_short.assemble(Seq(read), reference)
 
     assert(graph.kmers.size === 4)
@@ -97,11 +97,11 @@ class ReadCallAssemblySuite extends FunSuite {
 
   test("put kmers into graph for a small set of reads without a polymorphism") {
     val reference = "TACCAATGTAA"
-    val read0 = make_read("TACCAAT"    , 0L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
-    val read1 = make_read( "ACCAATG"   , 1L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
-    val read2 = make_read(  "CCAATGT"  , 2L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
-    val read3 = make_read(   "CAATGTA" , 3L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
-    val read4 = make_read(    "AATGTAA", 4L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read0 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
 
     val readBucket = Seq(read0, read1, read2, read3, read4)
     val kmerGraph = rcap_short.assemble(readBucket, reference)
@@ -140,16 +140,16 @@ class ReadCallAssemblySuite extends FunSuite {
 
   test("put kmers into graph for a small set of reads with a polymorphism") {
     val reference = "TACCAATGTAA"
-    val read0 = make_read("TACCCAT"    , 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
-    val read1 = make_read( "ACCCATG"   , 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
-    val read2 = make_read(  "CCCATGT"  , 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
-    val read3 = make_read(   "CCATGTA" , 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
-    val read4 = make_read(    "CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
-    val read5 = make_read("TACCAAT"    , 0L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
-    val read6 = make_read( "ACCAATG"   , 1L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
-    val read7 = make_read(  "CCAATGT"  , 2L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
-    val read8 = make_read(   "CAATGTA" , 3L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
-    val read9 = make_read(    "AATGTAA", 4L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
+    val read0 = make_read("TACCCAT", 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCCATG", 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCCATGT", 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CCATGTA", 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+    val read6 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
+    val read7 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
+    val read8 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
+    val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
     val kmerGraph = rcap_short.assemble(readBucket, reference)
@@ -190,20 +190,20 @@ class ReadCallAssemblySuite extends FunSuite {
 
   test("\"Call\" hom ref, ~10x coverage") {
     val reference = "TACCAATGTAA"
-    val read0 = make_read("TACCAAT"    , 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
-    val read1 = make_read( "ACCAATG"   , 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
-    val read2 = make_read(  "CCAATGT"  , 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
-    val read3 = make_read(   "CAATGTA" , 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
-    val read4 = make_read(    "AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
-    val read5 = make_read("TACCAAT"    , 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
-    val read6 = make_read( "ACCAATG"   , 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
-    val read7 = make_read(  "CCAATGT"  , 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
-    val read8 = make_read(   "CAATGTA" , 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
-    val read9 = make_read(    "AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
+    val read0 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+    val read6 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
+    val read7 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
+    val read8 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
+    val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
     val kmerGraph = rcap_short.assemble(readBucket, reference)
-    
+
     val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
 
     assert(variants.length === 0)
@@ -211,20 +211,20 @@ class ReadCallAssemblySuite extends FunSuite {
 
   test("Call simple het SNP, ~10x coverage") {
     val reference = "TACCAATGTAA"
-    val read0 = make_read("TACCCAT"    , 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
-    val read1 = make_read( "ACCCATG"   , 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
-    val read2 = make_read(  "CCCATGT"  , 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
-    val read3 = make_read(   "CCATGTA" , 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
-    val read4 = make_read(    "CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
-    val read5 = make_read("TACCAAT"    , 0L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
-    val read6 = make_read( "ACCAATG"   , 1L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
-    val read7 = make_read(  "CCAATGT"  , 2L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
-    val read8 = make_read(   "CAATGTA" , 3L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
-    val read9 = make_read(    "AATGTAA", 4L, "7M", "7"  , 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
+    val read0 = make_read("TACCCAT", 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCCATG", 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCCATGT", 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CCATGTA", 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+    val read6 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
+    val read7 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
+    val read8 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
+    val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
     val kmerGraph = rcap_short.assemble(readBucket, reference)
-    
+
     val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
 
     assert(variants.length === 1)
@@ -239,20 +239,20 @@ class ReadCallAssemblySuite extends FunSuite {
 
   test("Call simple hom SNP, ~10x coverage") {
     val reference = "TACCAATGTAA"
-    val read0 = make_read("TACCCAT"    , 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
-    val read1 = make_read( "ACCCATG"   , 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
-    val read2 = make_read(  "CCCATGT"  , 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
-    val read3 = make_read(   "CCATGTA" , 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
-    val read4 = make_read(    "CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
-    val read5 = make_read("TACCCAT"    , 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
-    val read6 = make_read( "ACCCATG"   , 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
-    val read7 = make_read(  "CCCATGT"  , 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
-    val read8 = make_read(   "CCATGTA" , 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
-    val read9 = make_read(    "CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
+    val read0 = make_read("TACCCAT", 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCCATG", 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCCATGT", 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CCATGTA", 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = make_read("TACCCAT", 0L, "7M", "4A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+    val read6 = make_read("ACCCATG", 1L, "7M", "3A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
+    val read7 = make_read("CCCATGT", 2L, "7M", "2A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
+    val read8 = make_read("CCATGTA", 3L, "7M", "1A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
+    val read9 = make_read("CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
     val kmerGraph = rcap_short.assemble(readBucket, reference)
-    
+
     val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
 
     assert(variants.length === 1)

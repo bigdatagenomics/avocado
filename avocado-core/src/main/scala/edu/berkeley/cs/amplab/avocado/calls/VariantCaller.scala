@@ -14,29 +14,29 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls
+package org.bdgenomics.avocado.calls
 
-import org.apache.commons.configuration.{HierarchicalConfiguration, SubnodeConfiguration}
+import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
-import edu.berkeley.cs.amplab.adam.avro.{ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype}
-import edu.berkeley.cs.amplab.adam.models.ADAMVariantContext
-import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
-import edu.berkeley.cs.amplab.avocado.calls.pileup.{PileupCallSimpleSNP, PileupCallUnspecified}
-import edu.berkeley.cs.amplab.avocado.calls.reads.{ReadCallAssemblyPhaser, ReadCallUnspecified}
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype }
+import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.avocado.calls.pileup.{ PileupCallSimpleSNP, PileupCallUnspecified }
+import org.bdgenomics.avocado.calls.reads.{ ReadCallAssemblyPhaser, ReadCallUnspecified }
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object VariantCaller {
 
   private val calls = List(PileupCallSimpleSNP,
-                           PileupCallUnspecified,
-                           ReadCallAssemblyPhaser,
-                           ReadCallUnspecified)
+    PileupCallUnspecified,
+    ReadCallAssemblyPhaser,
+    ReadCallUnspecified)
 
-  def apply (callName: String,
-             callAlgorithm: String, 
-             stats: AvocadoConfigAndStats, 
-             config: HierarchicalConfiguration): VariantCall = {
-    val call = calls.find (_.callName == callAlgorithm)
+  def apply(callName: String,
+            callAlgorithm: String,
+            stats: AvocadoConfigAndStats,
+            config: HierarchicalConfiguration): VariantCall = {
+    val call = calls.find(_.callName == callAlgorithm)
 
     call match {
       case Some(c) => {

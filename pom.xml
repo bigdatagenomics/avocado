@@ -2,14 +2,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>edu.berkeley.cs.amplab.avocado</groupId>
+  <groupId>org.bdgenomics.avocado</groupId>
   <artifactId>avocado</artifactId>
   <version>0.0.2</version>
   <packaging>pom</packaging>
   <name>avocado: A Variant Caller, Distributed</name>
 
   <properties>
-    <adam.version>0.7.3-SNAPSHOT</adam.version>
+    <adam.version>0.8.1-SNAPSHOT</adam.version>
     <avro.version>1.7.4</avro.version>
     <java.version>1.6</java.version>
     <scala.version>2.10.3</scala.version>
@@ -159,10 +159,29 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.scalariform</groupId>
+        <artifactId>scalariform-maven-plugin</artifactId>
+        <version>0.1.4</version>
+        <executions>
+          <execution>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>format</goal>
+            </goals>
+            <configuration>
+              <alignParameters>true</alignParameters>
+              <alignSingleLineCaseStatements>true</alignSingleLineCaseStatements>
+              <compactControlReadability>true</compactControlReadability>
+              <doubleIndentClassDeclaration>true</doubleIndentClassDeclaration>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 
-  <repositories> 
+  <repositories>
     <repository>
       <id>Sonatype</id>
       <url>http://oss.sonatype.org/content/repositories/snapshots/</url>
@@ -179,17 +198,17 @@
 
   <dependencies>
     <dependency>
-      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <groupId>org.bdgenomics.adam</groupId>
       <artifactId>adam-format</artifactId>
       <version>${adam.version}</version>
     </dependency>
     <dependency>
-      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <groupId>org.bdgenomics.adam</groupId>
       <artifactId>adam-core</artifactId>
       <version>${adam.version}</version>
     </dependency>
     <dependency>
-      <groupId>edu.berkeley.cs.amplab.adam</groupId>
+      <groupId>org.bdgenomics.adam</groupId>
       <artifactId>adam-cli</artifactId>
       <version>${adam.version}</version>
     </dependency>

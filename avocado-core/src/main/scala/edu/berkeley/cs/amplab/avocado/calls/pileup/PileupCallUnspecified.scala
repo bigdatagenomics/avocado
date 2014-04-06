@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.calls.pileup
+package org.bdgenomics.avocado.calls.pileup
 
-import edu.berkeley.cs.amplab.adam.models.{ADAMRod, ADAMVariantContext}
-import edu.berkeley.cs.amplab.avocado.calls.VariantCallCompanion
-import edu.berkeley.cs.amplab.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
+import org.bdgenomics.avocado.calls.VariantCallCompanion
+import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
-import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.{ SparkContext, Logging }
 import org.apache.spark.rdd.RDD
 
 object PileupCallUnspecified extends VariantCallCompanion {
 
   val callName = "PileupUnspecified"
 
-  def apply (stats: AvocadoConfigAndStats,
-             config: SubnodeConfiguration): PileupCallUnspecified = {
+  def apply(stats: AvocadoConfigAndStats,
+            config: SubnodeConfiguration): PileupCallUnspecified = {
 
     new PileupCallUnspecified()
   }
@@ -41,14 +41,14 @@ object PileupCallUnspecified extends VariantCallCompanion {
 class PileupCallUnspecified extends PileupCall {
 
   val companion = PileupCallUnspecified
- 
+
   /**
    * Empty calling method.
    */
-  override def callRods (pileups: RDD [ADAMRod]): RDD [ADAMVariantContext] = {
-    throw new IllegalArgumentException (companion.callName + " is not callable.")
+  override def callRods(pileups: RDD[ADAMRod]): RDD[ADAMVariantContext] = {
+    throw new IllegalArgumentException(companion.callName + " is not callable.")
   }
 
   // Call is generic, so is not callable
-  override def isCallable () = false
+  override def isCallable() = false
 }

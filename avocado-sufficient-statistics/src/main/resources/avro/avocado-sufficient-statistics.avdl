@@ -1,4 +1,4 @@
-@namespace("edu.berkeley.cs.amplab.avocado.avro")
+@namespace("org.bdgenomics.avocado.avro")
 protocol avocado {
 
 record AvocadoStatisticEntry {

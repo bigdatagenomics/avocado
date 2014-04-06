@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package edu.berkeley.cs.amplab.avocado.algorithms.hmm
+package org.bdgenomics.avocado.algorithms.hmm
 
-import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import org.bdgenomics.adam.avro.ADAMRecord
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
 
@@ -75,7 +75,7 @@ class HMMAligner {
    * @param testQualities String of qualities. Not currently used.
    * @return True if sequence has variants.
    */
-  def alignSequences (refSequence: String, testSequence: String, testQualities: String): Boolean = {
+  def alignSequences(refSequence: String, testSequence: String, testQualities: String): Boolean = {
 
     def fpCompare(a: Double, b: Double, eps: Double): Boolean = abs(a - b) <= eps
 
@@ -91,7 +91,8 @@ class HMMAligner {
       traceMatches = new Array[Char](matSize)
       traceInserts = new Array[Char](matSize)
       traceDeletes = new Array[Char](matSize)
-    } else if (matSize <= 1 || oldMatSize <= 1) {
+    }
+    else if (matSize <= 1 || oldMatSize <= 1) {
       matches = new Array[Double](1)
       inserts = new Array[Double](1)
       deletes = new Array[Double](1)
@@ -118,7 +119,8 @@ class HMMAligner {
             // TODO(peter, 12/7) there is a second constant term to the prior...
             val prior = if (testBase == refBase) {
               matchPrior / (indelPrior * indelPrior)
-            } else {
+            }
+            else {
               mismatchPrior / (indelPrior * indelPrior)
             }
             val idx = (i - 1) * stride + (j - 1)
@@ -128,31 +130,38 @@ class HMMAligner {
             val mMax = max(mMatch, max(mInsert, mDelete)) + prior
             val t = if (fpCompare(mMax, mMatch, 0.01)) {
               'M'
-            } else if (fpCompare(mMax, mInsert, 0.01)) {
+            }
+            else if (fpCompare(mMax, mInsert, 0.01)) {
               'I'
-            } else if (fpCompare(mMax, mDelete, 0.01)) {
+            }
+            else if (fpCompare(mMax, mDelete, 0.01)) {
               'D'
-            } else {
+            }
+            else {
               '.'
             }
             (mMax, t)
-          } else {
+          }
+          else {
             (Double.NegativeInfinity, '.')
           }
           val (ins, trIns) = if (i >= 1) {
-            val idx = (i-1) * stride + j
+            val idx = (i - 1) * stride + j
             val insMatch = matches(idx) + indelToMatchPrior
             val insInsert = inserts(idx) + indelToIndelPrior
             val insMax = max(insMatch, insInsert)
             val t = if (fpCompare(insMax, insMatch, 0.01)) {
               'M'
-            } else if (fpCompare(insMax, insInsert, 0.01)) {
+            }
+            else if (fpCompare(insMax, insInsert, 0.01)) {
               'I'
-            } else {
+            }
+            else {
               '.'
             }
             (insMax, t)
-          } else {
+          }
+          else {
             (Double.NegativeInfinity, '.')
           }
           val (del, trDel) = if (j >= 1) {
@@ -162,13 +171,16 @@ class HMMAligner {
             val delMax = max(delMatch, delDelete)
             val t = if (fpCompare(delMax, delMatch, 0.01)) {
               'M'
-            } else if (fpCompare(delMax, delDelete, 0.01)) {
+            }
+            else if (fpCompare(delMax, delDelete, 0.01)) {
               'D'
-            } else {
+            }
+            else {
               '.'
             }
             (delMax, t)
-          } else {
+          }
+          else {
             (Double.NegativeInfinity, '.')
           }
           val idx = i * stride + j
@@ -184,7 +196,8 @@ class HMMAligner {
 
     if (matSize > 0) {
       alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
-    } else {
+    }
+    else {
       alignmentLikelihood = max(matches(0), max(inserts(0), deletes(0)))
     }
 
@@ -199,7 +212,7 @@ class HMMAligner {
         if (HMMAligner.debug) println(s)
       }
     }
-    
+
     if (HMMAligner.debug) {
       println("matches")
       printArray(matches)
@@ -220,11 +233,12 @@ class HMMAligner {
     def indexMax(a: (Double, Int), b: (Double, Int)): (Double, Int) = {
       if (a._1 > b._1) {
         a
-      } else {
+      }
+      else {
         b
       }
     }
-    
+
     def getArrayMax(array: Array[Double]): (Double, Int) = {
       array.zipWithIndex.reduce(indexMax)
     }
@@ -236,18 +250,18 @@ class HMMAligner {
 
     var i = paddedTestLen - 1
     var j = paddedRefLen - 1
-    
+
     if (HMMAligner.debug)
       println(i + ", " + j)
 
     while (i > 0 && j > 0) {
       val idx = i * stride + j
-      
+
       if (HMMAligner.debug) {
         println(i + ", " + j + (": %1.1f" format matches(idx)) + (", %1.1f" format inserts(idx)) +
-                (", %1.1f" format deletes(idx)))
+          (", %1.1f" format deletes(idx)))
       }
-              
+
       val bestScore = max(matches(idx), max(inserts(idx), deletes(idx)))
       // TODO(peter, 12/7) here, build the aligned sequences.
       val tr = if (fpCompare(bestScore, matches(idx), 0.0001)) {
@@ -263,21 +277,24 @@ class HMMAligner {
         }
         // FIXME
         traceMatches(idx)
-      } else if (fpCompare(bestScore, inserts(idx), 0.0001)) {
+      }
+      else if (fpCompare(bestScore, inserts(idx), 0.0001)) {
         revAlignedTestSeq += testSequence(i - 1)
         revAlignedRefSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'I'
         traceInserts(idx)
-      } else if (fpCompare(bestScore, deletes(idx), 0.0001)) {
+      }
+      else if (fpCompare(bestScore, deletes(idx), 0.0001)) {
         revAlignedRefSeq += refSequence(j - 1)
         revAlignedTestSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'D'
         traceDeletes(idx)
-      } else {
+      }
+      else {
         revAlignedTestSeq += 'x'
         revAlignedRefSeq += 'x'
         '.'
@@ -300,7 +317,7 @@ class HMMAligner {
         } // TODO(peter, 12/8) the alignment is bad (probably a bug).
       }
     }
-    
+
     testAligned = revAlignedTestSeq.reverse
     refAligned = revAlignedRefSeq.reverse
 
@@ -308,7 +325,7 @@ class HMMAligner {
       println("ta: " + testAligned)
       println("ra: " + refAligned)
     }
-      
+
     var unitAlignment = revAlignment.reverse
     if (HMMAligner.debug) println(unitAlignment)
     alignment = new ArrayBuffer[(Int, Char)]
@@ -344,21 +361,21 @@ class HMMAligner {
    *
    * @return Log10 likelihood of alignment.
    */
-  def getLikelihood (): Double = alignmentLikelihood
+  def getLikelihood(): Double = alignmentLikelihood
 
   /**
    * Compute the (log10) prior prob of observing the given alignment.
    *
    * @return Prior for alignment.
    */
-  def getPrior (): Double = alignmentPrior
+  def getPrior(): Double = alignmentPrior
 
   /**
    * Compute the alignment tokens (equivalent to cigar).
    *
    * @return Alignment tokens.
    */
-  def getAlignment (): ArrayBuffer[(Int, Char)] = {
+  def getAlignment(): ArrayBuffer[(Int, Char)] = {
     alignment.clone
   }
 
@@ -367,7 +384,7 @@ class HMMAligner {
    *
    * @return Tuple of sequences aligned to (ref, test) sequences.
    */
-  def getAlignedSequences (): (String, String) = (refAligned, testAligned)
+  def getAlignedSequences(): (String, String) = (refAligned, testAligned)
 }
 
 /**
@@ -375,12 +392,12 @@ class HMMAligner {
  *
  * @param sequence String representing haplotype alignment.
  */
-class Haplotype (val sequence: String) {
+class Haplotype(val sequence: String) {
   var perReadLikelihoods = new ArrayBuffer[Double]
   var readsLikelihood = Double.NegativeInfinity
   var hasVariants = false
   var alignment = new ArrayBuffer[(Int, Char)]
-  
+
   /**
    * Score likelihood of reads when assembled into haplotype.
    *
@@ -388,7 +405,7 @@ class Haplotype (val sequence: String) {
    * @param reads Sequence of reads to use.
    * @return Likelihood that reads are properly aligned.
    */
-  def scoreReadsLikelihood (hmm: HMMAligner, reads: Seq[ADAMRecord]): Double = {
+  def scoreReadsLikelihood(hmm: HMMAligner, reads: Seq[ADAMRecord]): Double = {
     perReadLikelihoods.clear
     readsLikelihood = 0.0
     for (r <- reads) {
@@ -398,8 +415,9 @@ class Haplotype (val sequence: String) {
         val readLike = hmm.getLikelihood // - hmm.getPriora
         perReadLikelihoods += readLike
         readsLikelihood += readLike
-      } catch {
-        case _ : Throwable => {
+      }
+      catch {
+        case _: Throwable => {
           perReadLikelihoods += 0.0
           readsLikelihood += 0.0
         }
@@ -415,7 +433,7 @@ class Haplotype (val sequence: String) {
    * @param refHaplotype Haplotype for reference in this location.
    * @return True if region has variants.
    */
-  def alignToReference (hmm: HMMAligner, refHaplotype: Haplotype): Boolean = {
+  def alignToReference(hmm: HMMAligner, refHaplotype: Haplotype): Boolean = {
     // TODO(peter, 12/8) store the alignment details (including the cigar).
     hasVariants = hmm.alignSequences(refHaplotype.sequence, sequence, null)
     alignment = hmm.getAlignment
@@ -441,12 +459,14 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
    * @param h2 Second haplotype to compare.
    * @return Ordering info for haplotypes.
    */
-  def compare (h1: Haplotype, h2: Haplotype): Int = {
+  def compare(h1: Haplotype, h2: Haplotype): Int = {
     if (h1.readsLikelihood < h2.readsLikelihood) {
       -1
-    } else if (h1.readsLikelihood > h2.readsLikelihood) {
+    }
+    else if (h1.readsLikelihood > h2.readsLikelihood) {
       1
-    } else {
+    }
+    else {
       0
     }
   }
@@ -458,7 +478,7 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
  * @param haplotype1 First haplotype of pair.
  * @param haplotype2 Second haplotype of pair.
  */
-class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
+class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype) {
   var pairLikelihood = Double.NegativeInfinity
   var hasVariants = false
 
@@ -475,7 +495,7 @@ class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
    *
    * @see approxLogSumExp10
    */
-  def exactLogSumExp10 (x1: Double, x2: Double): Double = {
+  def exactLogSumExp10(x1: Double, x2: Double): Double = {
     log10(pow(10.0, x1) + pow(10.0, x2))
   }
 
@@ -488,7 +508,7 @@ class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
    *
    * @see exactLogSumExp10
    */
-  def approxLogSumExp10 (x1: Double, x2: Double): Double = {
+  def approxLogSumExp10(x1: Double, x2: Double): Double = {
     exactLogSumExp10(x1, x2)
   }
 
@@ -499,7 +519,7 @@ class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
    * @param reads Sequence of reads that are evidence for haplotype.
    * @return Phred scaled likelihood.
    */
-  def scorePairLikelihood (hmm: HMMAligner, reads: Seq[ADAMRecord]): Double = {
+  def scorePairLikelihood(hmm: HMMAligner, reads: Seq[ADAMRecord]): Double = {
     var readsProb = 0.0
     for (i <- 0 until reads.length) {
       val readLikelihood1 = haplotype1.perReadLikelihoods(i)
@@ -519,7 +539,7 @@ class HaplotypePair (val haplotype1: Haplotype, val haplotype2: Haplotype) {
    * @param refHaplotype Reference haplotype for active region.
    * @return True if region has variants.
    */
-  def alignToReference (hmm: HMMAligner, refHaplotype: Haplotype): Boolean = {
+  def alignToReference(hmm: HMMAligner, refHaplotype: Haplotype): Boolean = {
     hasVariants = haplotype1.alignToReference(hmm, refHaplotype)
     if (haplotype2 != haplotype1) {
       hasVariants |= haplotype2.alignToReference(hmm, refHaplotype)
@@ -542,12 +562,14 @@ object HaplotypePairOrdering extends Ordering[HaplotypePair] {
    * @param pair2 Second haplotype pair to compare.
    * @return Comparison of haplotype pairs.
    */
-  def compare (pair1: HaplotypePair, pair2: HaplotypePair): Int = {
+  def compare(pair1: HaplotypePair, pair2: HaplotypePair): Int = {
     if (pair1.pairLikelihood < pair2.pairLikelihood) {
       -1
-    } else if (pair1.pairLikelihood > pair2.pairLikelihood) {
+    }
+    else if (pair1.pairLikelihood > pair2.pairLikelihood) {
       1
-    } else {
+    }
+    else {
       0
     }
   }
