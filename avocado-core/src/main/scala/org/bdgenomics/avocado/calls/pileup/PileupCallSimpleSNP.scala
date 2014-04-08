@@ -82,8 +82,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
       log.warn("Want to call non-homozygous ref genotype, but don't see non-ref bases @ " +
         pileupHead.getPosition + ".")
       List[ADAMGenotype]()
-    }
-    else if (likelihood.indexOf(likelihood.max) == 1) {
+    } else if (likelihood.indexOf(likelihood.max) == 1) {
       // hetereozygous
       assert(pileupHead.getReferenceBase != maxNonRefBase.get,
         "Cannot have reference be equal to non-ref base, @ " + pileupHead.getPosition + ".")
@@ -112,8 +111,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
         .build()
 
       List(genotypeRef, genotypeNonRef)
-    }
-    else if (likelihood.indexOf(likelihood.max) == 2) {
+    } else if (likelihood.indexOf(likelihood.max) == 2) {
       // homozygous non reference
       assert(pileupHead.getReferenceBase != maxNonRefBase.get,
         "Cannot have reference be equal to non-ref base, @ " + pileupHead.getPosition + ".")
@@ -142,8 +140,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
         .build()
 
       List(genotypeNonRef0, genotypeNonRef1)
-    }
-    else {
+    } else {
       // homozygous
       List[ADAMGenotype]()
     }
@@ -200,8 +197,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
 
           pow((ploidy - g) * epsilon + g * (1 - epsilon), base.getCountAtPosition.toDouble)
         }).reduce(_ * _)
-      }
-      else {
+      } else {
         1.0
       }
 
@@ -212,8 +208,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
 
           pow((ploidy - g) * (1 - epsilon) + g * epsilon, base.getCountAtPosition.toDouble)
         }).reduce(_ * _)
-      }
-      else {
+      } else {
         1.0
       }
 
@@ -248,8 +243,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
     def pickMaxBase(kv1: (Base, Int), kv2: (Base, Int)): (Base, Int) = {
       if (kv1._2 > kv2._2) {
         kv1
-      }
-      else {
+      } else {
         kv2
       }
     }
@@ -257,8 +251,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
     // reduce down to get the base with the highest count
     if (nonRefBaseCount.isEmpty) {
       None
-    }
-    else {
+    } else {
       Some(nonRefBaseCount.reduce(pickMaxBase)._1)
     }
   }
@@ -299,8 +292,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
 
       // write calls to list
       genotypesToVariantContext(writeCallInfo(pileup.head, likelihood, maxNonRefBase))
-    }
-    else {
+    } else {
       // cannot call indels
       log.warn("Saw indel evidence at " + pileup.head.getPosition + ". Ignored.")
       List[ADAMVariantContext]()

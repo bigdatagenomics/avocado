@@ -55,8 +55,7 @@ private[postprocessing] trait GenotypeFilter extends Serializable {
 
     if (filteredGt.length > 0) {
       Some(ADAMVariantContext.buildFromGenotypes(filteredGt))
-    }
-    else {
+    } else {
       None
     }
   }

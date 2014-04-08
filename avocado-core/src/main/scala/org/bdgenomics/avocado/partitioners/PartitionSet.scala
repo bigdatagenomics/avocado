@@ -36,14 +36,12 @@ class PartitionSet(protected val regionMapping: SortedMap[ReferenceRegion, Int])
                            region: ReferenceRegion): TreeSet[ReferenceRegion] = {
     if (set.isEmpty) {
       set + region
-    }
-    else {
+    } else {
       val t = set.last
 
       if (t.overlaps(region) || t.isAdjacent(region)) {
         set.dropRight(1) + t.merge(region)
-      }
-      else {
+      } else {
         set + region
       }
     }

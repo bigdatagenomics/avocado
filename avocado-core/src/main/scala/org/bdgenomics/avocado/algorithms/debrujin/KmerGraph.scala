@@ -87,8 +87,7 @@ class KmerPath(val edges: Seq[Kmer]) {
         sb += e.suffix
       }
       sb
-    }
-    else {
+    } else {
       "" // TODO should throw exception
     }
   }
@@ -114,11 +113,9 @@ object KmerPathOrdering extends Ordering[KmerPath] {
   def compare(path1: KmerPath, path2: KmerPath): Int = {
     if (path1.multSum < path2.multSum) {
       -1
-    }
-    else if (path1.multSum > path2.multSum) {
+    } else if (path1.multSum > path2.multSum) {
       1
-    }
-    else {
+    } else {
       0
     }
   }
@@ -326,8 +323,7 @@ class KmerGraph(kLen: Int, readLen: Int, regionLen: Int, reference: String) {
       if (v.equals(sinkKmer.nextPrefix)) {
         val path = new KmerPath(edges.clone.toSeq)
         paths = path :: paths
-      }
-      else if (depth <= maxDepth) {
+      } else if (depth <= maxDepth) {
         for (k <- kmers.getOrElse(v, Set[Kmer]())) {
           edges += k
           allPathsDFS(k.nextPrefix, depth + 1)

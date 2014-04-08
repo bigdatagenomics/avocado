@@ -67,15 +67,12 @@ object EMForAlleles {
         for (j <- 0 to n) { // 0 = 0 people not first person
           if (j == 0) {
             Y(i)(j)(k) = 1.0
-          }
-          else if (k == 0) {
+          } else if (k == 0) {
             Y(i)(j)(k) = (1.0 / (2.0 * j * (2.0 * j - 1.0))) * ((2.0 * j - k) * (2.0 * j - k - 1.0) * Y(i)(j - 1)(k) * GL(i)(j)._1)
-          }
-          else if (k == 1) {
+          } else if (k == 1) {
             Y(i)(j)(k) = (1.0 / (2.0 * j * (2.0 * j - 1.0))) * ((2.0 * j - k) * (2.0 * j - k - 1.0) * Y(i)(j - 1)(k) * GL(i)(j)._1 +
               2.0 * k * (2.0 * j - k) * Y(i)(j - 1)(k - 1) * GL(i)(j)._2)
-          }
-          else {
+          } else {
             Y(i)(j)(k) = (1.0 / (2.0 * j * (2.0 * j - 1.0))) * ((2.0 * j - k) * (2.0 * j - k - 1.0) * Y(i)(j - 1)(k) * GL(i)(j)._1 +
               2.0 * k * (2.0 * j - k) * Y(i)(j - 1)(k - 1) * GL(i)(j)._2 + k * (k - 1.0) *
               Y(i)(j - 1)(k - 2) * GL(i)(j)._2)

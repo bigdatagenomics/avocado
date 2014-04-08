@@ -80,8 +80,7 @@ class DefaultPartitioner(contigLengths: Map[Int, Long],
       // if contig doesn't divide perfectly by bucket size, then add an extra bucket
       val buckets = if (len % bucketSize == 0) {
         len / bucketSize
-      }
-      else {
+      } else {
         len / bucketSize + 1
       }
 
@@ -143,13 +142,11 @@ class DefaultPartitionSet(mapping: SortedMap[ReferenceRegion, Int],
         }
 
         ids
-      }
-      else {
+      } else {
         throw new IllegalArgumentException("Region on contig " + region.refId + " with start at " + region.start +
           " and end at " + region.end + " is outside of the reference contig.")
       }
-    }
-    catch {
+    } catch {
       case _: Throwable => throw new IllegalArgumentException("Received region with contig ID " + region.refId +
         ", but do not have a matching reference contig.")
     }
