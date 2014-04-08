@@ -31,8 +31,7 @@ object RecalibrateBaseQualities extends PreprocessingStage {
     // check for snp table
     val snpTable = if (config.containsKey("snpTable")) {
       SnpTable(new File(config.getString("snpTable")))
-    }
-    else {
+    } else {
       SnpTable()
     }
 

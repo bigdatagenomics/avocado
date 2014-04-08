@@ -91,8 +91,7 @@ class HMMAligner {
       traceMatches = new Array[Char](matSize)
       traceInserts = new Array[Char](matSize)
       traceDeletes = new Array[Char](matSize)
-    }
-    else if (matSize <= 1 || oldMatSize <= 1) {
+    } else if (matSize <= 1 || oldMatSize <= 1) {
       matches = new Array[Double](1)
       inserts = new Array[Double](1)
       deletes = new Array[Double](1)
@@ -119,8 +118,7 @@ class HMMAligner {
             // TODO(peter, 12/7) there is a second constant term to the prior...
             val prior = if (testBase == refBase) {
               matchPrior / (indelPrior * indelPrior)
-            }
-            else {
+            } else {
               mismatchPrior / (indelPrior * indelPrior)
             }
             val idx = (i - 1) * stride + (j - 1)
@@ -130,19 +128,15 @@ class HMMAligner {
             val mMax = max(mMatch, max(mInsert, mDelete)) + prior
             val t = if (fpCompare(mMax, mMatch, 0.01)) {
               'M'
-            }
-            else if (fpCompare(mMax, mInsert, 0.01)) {
+            } else if (fpCompare(mMax, mInsert, 0.01)) {
               'I'
-            }
-            else if (fpCompare(mMax, mDelete, 0.01)) {
+            } else if (fpCompare(mMax, mDelete, 0.01)) {
               'D'
-            }
-            else {
+            } else {
               '.'
             }
             (mMax, t)
-          }
-          else {
+          } else {
             (Double.NegativeInfinity, '.')
           }
           val (ins, trIns) = if (i >= 1) {
@@ -152,16 +146,13 @@ class HMMAligner {
             val insMax = max(insMatch, insInsert)
             val t = if (fpCompare(insMax, insMatch, 0.01)) {
               'M'
-            }
-            else if (fpCompare(insMax, insInsert, 0.01)) {
+            } else if (fpCompare(insMax, insInsert, 0.01)) {
               'I'
-            }
-            else {
+            } else {
               '.'
             }
             (insMax, t)
-          }
-          else {
+          } else {
             (Double.NegativeInfinity, '.')
           }
           val (del, trDel) = if (j >= 1) {
@@ -171,16 +162,13 @@ class HMMAligner {
             val delMax = max(delMatch, delDelete)
             val t = if (fpCompare(delMax, delMatch, 0.01)) {
               'M'
-            }
-            else if (fpCompare(delMax, delDelete, 0.01)) {
+            } else if (fpCompare(delMax, delDelete, 0.01)) {
               'D'
-            }
-            else {
+            } else {
               '.'
             }
             (delMax, t)
-          }
-          else {
+          } else {
             (Double.NegativeInfinity, '.')
           }
           val idx = i * stride + j
@@ -196,8 +184,7 @@ class HMMAligner {
 
     if (matSize > 0) {
       alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
-    }
-    else {
+    } else {
       alignmentLikelihood = max(matches(0), max(inserts(0), deletes(0)))
     }
 
@@ -233,8 +220,7 @@ class HMMAligner {
     def indexMax(a: (Double, Int), b: (Double, Int)): (Double, Int) = {
       if (a._1 > b._1) {
         a
-      }
-      else {
+      } else {
         b
       }
     }
@@ -271,30 +257,26 @@ class HMMAligner {
           hasVariants = true
           numSnps += 1
           revAlignment += 'X'
-        }
-        else {
+        } else {
           revAlignment += '='
         }
         // FIXME
         traceMatches(idx)
-      }
-      else if (fpCompare(bestScore, inserts(idx), 0.0001)) {
+      } else if (fpCompare(bestScore, inserts(idx), 0.0001)) {
         revAlignedTestSeq += testSequence(i - 1)
         revAlignedRefSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'I'
         traceInserts(idx)
-      }
-      else if (fpCompare(bestScore, deletes(idx), 0.0001)) {
+      } else if (fpCompare(bestScore, deletes(idx), 0.0001)) {
         revAlignedRefSeq += refSequence(j - 1)
         revAlignedTestSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'D'
         traceDeletes(idx)
-      }
-      else {
+      } else {
         revAlignedTestSeq += 'x'
         revAlignedRefSeq += 'x'
         '.'
@@ -340,8 +322,7 @@ class HMMAligner {
         }
         alignSpan = 1
         alignMove = move
-      }
-      else {
+      } else {
         alignSpan += 1
       }
     }
@@ -415,8 +396,7 @@ class Haplotype(val sequence: String) {
         val readLike = hmm.getLikelihood // - hmm.getPriora
         perReadLikelihoods += readLike
         readsLikelihood += readLike
-      }
-      catch {
+      } catch {
         case _: Throwable => {
           perReadLikelihoods += 0.0
           readsLikelihood += 0.0
@@ -462,11 +442,9 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
   def compare(h1: Haplotype, h2: Haplotype): Int = {
     if (h1.readsLikelihood < h2.readsLikelihood) {
       -1
-    }
-    else if (h1.readsLikelihood > h2.readsLikelihood) {
+    } else if (h1.readsLikelihood > h2.readsLikelihood) {
       1
-    }
-    else {
+    } else {
       0
     }
   }
@@ -565,11 +543,9 @@ object HaplotypePairOrdering extends Ordering[HaplotypePair] {
   def compare(pair1: HaplotypePair, pair2: HaplotypePair): Int = {
     if (pair1.pairLikelihood < pair2.pairLikelihood) {
       -1
-    }
-    else if (pair1.pairLikelihood > pair2.pairLikelihood) {
+    } else if (pair1.pairLikelihood > pair2.pairLikelihood) {
       1
-    }
-    else {
+    } else {
       0
     }
   }

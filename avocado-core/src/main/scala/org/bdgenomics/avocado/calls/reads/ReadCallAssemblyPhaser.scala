@@ -153,14 +153,12 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       if (offset >= 0 && offset < ref.length) {
         try {
           reference += ref.substring(offset)
-        }
-        catch {
+        } catch {
           case (e: StringIndexOutOfBoundsException) => {
             log.warn("String index out of bounds at: " + reference + ", " + ref + ", " + offset)
           }
         }
-      }
-      else if (offset < 0) {
+      } else if (offset < 0) {
         return ""
       }
     }
@@ -235,14 +233,12 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
 
     val refAllele = if (varType != VariantType.Insertion) {
       refSequence.substring(refOffset, refOffset + varLength)
-    }
-    else {
+    } else {
       ""
     }
     val altAllele = if (varType != VariantType.Deletion) {
       varSequence.substring(varOffset, varOffset + varLength)
-    }
-    else {
+    } else {
       ""
     }
 
@@ -268,8 +264,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         .build()
 
       List(genotype)
-    }
-    else if (!heterozygousRef && !heterozygousNonref) {
+    } else if (!heterozygousRef && !heterozygousNonref) {
       val alleles = List(ADAMGenotypeAllele.Alt, ADAMGenotypeAllele.Alt)
 
       val contig = ADAMContig.newBuilder
@@ -291,8 +286,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         .build()
 
       List(genotype)
-    }
-    else {
+    } else {
       print("not calling")
       List[ADAMGenotype]()
     }
@@ -387,8 +381,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val calledProbability = pow(10.0, calledHaplotypePair.pairLikelihood)
       val uncalledProbability = pow(10.0, uncalledHaplotypePair.pairLikelihood)
       uncalledProbability / (calledProbability + uncalledProbability)
-    }
-    else {
+    } else {
       1.0
     }
     val variantPhred = PhredUtils.successProbabilityToPhred(variantErrorProb)
@@ -427,8 +420,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                 case 'X' => {
                   if (variantLength > 1) {
                     VariantType.MNP
-                  }
-                  else {
+                  } else {
                     VariantType.SNP
                   }
                 }
@@ -455,8 +447,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         }
       }
       genotypesToVariantContext(variants)
-    }
-    else {
+    } else {
       List()
     }
   }
@@ -481,8 +472,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       if (ref.length > 0 && region.length > 0) {
         val kmerGraph = assemble(region, ref)
         phaseAssembly(region, kmerGraph, ref)
-      }
-      else {
+      } else {
         List()
       }
     })

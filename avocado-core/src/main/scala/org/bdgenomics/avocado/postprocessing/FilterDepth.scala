@@ -43,14 +43,11 @@ private[postprocessing] object FilterDepth extends PostprocessingStage {
 
     val depth = if (config.containsKey("absoluteDepth") && !config.containsKey("relativeDepth")) {
       config.getInt("absoluteDepth")
-    }
-    else if (!config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
+    } else if (!config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
       (config.getDouble("relativeDepth") * stats.coverage).toInt
-    }
-    else if (config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
+    } else if (config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
       throw new IllegalArgumentException("Both absoluteDepth and relativeDepth are specified.")
-    }
-    else {
+    } else {
       (0.75 * stats.coverage).toInt
     }
 
