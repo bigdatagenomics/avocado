@@ -172,7 +172,6 @@
             <configuration>
               <alignParameters>true</alignParameters>
               <alignSingleLineCaseStatements>true</alignSingleLineCaseStatements>
-              <compactControlReadability>true</compactControlReadability>
               <doubleIndentClassDeclaration>true</doubleIndentClassDeclaration>
             </configuration>
           </execution>
