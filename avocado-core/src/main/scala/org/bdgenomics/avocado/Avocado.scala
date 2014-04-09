@@ -21,7 +21,7 @@ import org.apache.commons.configuration.plist.PropertyListConfiguration
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
-import org.kohsuke.args4j.{ Option => option, Argument }
+import org.kohsuke.args4j.{Option => option, Argument}
 import org.bdgenomics.adam.avro.{ ADAMVariant, ADAMRecord, ADAMNucleotideContigFragment }
 import org.bdgenomics.adam.cli.{
   ADAMSparkCommand,
@@ -54,7 +54,7 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
   @Argument(metaVar = "READS", required = true, usage = "ADAM read-oriented data", index = 0)
   var readInput: String = _
 
-  @Argument(metaVar = "REFERENCE", required = true, usage = "ADAM reference genome data", index = 1)
+  @Argument(metaVar = "REFERENCE", required = true, usage = "ADAM or FASTA reference genome data", index = 1)
   var referenceInput: String = _
 
   @Argument(metaVar = "VARIANTS", required = true, usage = "ADAM variant output", index = 2)
@@ -65,6 +65,9 @@ class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
 
   @option(name = "-debug", usage = "If set, prints a higher level of debug output.")
   var debug = false
+
+  @option(required = false, name = "-fragment_length", usage = "Sets maximum fragment length. Default value is 10,000. Values greater than 1e9 should be avoided.")
+  var fragmentLength: Long = 10000L
 }
 
 class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoArgs] with Logging {
@@ -227,7 +230,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
     log.info("Starting avocado...")
 
     // load in reference from ADAM file
-    val reference: RDD[ADAMNucleotideContigFragment] = sc.adamLoad(args.referenceInput)
+    val reference: RDD[ADAMNucleotideContigFragment] = sc.adamSequenceLoad(args.referenceInput, args.fragmentLength)
 
     log.info("Loading reads in from " + args.readInput)
     // load in reads from ADAM file
