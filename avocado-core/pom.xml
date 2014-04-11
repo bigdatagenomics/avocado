@@ -16,7 +16,7 @@
   <name>avocado-core: A Variant Caller, Distributed</name>
 
   <properties>
-    <spark.version>0.9.0-incubating</spark.version>
+    <spark.version>0.9.1</spark.version>
   </properties>
 
   <build>
