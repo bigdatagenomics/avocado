@@ -76,7 +76,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
     val homozygousNonPhred = PhredUtils.successProbabilityToPhred(likelihood(0))
 
     // simplifying assumption - snps are biallelic
-    val call = if (likelihood.indexOf(likelihood.max) != 0 &&
+    val call = if (likelihood.indexOf(likelihood.max) != 2 &&
       maxNonRefBase.isEmpty) {
       // genotype likelihood is not in favor of reference, but we do not have any non ref bases?
       log.warn("Want to call non-homozygous ref genotype, but don't see non-ref bases @ " +
@@ -111,7 +111,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
         .build()
 
       List(genotypeRef, genotypeNonRef)
-    } else if (likelihood.indexOf(likelihood.max) == 2) {
+    } else if (likelihood.indexOf(likelihood.max) == 0) {
       // homozygous non reference
       assert(pileupHead.getReferenceBase != maxNonRefBase.get,
         "Cannot have reference be equal to non-ref base, @ " + pileupHead.getPosition + ".")
