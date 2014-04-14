@@ -21,13 +21,14 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype }
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.avocado.calls.pileup.{ PileupCallSimpleSNP, PileupCallUnspecified }
+import org.bdgenomics.avocado.calls.pileup.{ MPileupCallSimpleSNP, PileupCallSimpleSNP, PileupCallUnspecified }
 import org.bdgenomics.avocado.calls.reads.{ ReadCallAssemblyPhaser, ReadCallUnspecified }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object VariantCaller {
 
   private val calls = List(PileupCallSimpleSNP,
+    MPileupCallSimpleSNP,
     PileupCallUnspecified,
     ReadCallAssemblyPhaser,
     ReadCallUnspecified)

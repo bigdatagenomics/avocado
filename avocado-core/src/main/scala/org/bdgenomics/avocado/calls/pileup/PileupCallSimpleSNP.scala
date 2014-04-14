@@ -272,11 +272,11 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
    * Takes in a single pileup rod from a single sample at a single locus. For simplicity, we assume that
    * all sites are biallelic.
    *
-   * @param[in] pileup List of pileups. Should only contain one rod.
+   * @param[in] rod ADAMRod
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP(pileup: List[ADAMPileup]): List[ADAMVariantContext] = {
-
+  protected def callSNP(rod: ADAMRod): List[ADAMVariantContext] = {
+    val pileup = rod.pileups
     if (pileup.forall(_.getRangeLength == null)) {
       val loci = pileup.head.getPosition
       log.info("Calling pileup at " + loci)
@@ -302,12 +302,12 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
   /**
    * Call variants using simple pileup based SNP calling algorithm.
    *
-   * @param[in] pileupGroups An RDD containing lists of pileups.
+   * @param[in] pileups An RDD containing of ADAMRods.
    * @return An RDD containing called variants.
    */
   override def callRods(pileups: RDD[ADAMRod]): RDD[ADAMVariantContext] = {
     log.info("Calling SNPs on pileups and flattening.")
-    pileups.map(_.pileups)
+    pileups
       .map(callSNP)
       .flatMap((p: List[ADAMVariantContext]) => p)
   }

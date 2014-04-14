@@ -60,11 +60,11 @@ class MPileupCallSimpleSNP(ploidy: Int,
    * Takes in a single pileup rod from a single sample at a single locus. For simplicity, we assume that
    * all sites are biallelic.
    *
-   * @param[in] pileup List of pileups. Should only contain one rod.
+   * @param[in] rod ADAMRod
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected def callSNP(pileup: ADAMRod): List[ADAMVariantContext] = {
-    val samples = pileup.splitBySamples
+  protected override def callSNP(rod: ADAMRod): List[ADAMVariantContext] = {
+    val samples = rod.splitBySamples
 
     // score off of rod info
     val likelihoods: Array[Array[(Double, Double, Double)]] = samples.map(_.pileups)
@@ -90,7 +90,7 @@ class MPileupCallSimpleSNP(ploidy: Int,
     var g = List[ADAMGenotype]()
 
     // get most often seen non-reference base
-    val maxNonRefBase = getMaxNonRefBase(pileup.pileups)
+    val maxNonRefBase = getMaxNonRefBase(rod.pileups)
 
     // loop over samples and write calls to list
     for (i <- 0 until likelihoods.length) {
