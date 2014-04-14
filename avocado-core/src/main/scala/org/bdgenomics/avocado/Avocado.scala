@@ -21,7 +21,7 @@ import org.apache.commons.configuration.plist.PropertyListConfiguration
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
-import org.kohsuke.args4j.{Option => option, Argument}
+import org.kohsuke.args4j.{ Option => option, Argument }
 import org.bdgenomics.adam.avro.{ ADAMVariant, ADAMRecord, ADAMNucleotideContigFragment }
 import org.bdgenomics.adam.cli.{
   ADAMSparkCommand,
