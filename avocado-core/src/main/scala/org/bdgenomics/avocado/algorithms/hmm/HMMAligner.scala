@@ -58,10 +58,6 @@ class HMMAligner {
   private var inserts: Array[Double] = Array(0.0)
   private var deletes: Array[Double] = Array(0.0)
 
-  private var traceMatches: Array[Char] = Array('\0')
-  private var traceInserts: Array[Char] = Array('\0')
-  private var traceDeletes: Array[Char] = Array('\0')
-
   private var alignment: ArrayBuffer[(Int, Char)] = null
 
   private var alignmentLikelihood = Double.NegativeInfinity
@@ -84,20 +80,11 @@ class HMMAligner {
     stride = paddedRefLen
     val oldMatSize = matSize
     matSize = max(matSize, paddedTestLen * paddedRefLen)
-    if (matSize > oldMatSize && matSize > 0) {
+
+    if (matSize > oldMatSize) {
       matches = new Array[Double](matSize)
       inserts = new Array[Double](matSize)
       deletes = new Array[Double](matSize)
-      traceMatches = new Array[Char](matSize)
-      traceInserts = new Array[Char](matSize)
-      traceDeletes = new Array[Char](matSize)
-    } else if (matSize <= 1 || oldMatSize <= 1) {
-      matches = new Array[Double](1)
-      inserts = new Array[Double](1)
-      deletes = new Array[Double](1)
-      traceMatches = new Array[Char](1)
-      traceInserts = new Array[Char](1)
-      traceDeletes = new Array[Char](1)
     }
 
     // Note: want to use the _test_ haplotype length here, not the ref length.
@@ -109,10 +96,11 @@ class HMMAligner {
     matches(0) = 2.0 * eta
     inserts(0) = Double.NegativeInfinity
     deletes(0) = Double.NegativeInfinity
+
     for (i <- 0 until paddedTestLen) {
       for (j <- 0 until paddedRefLen) {
         if (i > 0 || j > 0) {
-          val (m, trM) = if (i >= 1 && j >= 1) {
+          val m = if (i >= 1 && j >= 1) {
             val testBase = testSequence(i - 1)
             val refBase = refSequence(j - 1)
             // TODO(peter, 12/7) there is a second constant term to the prior...
@@ -126,67 +114,37 @@ class HMMAligner {
             val mInsert = inserts(idx)
             val mDelete = deletes(idx)
             val mMax = max(mMatch, max(mInsert, mDelete)) + prior
-            val t = if (fpCompare(mMax, mMatch, 0.01)) {
-              'M'
-            } else if (fpCompare(mMax, mInsert, 0.01)) {
-              'I'
-            } else if (fpCompare(mMax, mDelete, 0.01)) {
-              'D'
-            } else {
-              '.'
-            }
-            (mMax, t)
+            mMax
           } else {
-            (Double.NegativeInfinity, '.')
+            Double.NegativeInfinity
           }
-          val (ins, trIns) = if (i >= 1) {
+          val ins = if (i >= 1) {
             val idx = (i - 1) * stride + j
             val insMatch = matches(idx) + indelToMatchPrior
             val insInsert = inserts(idx) + indelToIndelPrior
             val insMax = max(insMatch, insInsert)
-            val t = if (fpCompare(insMax, insMatch, 0.01)) {
-              'M'
-            } else if (fpCompare(insMax, insInsert, 0.01)) {
-              'I'
-            } else {
-              '.'
-            }
-            (insMax, t)
+            insMax
           } else {
-            (Double.NegativeInfinity, '.')
+            Double.NegativeInfinity
           }
-          val (del, trDel) = if (j >= 1) {
+          val del = if (j >= 1) {
             val idx = i * stride + (j - 1)
             val delMatch = matches(idx) + indelToMatchPrior
             val delDelete = deletes(idx) + indelToIndelPrior
             val delMax = max(delMatch, delDelete)
-            val t = if (fpCompare(delMax, delMatch, 0.01)) {
-              'M'
-            } else if (fpCompare(delMax, delDelete, 0.01)) {
-              'D'
-            } else {
-              '.'
-            }
-            (delMax, t)
+            delMax
           } else {
-            (Double.NegativeInfinity, '.')
+            Double.NegativeInfinity
           }
           val idx = i * stride + j
           matches(idx) = m
           inserts(idx) = ins
           deletes(idx) = del
-          traceMatches(idx) = trM
-          traceInserts(idx) = trIns
-          traceDeletes(idx) = trDel
         }
       }
     }
 
-    if (matSize > 0) {
-      alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
-    } else {
-      alignmentLikelihood = max(matches(0), max(inserts(0), deletes(0)))
-    }
+    alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
 
     def printArray(a: Array[Double]) {
       for (i <- 0 until paddedTestLen) {
@@ -248,9 +206,12 @@ class HMMAligner {
           (", %1.1f" format deletes(idx)))
       }
 
-      val bestScore = max(matches(idx), max(inserts(idx), deletes(idx)))
-      // TODO(peter, 12/7) here, build the aligned sequences.
-      val tr = if (fpCompare(bestScore, matches(idx), 0.0001)) {
+      /*
+       * Check for scoring at each position, and then suggest next move. At this step, we identify
+       * the next direction to move by looking at the "state" of the current coordinate. We call
+       * our current 'state' by choosing the state with the highest cumulative likelihood.
+       */
+      val tr = if (matches(idx) >= inserts(idx) && matches(idx) >= deletes(idx)) {
         revAlignedTestSeq += testSequence(i - 1)
         revAlignedRefSeq += refSequence(j - 1)
         if (testSequence(i - 1) != refSequence(j - 1)) {
@@ -260,26 +221,24 @@ class HMMAligner {
         } else {
           revAlignment += '='
         }
-        // FIXME
-        traceMatches(idx)
-      } else if (fpCompare(bestScore, inserts(idx), 0.0001)) {
+
+        'M'
+      } else if (inserts(idx) >= deletes(idx)) {
         revAlignedTestSeq += testSequence(i - 1)
         revAlignedRefSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'I'
-        traceInserts(idx)
-      } else if (fpCompare(bestScore, deletes(idx), 0.0001)) {
+
+        'I'
+      } else {
         revAlignedRefSeq += refSequence(j - 1)
         revAlignedTestSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'D'
-        traceDeletes(idx)
-      } else {
-        revAlignedTestSeq += 'x'
-        revAlignedRefSeq += 'x'
-        '.'
+
+        'D'
       }
 
       tr match {
@@ -293,10 +252,6 @@ class HMMAligner {
         case 'D' => {
           j -= 1
         }
-        case _ => {
-          i -= 1
-          j -= 1
-        } // TODO(peter, 12/8) the alignment is bad (probably a bug).
       }
     }
 
@@ -311,8 +266,10 @@ class HMMAligner {
     var unitAlignment = revAlignment.reverse
     if (HMMAligner.debug) println(unitAlignment)
     alignment = new ArrayBuffer[(Int, Char)]
+
     var alignSpan: Int = 0
     var alignMove: Char = '.'
+
     for (i <- 0 until unitAlignment.length) {
       val move = unitAlignment(i)
       if (move != alignMove) {

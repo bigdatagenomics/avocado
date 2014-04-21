@@ -264,4 +264,60 @@ class ReadCallAssemblySuite extends FunSuite {
     assert(alleles.head === ADAMGenotypeAllele.Alt)
     assert(alleles.last === ADAMGenotypeAllele.Alt)
   }
+
+  test("Call simple het INS, ~10x coverage") {
+    val reference = "TACCAATGTAA"
+    val read0 = make_read("TACCCAA", 0L, "4M1I2M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCCAAT", 1L, "3M1I3M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCCAATG", 2L, "2M1I4M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CCCAATG", 2L, "2M1I4M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("CCAATGT", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+    val read6 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
+    val read7 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
+    val read8 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
+    val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
+
+    val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
+    val kmerGraph = rcap_short.assemble(readBucket, reference)
+
+    val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
+
+    assert(variants.length === 1)
+    assert(variants.head.position.pos === 2L)
+    assert(variants.head.variant.variant.getReferenceAllele === "C")
+    assert(variants.head.variant.variant.getVariantAllele === "CC")
+    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(alleles.length === 2)
+    assert(alleles.head === ADAMGenotypeAllele.Ref)
+    assert(alleles.last === ADAMGenotypeAllele.Alt)
+  }
+
+  test("Call simple het DEL, ~10x coverage") {
+    val reference = "TACCAATGTAA"
+    val read0 = make_read("TACCATG", 0L, "4M1D2M", "4^A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCATGT", 1L, "3M1D3M", "3^A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCATGTA", 2L, "2M1D4M", "2^A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CATGTAA", 3L, "1M1D5M", "1^A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+    val read6 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
+    val read7 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
+    val read8 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
+    val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
+
+    val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
+    val kmerGraph = rcap_short.assemble(readBucket, reference)
+
+    val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
+
+    assert(variants.length === 1)
+    assert(variants.head.position.pos === 4L)
+    assert(variants.head.variant.variant.getReferenceAllele === "CA")
+    assert(variants.head.variant.variant.getVariantAllele === "C")
+    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(alleles.length === 2)
+    assert(alleles.head === ADAMGenotypeAllele.Ref)
+    assert(alleles.last === ADAMGenotypeAllele.Alt)
+  }
 }

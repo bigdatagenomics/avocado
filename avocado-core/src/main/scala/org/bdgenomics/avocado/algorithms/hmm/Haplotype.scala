@@ -29,7 +29,7 @@ class Haplotype(val sequence: String) {
       try {
         if (HMMAligner.debug) println(r.getSequence.toString + ", " + sequence)
         hmm.alignSequences(sequence, r.getSequence.toString, null)
-        val readLike = hmm.getLikelihood // - hmm.getPriora
+        val readLike = hmm.getLikelihood + hmm.getPrior
         perReadLikelihoods += readLike
         readsLikelihood += readLike
       } catch {
