@@ -231,15 +231,19 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                       refId: Int): List[ADAMGenotype] = {
     assert(!(heterozygousRef && heterozygousNonref))
 
-    val refAllele = if (varType != VariantType.Insertion) {
+    val refAllele = if (varType != VariantType.Insertion && varType != VariantType.Deletion) {
       refSequence.substring(refOffset, refOffset + varLength)
+    } else if (varType == VariantType.Deletion) {
+      refSequence.substring(refOffset - 1, refOffset + varLength)
     } else {
-      ""
+      refSequence.substring(refOffset, refOffset + 1)
     }
-    val altAllele = if (varType != VariantType.Deletion) {
+    val altAllele = if (varType != VariantType.Deletion && varType != VariantType.Insertion) {
       varSequence.substring(varOffset, varOffset + varLength)
+    } else if (varType == VariantType.Insertion) {
+      varSequence.substring(varOffset, varOffset + varLength + 1)
     } else {
-      ""
+      varSequence.substring(varOffset - 1, varOffset)
     }
 
     if (heterozygousRef) {
@@ -405,9 +409,11 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       }
       calledHaplotypes += calledHaplotypePair.haplotype1
       calledHaplotypes += calledHaplotypePair.haplotype2
+
       // FIXME this isn't quite right...
       val heterozygousRef = !calledHaplotypes.forall(_.hasVariants) && !calledHaplotypes.forall(!_.hasVariants)
       val heterozygousNonref = calledHaplotypes.filter(_.hasVariants).size > 1
+
       for (haplotype <- calledHaplotypes) {
         if (haplotype.hasVariants) {
           var variantOffset = 0
