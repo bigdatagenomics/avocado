@@ -58,10 +58,10 @@ object DefaultPartitioner extends ReferencePartitionerCompanion {
  * A default partitioner cuts the genome up into equally sized partitions which are spread
  * across reference contigs.
  *
- * @param contigLengths A map that maps a reference ID to the length of that reference contig.
+ * @param contigLengths A map that maps a reference name to the length of that reference contig.
  * @param bucketSize The size (in reference positions) of a single bucket.
  */
-class DefaultPartitioner(contigLengths: Map[Int, Long],
+class DefaultPartitioner(contigLengths: Map[String, Long],
                          bucketSize: Int) extends ReferencePartitioner {
 
   val companion = DefaultPartitioner
@@ -75,16 +75,16 @@ class DefaultPartitioner(contigLengths: Map[Int, Long],
     var bucketCount: SortedMap[ReferenceRegion, Int] = SortedMap[ReferenceRegion, Int]()
 
     contigLengths.foreach(kv => {
-      val (id, len) = kv
+      val (contigName, contigLength) = kv
 
       // if contig doesn't divide perfectly by bucket size, then add an extra bucket
-      val buckets = if (len % bucketSize == 0) {
-        len / bucketSize
+      val buckets = if (contigLength % bucketSize == 0) {
+        contigLength / bucketSize
       } else {
-        len / bucketSize + 1
+        contigLength / bucketSize + 1
       }
 
-      bucketCount += (ReferenceRegion(id, 0L, len) -> buckets.toInt)
+      bucketCount += (ReferenceRegion(contigName, 0L, contigLength) -> buckets.toInt)
     })
 
     // scan across map to get proper offsets - scan doesn't quite work correctly on maps...
@@ -108,10 +108,10 @@ class DefaultPartitionSet(mapping: SortedMap[ReferenceRegion, Int],
                           bucketSize: Int) extends PartitionSet(mapping) {
 
   // maps contig ID to the id of the first bucket in that contig
-  val contigIdMap: Map[Int, Int] = mapping.map(kv => (kv._1.refId, kv._2))
+  val contigIdMap: Map[String, Int] = mapping.map(kv => (kv._1.referenceName, kv._2))
 
   // maps contig ID to the reference region of that contig
-  val contigRegions: Map[Int, ReferenceRegion] = mapping.map(kv => (kv._1.refId, kv._1))
+  val contigRegions: Map[String, ReferenceRegion] = mapping.map(kv => (kv._1.referenceName, kv._1))
 
   /**
    * Overrides main implementation with a faster implementation that does not check
@@ -124,8 +124,8 @@ class DefaultPartitionSet(mapping: SortedMap[ReferenceRegion, Int],
   override def getPartition(region: ReferenceRegion): List[Int] = {
     try {
       // check that this region is inside of our reference contig
-      if (contigRegions(region.refId).contains(region)) {
-        val offset = contigIdMap(region.refId)
+      if (contigRegions(region.referenceName).contains(region)) {
+        val offset = contigIdMap(region.referenceName)
         var ids = List[Int]()
 
         // step across region by bucket size
@@ -143,11 +143,11 @@ class DefaultPartitionSet(mapping: SortedMap[ReferenceRegion, Int],
 
         ids
       } else {
-        throw new IllegalArgumentException("Region on contig " + region.refId + " with start at " + region.start +
+        throw new IllegalArgumentException("Region on contig " + region.referenceName + " with start at " + region.start +
           " and end at " + region.end + " is outside of the reference contig.")
       }
     } catch {
-      case _: Throwable => throw new IllegalArgumentException("Received region with contig ID " + region.refId +
+      case _: Throwable => throw new IllegalArgumentException("Received region with contig ID " + region.referenceName +
         ", but do not have a matching reference contig.")
     }
   }

@@ -25,7 +25,6 @@ class FilterDepthSuite extends FunSuite {
 
   test("do not filter genotypes that have no depth info") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -46,7 +45,6 @@ class FilterDepthSuite extends FunSuite {
 
   test("do not filter genotypes that have sufficient coverage") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -68,7 +66,6 @@ class FilterDepthSuite extends FunSuite {
 
   test("filter genotypes that have low coverage") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -90,7 +87,6 @@ class FilterDepthSuite extends FunSuite {
 
   test("do not filter genotypes that have no depth info or that have sufficient coverage") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -117,7 +113,6 @@ class FilterDepthSuite extends FunSuite {
 
   test("do not filter genotypes that have no depth info but filter low coverage calls") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder

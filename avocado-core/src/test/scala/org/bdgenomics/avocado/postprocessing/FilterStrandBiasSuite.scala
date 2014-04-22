@@ -25,7 +25,6 @@ class FilterStrandBiasSuite extends FunSuite {
 
   test("do not filter genotypes that have no strand biasing info") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -46,7 +45,6 @@ class FilterStrandBiasSuite extends FunSuite {
 
   test("do not filter genotypes that are inside bounds") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -69,7 +67,6 @@ class FilterStrandBiasSuite extends FunSuite {
 
   test("filter genotypes that are outside bounds") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -92,7 +89,6 @@ class FilterStrandBiasSuite extends FunSuite {
 
   test("do not filter genotypes that have no strand biasing info or that are inside bounds") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder
@@ -120,7 +116,6 @@ class FilterStrandBiasSuite extends FunSuite {
 
   test("do not filter genotypes that have no strand biasing info but filter those that are outside bounds") {
     val contig = ADAMContig.newBuilder
-      .setContigId(0)
       .setContigName("0")
       .build
     val variant = ADAMVariant.newBuilder

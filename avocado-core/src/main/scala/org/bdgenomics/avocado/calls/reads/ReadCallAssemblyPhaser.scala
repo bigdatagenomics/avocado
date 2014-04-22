@@ -227,8 +227,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                       phred: Int,
                       refPos: Long,
                       sampleName: String,
-                      refName: String,
-                      refId: Int): List[ADAMGenotype] = {
+                      refName: String): List[ADAMGenotype] = {
     assert(!(heterozygousRef && heterozygousNonref))
 
     val refAllele = if (varType != VariantType.Insertion && varType != VariantType.Deletion) {
@@ -250,7 +249,6 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val alleles = List(ADAMGenotypeAllele.Ref, ADAMGenotypeAllele.Alt)
 
       val contig = ADAMContig.newBuilder
-        .setContigId(refId)
         .setContigName(refName)
         .build
       val variant = ADAMVariant.newBuilder
@@ -272,7 +270,6 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val alleles = List(ADAMGenotypeAllele.Alt, ADAMGenotypeAllele.Alt)
 
       val contig = ADAMContig.newBuilder
-        .setContigId(refId)
         .setContigName(refName)
         .build
       val variant = ADAMVariant.newBuilder
@@ -396,8 +393,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val sortedRegion = region.sortBy(_.getStart)
       val firstRead = sortedRegion(0)
       val refPos = firstRead.getStart
-      val refName = firstRead.getReferenceName.toString
-      val refId = firstRead.getReferenceId
+      val refName = firstRead.getContig.getContigName.toString
       val sampleName = firstRead.getRecordGroupSample.toString
       var calledHaplotypes = new HashSet[Haplotype]
       val calledHaplotype1 = calledHaplotypePair.haplotype1
@@ -440,7 +436,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                 heterozygousNonref,
                 variantPhred,
                 refPos,
-                sampleName, refName, refId)
+                sampleName, refName)
               variants = variants ::: variant
             }
             if (move != 'D') {

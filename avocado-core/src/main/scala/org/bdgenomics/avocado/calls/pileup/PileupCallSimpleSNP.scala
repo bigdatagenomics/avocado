@@ -88,8 +88,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
         "Cannot have reference be equal to non-ref base, @ " + pileupHead.getPosition + ".")
 
       val contig = ADAMContig.newBuilder
-        .setContigId(pileupHead.getReferenceId)
-        .setContigName(pileupHead.getReferenceName)
+        .setContigName(pileupHead.getContig.getContigName)
         .build
       val variant = ADAMVariant.newBuilder
         .setContig(contig)
@@ -117,8 +116,7 @@ class PileupCallSimpleSNP(ploidy: Int) extends PileupCall {
         "Cannot have reference be equal to non-ref base, @ " + pileupHead.getPosition + ".")
 
       val contig = ADAMContig.newBuilder
-        .setContigId(pileupHead.getReferenceId)
-        .setContigName(pileupHead.getReferenceName)
+        .setContigName(pileupHead.getContig.getContigName)
         .build
       val variant = ADAMVariant.newBuilder
         .setContig(contig)

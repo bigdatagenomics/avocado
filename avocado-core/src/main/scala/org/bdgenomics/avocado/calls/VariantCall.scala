@@ -63,7 +63,7 @@ abstract class VariantCall extends Serializable with Logging {
                                       samples: Int = 1): List[ADAMVariantContext] = {
 
     val grouped = genotypes.groupBy(
-      g => (g.getVariant.getContig.getContigId, g.getVariant.getVariantAllele))
+      g => (g.getVariant.getContig.getContigName.toString, g.getVariant.getVariantAllele))
       .map(kv => {
         val (k, g) = kv
 
