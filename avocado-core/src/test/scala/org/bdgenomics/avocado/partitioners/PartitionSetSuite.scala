@@ -22,13 +22,13 @@ import scala.collection.immutable.SortedMap
 
 class PartitionSetSuite extends FunSuite {
 
-  val regionMapping = SortedMap(ReferenceRegion(0, 0L, 100L) -> 0,
-    ReferenceRegion(0, 100L, 200L) -> 1,
-    ReferenceRegion(0, 300L, 400L) -> 2)
+  val regionMapping = SortedMap(ReferenceRegion("0", 0L, 100L) -> 0,
+    ReferenceRegion("0", 100L, 200L) -> 1,
+    ReferenceRegion("0", 300L, 400L) -> 2)
   val partitionSet = new PartitionSet(regionMapping)
 
   test("region that is fully contained in a single partition") {
-    val r = ReferenceRegion(0, 10L, 40L)
+    val r = ReferenceRegion("0", 10L, 40L)
 
     assert(partitionSet.isInSet(r))
     assert(!partitionSet.isOutsideOfSet(r))
@@ -37,7 +37,7 @@ class PartitionSetSuite extends FunSuite {
   }
 
   test("region that is fully contained in two adjacent partitions") {
-    val r = ReferenceRegion(0, 90L, 120L)
+    val r = ReferenceRegion("0", 90L, 120L)
 
     assert(partitionSet.isInSet(r))
     assert(!partitionSet.isOutsideOfSet(r))
@@ -47,7 +47,7 @@ class PartitionSetSuite extends FunSuite {
   }
 
   test("region that is in two adjacent partitions, but extends outside of them as well") {
-    val r = ReferenceRegion(0, 90L, 220L)
+    val r = ReferenceRegion("0", 90L, 220L)
 
     assert(partitionSet.isInSet(r))
     assert(partitionSet.isOutsideOfSet(r))
@@ -57,7 +57,7 @@ class PartitionSetSuite extends FunSuite {
   }
 
   test("region that is in two partitions with a gap between them") {
-    val r = ReferenceRegion(0, 170L, 320L)
+    val r = ReferenceRegion("0", 170L, 320L)
 
     assert(partitionSet.isInSet(r))
     assert(partitionSet.isOutsideOfSet(r))
@@ -67,7 +67,7 @@ class PartitionSetSuite extends FunSuite {
   }
 
   test("region that is fully outside of the set") {
-    val r = ReferenceRegion(0, 450L, 550L)
+    val r = ReferenceRegion("0", 450L, 550L)
 
     assert(!partitionSet.isInSet(r))
     assert(partitionSet.isOutsideOfSet(r))

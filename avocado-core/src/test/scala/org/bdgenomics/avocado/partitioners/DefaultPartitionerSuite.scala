@@ -22,7 +22,7 @@ import scala.collection.immutable.SortedMap
 
 class DefaultPartitionerSuite extends FunSuite {
 
-  val contigs = Map(0 -> 1000L, 1 -> 500L, 2 -> 100L)
+  val contigs = Map("0" -> 1000L, "1" -> 500L, "2" -> 100L)
   val partitioner = new DefaultPartitioner(contigs, 100)
   val partitions = partitioner.computePartitions()
 
@@ -36,19 +36,19 @@ class DefaultPartitionerSuite extends FunSuite {
   }
 
   test("check that offsets are correct") {
-    val ctg0 = ReferenceRegion(0, 0, 99L)
+    val ctg0 = ReferenceRegion("0", 0, 99L)
     assert(partitions.isInSet(ctg0))
     assert(!partitions.isOutsideOfSet(ctg0))
     assert(partitions.getPartition(ctg0).length === 1)
     assert(partitions.getPartition(ctg0).head === 0)
 
-    val ctg1 = ReferenceRegion(1, 0, 99L)
+    val ctg1 = ReferenceRegion("1", 0, 99L)
     assert(partitions.isInSet(ctg1))
     assert(!partitions.isOutsideOfSet(ctg1))
     assert(partitions.getPartition(ctg1).length === 1)
     assert(partitions.getPartition(ctg1).head === 10)
 
-    val ctg2 = ReferenceRegion(2, 0, 99L)
+    val ctg2 = ReferenceRegion("2", 0, 99L)
     assert(partitions.isInSet(ctg2))
     assert(!partitions.isOutsideOfSet(ctg2))
     assert(partitions.getPartition(ctg2).length === 1)
@@ -56,7 +56,7 @@ class DefaultPartitionerSuite extends FunSuite {
   }
 
   test("default partition set properly handles regions that span buckets") {
-    val ctg0 = ReferenceRegion(0, 0, 299L)
+    val ctg0 = ReferenceRegion("0", 0, 299L)
     assert(partitions.isInSet(ctg0))
     assert(!partitions.isOutsideOfSet(ctg0))
     assert(partitions.getPartition(ctg0).length === 3)
@@ -66,7 +66,7 @@ class DefaultPartitionerSuite extends FunSuite {
   }
 
   test("throws exception for contigs not in reference") {
-    val ctg3 = ReferenceRegion(3, 0, 100L)
+    val ctg3 = ReferenceRegion("3", 0, 100L)
 
     intercept[IllegalArgumentException] {
       partitions.getPartition(ctg3)
@@ -74,7 +74,7 @@ class DefaultPartitionerSuite extends FunSuite {
   }
 
   test("throws exception for contigs that extend past ends of reference contigs") {
-    val ctg0 = ReferenceRegion(0, 900L, 1100L)
+    val ctg0 = ReferenceRegion("0", 900L, 1100L)
     assert(partitions.isInSet(ctg0))
 
     intercept[IllegalArgumentException] {

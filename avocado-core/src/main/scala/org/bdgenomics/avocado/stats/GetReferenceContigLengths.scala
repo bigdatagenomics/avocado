@@ -28,8 +28,8 @@ private[stats] object GetReferenceContigLengths {
    * @param rdd RDD of reference contigs.
    * @return List of contig lengths.
    */
-  def apply(rdd: RDD[ADAMNucleotideContigFragment]): Map[Int, Long] = {
-    rdd.map(c => (c.getContigId.toInt, c.getContigLength.toLong)).distinct.collect.toMap
+  def apply(rdd: RDD[ADAMNucleotideContigFragment]): Map[String, Long] = {
+    rdd.map(c => (c.getContig.getContigName.toString, c.getContigLength.toLong)).distinct.collect.toMap
   }
 
 }

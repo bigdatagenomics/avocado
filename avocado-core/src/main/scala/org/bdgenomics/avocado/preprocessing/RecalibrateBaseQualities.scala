@@ -28,11 +28,13 @@ object RecalibrateBaseQualities extends PreprocessingStage {
   val stageName = "recalibrateBaseQualities"
 
   def apply(rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
+
+    val sc = rdd.sparkContext
     // check for snp table
     val snpTable = if (config.containsKey("snpTable")) {
-      SnpTable(new File(config.getString("snpTable")))
+      sc.broadcast(SnpTable(new File(config.getString("snpTable"))))
     } else {
-      SnpTable()
+      sc.broadcast(SnpTable())
     }
 
     // run bqsr with snp table loaded

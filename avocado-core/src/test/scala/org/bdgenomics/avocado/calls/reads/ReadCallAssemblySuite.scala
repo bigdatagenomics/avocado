@@ -16,7 +16,7 @@
 
 package org.bdgenomics.avocado.calls.reads
 
-import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMGenotypeAllele }
+import org.bdgenomics.adam.avro.{ ADAMContig, ADAMRecord, ADAMGenotypeAllele }
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.avocado.algorithms.debrujin._
 import org.bdgenomics.avocado.algorithms.hmm._
@@ -37,6 +37,11 @@ class ReadCallAssemblySuite extends FunSuite {
                 length: Int,
                 qualities: Seq[Int],
                 id: Int = 0): ADAMRecord = {
+
+    val contig = ADAMContig.newBuilder()
+      .setContigName("chr1")
+      .build()
+
     ADAMRecord.newBuilder()
       .setReadName("read" + id.toString)
       .setStart(start)
@@ -47,9 +52,8 @@ class ReadCallAssemblySuite extends FunSuite {
       .setMapq(60)
       .setQual(qualities.map(_.toChar.toString).reduce(_ + _))
       .setMismatchingPositions(mdtag)
-      .setReferenceName("chr1")
-      .setReferenceId(1)
       .setRecordGroupSample("sample")
+      .setContig(contig)
       .build()
   }
 
