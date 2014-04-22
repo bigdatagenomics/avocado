@@ -27,32 +27,27 @@ object HMMAligner {
 /**
  * Pairwise alignment HMM. See the Durbin textbook (1998), chapter 4.
  */
-class HMMAligner {
-  var refSequence: String = null
+object AlignmentState extends Enumeration {
+  type AlignmentState = Value
+  val Insertion, Match, Mismatch, Deletion, None = Value
+}
+
+/**
+ * Pairwise alignment HMM. See the Durbin textbook (1998), chapter 4.
+ */
+class HMMAligner(val indelPrior: Double = -4.0,
+                 val mismatchPrior: Double = -3.0 - log10(3.0),
+                 val matchPrior: Double = log10(1.0 - 1.0e-3),
+                 val indelToMatchPrior: Double = -4.0,
+                 val indelToIndelPrior: Double = -4.0) {
+
   var refAligned: String = null
 
-  var testSequence: String = null
   var testAligned: String = null
-
-  var testQualities: String = null
 
   var refOffset = 0
 
-  var paddedRefLen = 0
-  var paddedTestLen = 0
-
-  var stride = 0
   var matSize = 1
-
-  var eta = Double.NegativeInfinity
-
-  // This uses the quick and dirty numbers from the Dindel (2011) paper.
-  // TODO(peter, 12/7) I'm forgetting a factor of 3 somewhere...
-  val mismatchPrior = -3.0 - log10(3.0)
-  val matchPrior = log10(1.0 - 1.0e-3)
-  val indelPrior = -4.0
-  val indelToMatchPrior = -4.0
-  val indelToIndelPrior = -4.0
 
   private var matches: Array[Double] = Array(0.0)
   private var inserts: Array[Double] = Array(0.0)
@@ -72,12 +67,110 @@ class HMMAligner {
    * @return True if sequence has variants.
    */
   def alignSequences(refSequence: String, testSequence: String, testQualities: String): Boolean = {
+    val paddedRefLen = refSequence.length + 1
+    val paddedTestLen = testSequence.length + 1
+    val stride = paddedRefLen
+    computeAlignmentLikelihood(testSequence, refSequence)
 
-    def fpCompare(a: Double, b: Double, eps: Double): Boolean = abs(a - b) <= eps
+    // Traceback to get the aligned sequences.
+    var hasVariants = false
+    var numSnps = 0
+    var numIndels = 0
+    var revAlignment = ""
+    var revAlignedTestSeq = ""
+    var revAlignedRefSeq = ""
 
-    paddedRefLen = refSequence.length + 1
-    paddedTestLen = testSequence.length + 1
-    stride = paddedRefLen
+    var i = paddedTestLen - 1
+    var j = paddedRefLen - 1
+
+    if (HMMAligner.debug)
+      println(i + ", " + j)
+
+    while (i > 0 && j > 0) {
+      val idx = i * stride + j
+
+      if (HMMAligner.debug) {
+        println(i + ", " + j + (": %1.1f" format matches(idx)) + (", %1.1f" format inserts(idx)) +
+          (", %1.1f" format deletes(idx)))
+      }
+
+      /*
+       * Check for scoring at each position, and then suggest next move. At this step, we identify
+       * the next direction to move by looking at the "state" of the current coordinate. We call
+       * our current 'state' by choosing the state with the highest cumulative likelihood.
+       */
+      if (matches(idx) >= inserts(idx) && matches(idx) >= deletes(idx)) {
+        revAlignedTestSeq += testSequence(i - 1)
+        revAlignedRefSeq += refSequence(j - 1)
+        if (testSequence(i - 1) != refSequence(j - 1)) {
+          hasVariants = true
+          numSnps += 1
+          revAlignment += 'X'
+        } else {
+          revAlignment += '='
+        }
+        i -= 1
+        j -= 1
+      } else if (inserts(idx) >= deletes(idx)) {
+        revAlignedTestSeq += testSequence(i - 1)
+        revAlignedRefSeq += '_'
+        hasVariants = true
+        numIndels += 1
+        revAlignment += 'I'
+        i -= 1
+      } else {
+        revAlignedRefSeq += refSequence(j - 1)
+        revAlignedTestSeq += '_'
+        hasVariants = true
+        numIndels += 1
+        revAlignment += 'D'
+        j -= 1
+      }
+    }
+
+    testAligned = revAlignedTestSeq.reverse
+    refAligned = revAlignedRefSeq.reverse
+
+    if (HMMAligner.debug) {
+      println("ta: " + testAligned)
+      println("ra: " + refAligned)
+    }
+
+    var unitAlignment = revAlignment.reverse
+    if (HMMAligner.debug) println(unitAlignment)
+    alignment = new ArrayBuffer[(Int, Char)]
+
+    var alignSpan: Int = 0
+    var alignMove: Char = '.'
+
+    for (i <- 0 until unitAlignment.length) {
+      val move = unitAlignment(i)
+      if (move != alignMove) {
+        if (alignSpan > 0) {
+          val tok = (alignSpan, alignMove)
+          alignment += tok
+        }
+        alignSpan = 1
+        alignMove = move
+      } else {
+        alignSpan += 1
+      }
+    }
+    val tok = (alignSpan, alignMove)
+    alignment += tok
+
+    // Compute the prior probability of the alignments, with the Dindel numbers.
+    alignmentPrior = mismatchPrior * numSnps + indelPrior * numIndels
+    if (HMMAligner.debug) println("ap: " + alignmentPrior)
+
+    // Returns whether the alignment has any SNPs or indels.
+    hasVariants
+  }
+
+  def computeAlignmentLikelihood(testSequence: String, refSequence: String) {
+    val paddedRefLen = refSequence.length + 1
+    val paddedTestLen = testSequence.length + 1
+    val stride = paddedRefLen
     val oldMatSize = matSize
     matSize = max(matSize, paddedTestLen * paddedRefLen)
 
@@ -88,7 +181,7 @@ class HMMAligner {
     }
 
     // Note: want to use the _test_ haplotype length here, not the ref length.
-    eta = -log10(1.0 + testSequence.length)
+    val eta = -log10(1.0 + testSequence.length)
 
     // Compute the optimal alignment.
     // TODO(peter, 12/4) shortcut b/w global and local alignment: use a custom
@@ -96,7 +189,6 @@ class HMMAligner {
     matches(0) = 2.0 * eta
     inserts(0) = Double.NegativeInfinity
     deletes(0) = Double.NegativeInfinity
-
     for (i <- 0 until paddedTestLen) {
       for (j <- 0 until paddedRefLen) {
         if (i > 0 || j > 0) {
@@ -145,153 +237,6 @@ class HMMAligner {
     }
 
     alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
-
-    def printArray(a: Array[Double]) {
-      for (i <- 0 until paddedTestLen) {
-        var s = ""
-        for (j <- 0 until paddedRefLen) {
-          val idx = i * stride + j
-          s += "%2.2f" format a(idx)
-          s += "\t"
-        }
-        if (HMMAligner.debug) println(s)
-      }
-    }
-
-    if (HMMAligner.debug) {
-      println("matches")
-      printArray(matches)
-      println("inserts")
-      printArray(inserts)
-      println("deletes")
-      printArray(deletes)
-    }
-
-    // Traceback to get the aligned sequences.
-    var hasVariants = false
-    var numSnps = 0
-    var numIndels = 0
-    var revAlignment = ""
-    var revAlignedTestSeq = ""
-    var revAlignedRefSeq = ""
-
-    def indexMax(a: (Double, Int), b: (Double, Int)): (Double, Int) = {
-      if (a._1 > b._1) {
-        a
-      } else {
-        b
-      }
-    }
-
-    def getArrayMax(array: Array[Double]): (Double, Int) = {
-      array.zipWithIndex.reduce(indexMax)
-    }
-
-    val highestM = getArrayMax(matches)
-    val highestI = getArrayMax(inserts)
-    val highestD = getArrayMax(deletes)
-    val highestIdx = indexMax(highestM, indexMax(highestI, highestD))._2
-
-    var i = paddedTestLen - 1
-    var j = paddedRefLen - 1
-
-    if (HMMAligner.debug)
-      println(i + ", " + j)
-
-    while (i > 0 && j > 0) {
-      val idx = i * stride + j
-
-      if (HMMAligner.debug) {
-        println(i + ", " + j + (": %1.1f" format matches(idx)) + (", %1.1f" format inserts(idx)) +
-          (", %1.1f" format deletes(idx)))
-      }
-
-      /*
-       * Check for scoring at each position, and then suggest next move. At this step, we identify
-       * the next direction to move by looking at the "state" of the current coordinate. We call
-       * our current 'state' by choosing the state with the highest cumulative likelihood.
-       */
-      val tr = if (matches(idx) >= inserts(idx) && matches(idx) >= deletes(idx)) {
-        revAlignedTestSeq += testSequence(i - 1)
-        revAlignedRefSeq += refSequence(j - 1)
-        if (testSequence(i - 1) != refSequence(j - 1)) {
-          hasVariants = true
-          numSnps += 1
-          revAlignment += 'X'
-        } else {
-          revAlignment += '='
-        }
-
-        'M'
-      } else if (inserts(idx) >= deletes(idx)) {
-        revAlignedTestSeq += testSequence(i - 1)
-        revAlignedRefSeq += '_'
-        hasVariants = true
-        numIndels += 1
-        revAlignment += 'I'
-
-        'I'
-      } else {
-        revAlignedRefSeq += refSequence(j - 1)
-        revAlignedTestSeq += '_'
-        hasVariants = true
-        numIndels += 1
-        revAlignment += 'D'
-
-        'D'
-      }
-
-      tr match {
-        case 'M' => {
-          i -= 1
-          j -= 1
-        }
-        case 'I' => {
-          i -= 1
-        }
-        case 'D' => {
-          j -= 1
-        }
-      }
-    }
-
-    testAligned = revAlignedTestSeq.reverse
-    refAligned = revAlignedRefSeq.reverse
-
-    if (HMMAligner.debug) {
-      println("ta: " + testAligned)
-      println("ra: " + refAligned)
-    }
-
-    var unitAlignment = revAlignment.reverse
-    if (HMMAligner.debug) println(unitAlignment)
-    alignment = new ArrayBuffer[(Int, Char)]
-
-    var alignSpan: Int = 0
-    var alignMove: Char = '.'
-
-    for (i <- 0 until unitAlignment.length) {
-      val move = unitAlignment(i)
-      if (move != alignMove) {
-        if (alignSpan > 0) {
-          val tok = (alignSpan, alignMove)
-          alignment += tok
-        }
-        alignSpan = 1
-        alignMove = move
-      } else {
-        alignSpan += 1
-      }
-    }
-    val tok = (alignSpan, alignMove)
-    alignment += tok
-
-    // Compute the prior probability of the alignments, with the Dindel numbers.
-    alignmentPrior = mismatchPrior * numSnps + indelPrior * numIndels
-    if (HMMAligner.debug) println("ap: " + alignmentPrior)
-
-    // Returns whether the alignment has any SNPs or indels.
-    hasVariants
   }
 
   /**
