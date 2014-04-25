@@ -22,13 +22,15 @@ import org.bdgenomics.avocado.algorithms.hmm.AlignmentState._
 class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
                        val LOG_GAP_CONTINUE: Double = -2.0,
                        val LOG_SNP_RATE: Double = -3.0,
-                       val LOG_INDEL_RATE: Double = -4.0) {
+                       val LOG_INDEL_RATE: Double = -4.0,
+                       val LOG_PADDING_PENALTY: Double = -0.0) {
 
   var matSize = 0
   var stride = 0
   var matches = new Array[Double](matSize)
   var inserts = new Array[Double](matSize)
   var deletes = new Array[Double](matSize)
+  var padding = new Array[Double](matSize)
 
   // P( match -> match) = 1 - 2 * P(match -> indel) = 1 - 2 * P( gap-open )
   // in log-space
@@ -57,6 +59,7 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
       matches = new Array[Double](newMatrixSize)
       inserts = new Array[Double](newMatrixSize)
       deletes = new Array[Double](newMatrixSize)
+      padding = new Array[Double](newMatrixSize)
     }
 
     matSize = newMatrixSize
@@ -64,17 +67,23 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
   }
 
   def getAlignmentLikelihood(): Double = {
-    max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
+    max(padding(matSize - 1), max(matches(matSize - 1), max(inserts(matSize - 1),
+      deletes(matSize - 1))))
   }
 
   def initialise(sequenceLength: Int) = {
-    matches(0) = 2 * log10(1.0 + sequenceLength)
+    matches(0) = -2.0 * log10(1.0 + sequenceLength)
     inserts(0) = Double.NegativeInfinity
     deletes(0) = Double.NegativeInfinity
+    padding(0) = -2.0 * log10(1.0 + sequenceLength)
   }
 
   def getMostLikelyState(idx: Int, epsilon: Double = 1e-2): AlignmentState = {
-    if (matches(idx) + epsilon >= inserts(idx) && matches(idx) + epsilon >= deletes(idx))
+    if (padding(idx) + epsilon >= matches(idx) &&
+      padding(idx) + epsilon >= inserts(idx) &&
+      padding(idx) + epsilon >= deletes(idx)) {
+      AlignmentState.Padding
+    } else if (matches(idx) + epsilon >= inserts(idx) && matches(idx) + epsilon >= deletes(idx))
       AlignmentState.Match
     else if (inserts(idx) >= deletes(idx)) {
       AlignmentState.Insertion
@@ -96,6 +105,15 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
     if (j >= 1) {
       val idx = i * stride + (j - 1)
       max(gapProbability(AlignmentState.Deletion, idx), gapProbability(AlignmentState.Match, idx))
+    } else {
+      Double.NegativeInfinity
+    }
+  }
+
+  def getPaddingLikelihood(i: Int, j: Int, stride: Int, testLength: Int): Double = {
+    if ((i == 0 || i == testLength) && j >= 1) {
+      val idx = i * stride + (j - 1)
+      AlignmentState.values.map(state => paddingProbability(state, idx)).max
     } else {
       Double.NegativeInfinity
     }
@@ -131,6 +149,17 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
       case AlignmentState.Insertion                       => inserts(idx) + LOG_GAP_CLOSE
       case AlignmentState.Deletion                        => deletes(idx) + LOG_GAP_CLOSE
       case AlignmentState.Match | AlignmentState.Mismatch => matches(idx) + LOG_MATCH_TO_MATCH
+      case AlignmentState.Padding                         => padding(idx) + LOG_MATCH_TO_MATCH
     }
+  }
+
+  private def paddingProbability(state: AlignmentState, idx: Int): Double = {
+    val s = state match {
+      case AlignmentState.Insertion                       => inserts(idx)
+      case AlignmentState.Deletion                        => deletes(idx)
+      case AlignmentState.Match | AlignmentState.Mismatch => matches(idx)
+      case AlignmentState.Padding                         => padding(idx)
+    }
+    s + LOG_PADDING_PENALTY
   }
 }

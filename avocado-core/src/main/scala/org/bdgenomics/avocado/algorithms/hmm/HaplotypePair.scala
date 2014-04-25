@@ -59,9 +59,12 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
 
   lazy val hasVariants = haplotype1.hasVariants || haplotype2.hasVariants
   lazy val pairLikelihood = scorePairLikelihood
+  lazy val variantCount = haplotype1.variantCount + haplotype2.variantCount
 
   override def toString(): String = {
-    haplotype1.sequence + ", " + haplotype2.sequence + ", " + ("%1.3f" format pairLikelihood)
+    haplotype1.sequence + ", " + haplotype1.hasVariants + ", " +
+      haplotype2.sequence + ", " + haplotype2.hasVariants + ", " +
+      ("%1.3f" format pairLikelihood) + ", " + hasVariants
   }
 
   /**
@@ -71,8 +74,7 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
    */
   def scorePairLikelihood: Double = {
     val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map(scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
-    val alignment = hmm.alignSequences(haplotype2.sequence, haplotype1.sequence, null)
-    readsProb + alignment.prior
+    readsProb
   }
 
   val sequences: Set[String] = Set(haplotype1.sequence, haplotype2.sequence)
@@ -90,15 +92,22 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
 object HaplotypePairOrdering extends Ordering[HaplotypePair] {
 
   /**
-   * Compares two haplotype pairs. Returns (-1, 0, 1) if first pair has (lower, same, higher)
-   * pairwise likelihood.
+   * Compares two haplotype pairs. Returns 0 if the two pairs contain the same sequences. Else, sorts by pair
+   * likelihood. If the likelihoods are the same, we break ties by looking at the count of variants in the pair
+   * vs. the reference.
    *
    * @param pair1 First haplotype pair to compare.
    * @param pair2 Second haplotype pair to compare.
    * @return Comparison of haplotype pairs.
    */
   def compare(pair1: HaplotypePair, pair2: HaplotypePair): Int = {
-    if (pair1.pairLikelihood < pair2.pairLikelihood) {
+    if (pair1.sameSequences(pair2)) {
+      0
+    } else if (pair1.pairLikelihood < pair2.pairLikelihood) {
+      -1
+    } else if (pair1.pairLikelihood > pair2.pairLikelihood) {
+      1
+    } else if (pair1.variantCount >= pair2.variantCount) {
       -1
     } else {
       1
