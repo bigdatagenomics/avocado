@@ -18,6 +18,7 @@ package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.bdgenomics.adam.avro.ADAMRecord
 import org.bdgenomics.adam.rich.RichADAMRecord
+import scala.annotation.tailrec
 import scala.collection.mutable.{ HashSet }
 
 object KmerGraph {
@@ -47,12 +48,12 @@ object KmerGraph {
     offsets.map(idx => sequence.substring(idx, idx + k))
   }
 
-  private def buildPrefixMap(kmerSequences: Seq[String]): Map[String, HashSet[Kmer]] = {
+  private def buildPrefixMap(kmerSequences: Seq[String]): Map[String, Set[Kmer]] = {
     val kmers = kmerSequences.groupBy(x => x) // group by sequence
       .map(kv => Kmer(kv._1, kv._2.size)) // generate kmer w/ sequence and count
       .groupBy(kmer => kmer.prefix)
 
-    kmers.map(kv => (kv._1, HashSet[Kmer](kv._2.toSeq: _*)))
+    kmers.map(kv => (kv._1, kv._2.toSet))
   }
 
   /**
@@ -106,7 +107,7 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
 
   // The actual kmer graph consists of unique K-1 prefixes and kmers connected
   // by vertices.
-  private val kmerGraph = new scala.collection.mutable.HashMap[String, scala.collection.mutable.HashSet[Kmer]]
+  private var kmerGraph = Map[String, Set[Kmer]]()
 
   // add flanking sequences
   addFlanks(reference, flankLength)
@@ -139,7 +140,7 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
   }
 
   def addSequencesToGraph(kmerSequences: Seq[String]) {
-    kmerGraph ++= KmerGraph.buildPrefixMap(kmerSequences)
+    kmerGraph = kmerGraph ++ KmerGraph.buildPrefixMap(kmerSequences)
   }
 
   /**
@@ -163,31 +164,42 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
     paths
   }
 
-  def exciseKmer(kmer: Kmer) = {
-    val prefixSet = kmerGraph.get(kmer.prefix)
-    prefixSet.foreach(set => kmerGraph.put(kmer.prefix, set - kmer))
-  }
-
   /**
-   * Removes spurs from graph.
+   * Removes spurs from graph. Spurs are segments of the graph that do not connect to
+   * the source or sink of the graph. While these spurs do not contribute spurious haplotypes,
+   * they make the haplotype enumeration process more expensive.
    */
-  def removeSpurs(spurThreshold: Int = kmerLength) = {
-    // Remove all kmer paths with length <= spurThreshold, connected to the
-    // graph source and sink.
-    val edgesInSpurCandidate: Set[Kmer] = allPaths.filter(_.len < spurThreshold).flatMap(_.edges).toSet
-    val edgePrefixes = edgesInSpurCandidate.groupBy(kmer => kmer.prefix)
+  @tailrec final def removeSpurs() {
+    def count: Int = kmerGraph.map(kv => kv._2.size).sum
 
-    def removeCandidateSpur(prefixWithEdges: (String, Set[Kmer])) = {
-      val (prefix, edges) = prefixWithEdges
-      val neighbors = kmerGraph(prefix)
-      if (neighbors.size - edges.size == 0) {
-        kmerGraph.remove(prefix)
-      } else {
-        edges.foreach(exciseKmer)
-      }
+    val lastCount = count
+
+    val searchPrefixes = kmers.map(_.nextPrefix).toSeq
+    val sourceSearchPrefix = sourceKmer.nextPrefix
+    val sourcePrefix = sourceKmer.prefix
+    val sinkPrefix = sinkKmer.prefix
+    val sinkSearchPrefix = sinkKmer.nextPrefix
+    val prefixes = prefixSet
+
+    kmerGraph = kmerGraph.filter(kv => {
+      val (prefix, nodeKmers) = kv
+
+      // filter out kmers who do not have a predecessor
+      searchPrefixes.contains(prefix) || prefix == sourceSearchPrefix ||
+        prefix == sourcePrefix || prefix == sinkPrefix
+    }).mapValues(ks => {
+      ks.filter(k => {
+        val next = k.nextPrefix
+
+        // filter out kmers who do not point at any other kmers
+        prefixes.contains(next) || next == sinkPrefix || next == sinkSearchPrefix
+      })
+    }).filter(kv => !kv._2.isEmpty)
+
+    // if we removed spurs this iteration, loop and remove spurs
+    if (count != lastCount) {
+      removeSpurs()
     }
-
-    edgePrefixes.foreach(removeCandidateSpur)
   }
 
   override def toString(): String = {
