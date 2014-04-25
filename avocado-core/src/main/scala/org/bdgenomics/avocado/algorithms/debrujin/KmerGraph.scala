@@ -18,6 +18,7 @@ package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.bdgenomics.adam.avro.ADAMRecord
 import scala.collection.mutable.{ ArrayBuffer, HashMap, HashSet, PriorityQueue }
+import org.bdgenomics.adam.rich.RichADAMRecord
 
 /**
  * For our purposes, a read is a list of kmers.
@@ -210,7 +211,7 @@ class KmerGraph(kLen: Int, readLen: Int, regionLen: Int, reference: String) {
    *
    * @param readGroup Sequence of reads to add.
    */
-  def insertReads(readGroup: Seq[ADAMRecord]): Unit = {
+  def insertReads(readGroup: Seq[RichADAMRecord]): Unit = {
     reads = readGroup.map(x => new AssemblyRead(x))
     reads.foreach(r => insertReadKmers(r))
   }

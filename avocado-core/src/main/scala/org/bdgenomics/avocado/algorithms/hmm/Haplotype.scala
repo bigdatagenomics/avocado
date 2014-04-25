@@ -4,6 +4,8 @@ import scala.collection.mutable.ArrayBuffer
 import org.bdgenomics.adam.avro.ADAMRecord
 import scala.math._
 import scala.math.Ordering
+import org.bdgenomics.adam.rich.RichADAMRecord
+
 /**
  * Haplotype generated from HMM alignment.
  *
@@ -22,7 +24,7 @@ class Haplotype(val sequence: String) {
    * @param reads Sequence of reads to use.
    * @return Likelihood that reads are properly aligned.
    */
-  def scoreReadsLikelihood(hmm: HMMAligner, reads: Seq[ADAMRecord]): Double = {
+  def scoreReadsLikelihood(hmm: HMMAligner, reads: Seq[RichADAMRecord]): Double = {
     perReadLikelihoods.clear
     readsLikelihood = 0.0
     for (r <- reads) {
@@ -133,7 +135,7 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype) {
    * @param reads Sequence of reads that are evidence for haplotype.
    * @return Phred scaled likelihood.
    */
-  def scorePairLikelihood(hmm: HMMAligner, reads: Seq[ADAMRecord]): Double = {
+  def scorePairLikelihood(hmm: HMMAligner, reads: Seq[RichADAMRecord]): Double = {
     var readsProb = 0.0
     for (i <- 0 until reads.length) {
       val readLikelihood1 = haplotype1.perReadLikelihoods(i)

@@ -67,57 +67,6 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
   val companion = ReadCallAssemblyPhaser
 
   /**
-   * From a read, returns the reference sequence.
-   *
-   * @param read Read from which to return sequence.
-   * @return String containing reference sequence over this read.
-   *
-   * @see https://github.com/bigdatagenomics/adam/blob/indel-realign/adam-commands/src/main/scala/edu/berkeley/cs/amplab/adam/util/MdTag.scala
-   * @see getReference
-   */
-  def getReadReference(read: ADAMRecord): String = {
-    val mdtag = MdTag(read.getMismatchingPositions.toString, read.getStart)
-
-    val readSeq = RichADAMRecord(read).getSequence.toString
-    val cigar = RichADAMRecord(read).samtoolsCigar
-
-    var readPos = 0
-    var refPos = 0
-    var reference = ""
-
-    val cigarEls: Buffer[CigarElement] = cigar.getCigarElements
-    for (el <- cigarEls) {
-      el.getOperator match {
-        case CigarOperator.M => {
-          for (i <- (0 until el.getLength)) {
-            mdtag.mismatchedBase(refPos) match {
-              case Some(b) => reference += b
-              case None    => reference += readSeq(readPos)
-            }
-            readPos += 1
-            refPos += 1
-          }
-        }
-        case CigarOperator.D => {
-          for (i <- (0 until el.getLength)) {
-            mdtag.deletedBase(refPos) match {
-              case Some(b) => reference += b
-              case None    => {}
-            }
-            refPos += 1
-          }
-        }
-        case CigarOperator.I => {
-          readPos += el.getLength
-        }
-        case _ => {}
-      }
-    }
-
-    reference
-  }
-
-  /**
    * Gets the reference from a set of reads. Works _provided_ that region has non-zero coverage
    * across whole region.
    *
@@ -126,18 +75,18 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    *
    * @see getReadReference
    */
-  def getReference(region: Seq[ADAMRecord]): String = {
+  def getReference(region: Seq[RichADAMRecord]): String = {
     // TODO(peter, 12/5) currently, get the reference subsequence from the
     // MD tags of the ADAM records. Not entirely correct, because a region may
     // not be completely covered by reads, in which case the MD tags are
     // insufficient, so we ultimately want to resolve using the ref itself,
     // and not just the reads.
-    val posRefs = (region.map(_.getStart), region.map(r => getReadReference(r)))
-      .zipped.map((pos, ref) => (pos, ref))
-      .sortBy(_._1)
+    val posRefs =
+      region.map(read => (read.getStart, read.mdTag.map(_.getReference(read))))
+        .sortBy(_._1)
     val startPos = posRefs(0)._1
     var reference = ""
-    for ((pos, ref) <- posRefs) {
+    for ((position, readRef) <- posRefs) {
       // Here's an explanatory picture:
       //
       // OK:   [-----ref-----)
@@ -148,18 +97,24 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       //
       // Bail: [-----ref-----)
       //                         [---read---)
-      val relPos = pos - startPos
-      val offset = reference.length - relPos.toInt
-      if (offset >= 0 && offset < ref.length) {
-        try {
-          reference += ref.substring(offset)
-        } catch {
-          case (e: StringIndexOutOfBoundsException) => {
-            log.warn("String index out of bounds at: " + reference + ", " + ref + ", " + offset)
+      if (readRef.isDefined) {
+        val readReference = readRef.get
+
+        val relPos = position - startPos
+        val offset = reference.length - relPos.toInt
+        if (offset >= 0 && offset < readReference.length) {
+          try {
+            reference += readReference.substring(offset)
+          } catch {
+            case (e: StringIndexOutOfBoundsException) => {
+              log.warn("String index out of bounds at: " + reference + ", " + readReference + ", " + offset)
+            }
           }
+        } else if (offset < 0) {
+          return ""
         }
-      } else if (offset < 0) {
-        return ""
+      } else {
+        log.warn("No reference discovered for read due to missing MDTag or unmapped read")
       }
     }
     reference
@@ -172,7 +127,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param ref Reference sequence over which to test.
    * @return True if region is active.
    */
-  def isRegionActive(region: Seq[ADAMRecord], ref: String): Boolean = {
+  def isRegionActive(region: Seq[RichADAMRecord], ref: String): Boolean = {
     // TODO(peter, 12/6) a very naive active region criterion. Upgrade asap!
     val activeLikelihoodThresh = -2.0
     var refHaplotype = new Haplotype(ref)
@@ -188,7 +143,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param ref String representing reference over the region.
    * @return Kmer graph corresponding to region.
    */
-  def assemble(region: Seq[ADAMRecord], ref: String): KmerGraph = {
+  def assemble(region: Seq[RichADAMRecord], ref: String): KmerGraph = {
     val readLen = region(0).getSequence.length
     val regionLen = min(regionWindow + readLen - 1, ref.length)
     var kmerGraph = new KmerGraph(kmerLen, readLen, regionLen, ref)
@@ -213,7 +168,6 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param phred Phred scaled variant quality.
    * @param sampleName Name of sample.
    * @param refName Name of reference sequence.
-   * @param refId ID for reference.
    * @return List of genotypes.
    */
   def emitVariantCall(varType: VariantType.VariantType,
@@ -304,7 +258,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @param ref String for reference in the region.
    * @return List of variant contexts found in the region.
    */
-  def phaseAssembly(region: Seq[ADAMRecord],
+  def phaseAssembly(region: Seq[RichADAMRecord],
                     kmerGraph: KmerGraph,
                     ref: String): List[ADAMVariantContext] = {
     var refHaplotype = new Haplotype(ref)
@@ -462,9 +416,11 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    */
   override def call(reads: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
     log.info("Grouping reads into active regions.")
-    val activeRegions = reads.groupBy(r => r.getStart / regionWindow)
-      .map(x => (getReference(x._2), x._2))
-      .filter(x => isRegionActive(x._2, x._1))
+    val richReads = reads.map(RichADAMRecord(_))
+    val regions = richReads.groupBy(r => r.getStart / regionWindow)
+
+    val regionsAndReference = regions.map(kv => (getReference(kv._2), kv._2))
+    val activeRegions = regionsAndReference.filter(kv => isRegionActive(kv._2, kv._1))
 
     log.info("Calling variants with local assembly.")
 
