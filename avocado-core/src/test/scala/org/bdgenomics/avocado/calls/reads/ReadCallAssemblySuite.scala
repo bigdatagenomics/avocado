@@ -25,6 +25,7 @@ import org.apache.spark.rdd.RDD
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{ ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder }
+import org.bdgenomics.adam.rich.RichADAMRecord
 
 class ReadCallAssemblySuite extends FunSuite {
 
@@ -36,13 +37,13 @@ class ReadCallAssemblySuite extends FunSuite {
                 mdtag: String,
                 length: Int,
                 qualities: Seq[Int],
-                id: Int = 0): ADAMRecord = {
+                id: Int = 0): RichADAMRecord = {
 
     val contig = ADAMContig.newBuilder()
       .setContigName("chr1")
       .build()
 
-    ADAMRecord.newBuilder()
+    RichADAMRecord(ADAMRecord.newBuilder()
       .setReadName("read" + id.toString)
       .setStart(start)
       .setReadMapped(true)
@@ -54,7 +55,7 @@ class ReadCallAssemblySuite extends FunSuite {
       .setMismatchingPositions(mdtag)
       .setRecordGroupSample("sample")
       .setContig(contig)
-      .build()
+      .build())
   }
 
   test("Test the creation of several haplotype strings.") {
