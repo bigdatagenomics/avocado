@@ -65,12 +65,26 @@ class PartitionSet(protected val regionMapping: SortedMap[ReferenceRegion, Int])
    * @note Can be overridden if a more performant partition mapping function can be provided.
    *
    * @param region Region of interest.
-   * @return List of all partition indexes that this region overlaps with.
+   * @return List of all partition indices that this region overlaps with.
    */
   def getPartition(region: ReferenceRegion): List[Int] = {
     regionMapping.filterKeys(_.overlaps(region))
       .values
       .toList
+  }
+
+  /**
+   * Returns a list of all integer partition mappings that a region overlaps with,
+   * when the size of this region is increased by a flanking parameter.
+   *
+   * @param region Region of interest.
+   * @param flankLength Length of flanking sequence.
+   * @return List of all partition indices that this region overlaps with.
+   */
+  final def getPartition(region: ReferenceRegion, flankLength: Long): List[Int] = {
+    getPartition(ReferenceRegion(region.referenceName,
+      region.start - flankLength,
+      region.end + flankLength))
   }
 
   /**

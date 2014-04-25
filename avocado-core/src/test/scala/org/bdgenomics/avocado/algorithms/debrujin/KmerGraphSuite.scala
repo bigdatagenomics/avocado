@@ -18,10 +18,13 @@ package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.avro.{ ADAMContig, ADAMRecord }
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
 import org.bdgenomics.adam.util.SparkFunSuite
 import org.bdgenomics.avocado.calls.reads.ReadCallAssemblyPhaser
+import org.bdgenomics.avocado.partitioners.PartitionSet
+import scala.collection.immutable.SortedMap
 import scala.collection.mutable.ArrayBuffer
 
 class KmerGraphSuite extends SparkFunSuite {
@@ -187,7 +190,8 @@ class KmerGraphSuite extends SparkFunSuite {
     val reads = na12878_chr20_snp_reads.collect.toSeq
 
     // make generic assembler to get reference recovery method
-    val rcap = new ReadCallAssemblyPhaser(4, 0, 4)
+    val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
+    val rcap = new ReadCallAssemblyPhaser(emptyPartition, 4, 4)
     val reference = rcap.getReference(reads)
 
     val kmerGraph = KmerGraph(20, 101, reference.length, reference, reads, 40)
