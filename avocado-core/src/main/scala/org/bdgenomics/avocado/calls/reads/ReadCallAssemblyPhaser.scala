@@ -23,21 +23,19 @@ import org.bdgenomics.adam.avro.{
   ADAMRecord,
   ADAMVariant
 }
+import scala.collection.immutable.TreeSet
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
 import org.bdgenomics.adam.rich.RichADAMRecord._
-import org.bdgenomics.adam.util.{ MdTag, PhredUtils }
+import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.algorithms.debrujin._
 import org.bdgenomics.avocado.algorithms.hmm._
 import org.bdgenomics.avocado.calls.VariantCallCompanion
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
-import net.sf.samtools.{ Cigar, CigarOperator, CigarElement, TextCigarCodec }
 import org.apache.commons.configuration.SubnodeConfiguration
-import org.apache.spark.{ SparkContext, Logging }
 import org.apache.spark.rdd.{ RDD }
-import scala.collection.JavaConversions._
-import scala.collection.mutable.{ ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder }
+import scala.collection.mutable.HashSet
 import scala.math._
 
 object VariantType extends scala.Enumeration {
@@ -130,9 +128,9 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
   def isRegionActive(region: Seq[RichADAMRecord], ref: String): Boolean = {
     // TODO(peter, 12/6) a very naive active region criterion. Upgrade asap!
     val activeLikelihoodThresh = -2.0
-    var refHaplotype = new Haplotype(ref)
+    var refHaplotype = new Haplotype(ref, region)
     var hmm = new HMMAligner
-    val readsLikelihood = refHaplotype.scoreReadsLikelihood(hmm, region)
+    val readsLikelihood = refHaplotype.readsLikelihood
     readsLikelihood < activeLikelihoodThresh
   }
 
@@ -252,46 +250,34 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    *
    * @param region Sequence of reads covering region.
    * @param kmerGraph Graph of kmers to use for calling.
-   * @param ref String for reference in the region.
+   * @param reference String for reference in the region.
    * @return List of variant contexts found in the region.
    */
   def phaseAssembly(region: Seq[RichADAMRecord],
                     kmerGraph: KmerGraph,
-                    ref: String): List[ADAMVariantContext] = {
-    var refHaplotype = new Haplotype(ref)
+                    reference: String,
+                    maxHaplotypes: Int = 16): List[ADAMVariantContext] = {
+
+    val hmm = new HMMAligner
+    val refHaplotype = new Haplotype(reference, region)
 
     // Score all haplotypes against the reads.
-    var hmm = new HMMAligner
-    refHaplotype.scoreReadsLikelihood(hmm, region)
-    var orderedHaplotypes = new PriorityQueue[Haplotype]()(HaplotypeOrdering)
-    for (path <- kmerGraph.allPaths) {
-      val haplotype = new Haplotype(path.haplotypeString)
-      haplotype.scoreReadsLikelihood(hmm, region)
-      orderedHaplotypes.enqueue(haplotype)
-    }
+    val orderedHaplotypes = TreeSet[Haplotype](kmerGraph.allPaths.map( path =>
+      new Haplotype(path.haplotypeString, region, reference)).toSeq:_*)(HaplotypeOrdering.reverse)
 
     // Pick the top X-1 haplotypes and the reference haplotype.
-    val maxNumBestHaplotypes = 16
-    val numBestHaplotypes = min(maxNumBestHaplotypes, orderedHaplotypes.length)
-    var bestHaplotypes = new ArrayBuffer[Haplotype]
-    bestHaplotypes += refHaplotype
-    for (i <- 1 to numBestHaplotypes) {
-      bestHaplotypes += orderedHaplotypes.dequeue
-    }
+    val bestHaplotypes = refHaplotype :: orderedHaplotypes.take(maxHaplotypes - 1).toList
 
     // Score the haplotypes pairwise inclusively.
-    var refHaplotypePair: HaplotypePair = null
-    var orderedHaplotypePairs = new PriorityQueue[HaplotypePair]()(HaplotypePairOrdering)
-    for (i <- 0 until bestHaplotypes.length) {
-      for (j <- i until bestHaplotypes.length) {
-        var pair = new HaplotypePair(bestHaplotypes(i), bestHaplotypes(j))
-        pair.scorePairLikelihood(hmm, region)
-        orderedHaplotypePairs.enqueue(pair)
-        if (i == 0 && j == 0) {
-          refHaplotypePair = pair
-        }
+    val orderedHaplotypePairBuilder = TreeSet.newBuilder[HaplotypePair](HaplotypePairOrdering.reverse)
+    for (i <- 0 until bestHaplotypes.size) {
+      for (j <- i until bestHaplotypes.size) {
+        var pair = new HaplotypePair(bestHaplotypes(i), bestHaplotypes(j), hmm)
+        orderedHaplotypePairBuilder += pair
       }
     }
+
+    val orderedHaplotypePairs = orderedHaplotypePairBuilder.result
 
     if (ReadCallAssemblyPhaser.debug) {
       println("After scoring, have:")
@@ -299,38 +285,13 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     }
 
     // Pick the best haplotype pairs with and without indels.
-    val (calledHaplotypePair, uncalledHaplotypePair) = {
-      var calledRes: HaplotypePair = null
-      var uncalledRes: HaplotypePair = null
-      do {
-        val res = orderedHaplotypePairs.dequeue
-        res.alignToReference(hmm, refHaplotype) match {
-          case true => {
-            if (calledRes == null) {
-              calledRes = res
-            }
-          }
-          case false => {
-            if (uncalledRes == null) {
-              uncalledRes = res
-            }
-          }
-        }
-      } while ((calledRes == null || uncalledRes == null) && orderedHaplotypePairs.length > 0)
-      // TODO(peter, 12/8) this ought to be a pathological bug if it ever
-      // happens (i.e., the ref-ref pair counts as having variants).
-      // On the other hand, there might not be any valid variant haplotypes.
-      // (FIXME: Really I should be using Option[].)
-      if (uncalledRes == null) {
-        uncalledRes = refHaplotypePair
-      }
-      (calledRes, uncalledRes)
-    }
+    val calledHaplotypePair = orderedHaplotypePairs.find(_.hasVariants)
+    val uncalledHaplotypePair = orderedHaplotypePairs.find(!_.hasVariants).get
 
     // Compute the variant error probability and the equivalent phred score,
     // and use them for all called variants.
-    val variantErrorProb = if (calledHaplotypePair != null) {
-      val calledProbability = pow(10.0, calledHaplotypePair.pairLikelihood)
+    val variantErrorProb = if (calledHaplotypePair.isDefined) {
+      val calledProbability = pow(10.0, calledHaplotypePair.get.pairLikelihood)
       val uncalledProbability = pow(10.0, uncalledHaplotypePair.pairLikelihood)
       uncalledProbability / (calledProbability + uncalledProbability)
     } else {
@@ -339,7 +300,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     val variantPhred = PhredUtils.successProbabilityToPhred(variantErrorProb)
 
     // TODO(peter, 12/8) Call variants, _without_ incorporating phasing for now.
-    if (calledHaplotypePair != null) {
+    if (calledHaplotypePair.isDefined) {
       var variants = List[ADAMGenotype]()
       val sortedRegion = region.sortBy(_.getStart)
       val firstRead = sortedRegion(0)
@@ -347,15 +308,15 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val refName = firstRead.getContig.getContigName.toString
       val sampleName = firstRead.getRecordGroupSample.toString
       var calledHaplotypes = new HashSet[Haplotype]
-      val calledHaplotype1 = calledHaplotypePair.haplotype1
-      val calledHaplotype2 = calledHaplotypePair.haplotype2
+      val calledHaplotype1 = calledHaplotypePair.get.haplotype1
+      val calledHaplotype2 = calledHaplotypePair.get.haplotype2
       if (ReadCallAssemblyPhaser.debug) {
         println("Called:")
         println(calledHaplotype1 + ", " + calledHaplotype1.hasVariants + ", " + calledHaplotype1.alignment)
         println(calledHaplotype2 + ", " + calledHaplotype2.hasVariants + ", " + calledHaplotype2.alignment)
       }
-      calledHaplotypes += calledHaplotypePair.haplotype1
-      calledHaplotypes += calledHaplotypePair.haplotype2
+      calledHaplotypes += calledHaplotypePair.get.haplotype1
+      calledHaplotypes += calledHaplotypePair.get.haplotype2
 
       // FIXME this isn't quite right...
       val heterozygousRef = !calledHaplotypes.forall(_.hasVariants) && !calledHaplotypes.forall(!_.hasVariants)
