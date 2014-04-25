@@ -140,17 +140,14 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * Performs assembly over a region.
    *
    * @param region Sequence of reads spanning the region.
-   * @param ref String representing reference over the region.
+   * @param reference String representing reference over the region.
    * @return Kmer graph corresponding to region.
    */
-  def assemble(region: Seq[RichADAMRecord], ref: String): KmerGraph = {
+
+  def assemble(region: Seq[RichADAMRecord], reference: String, removeSpurs: Boolean = false): KmerGraph = {
     val readLen = region(0).getSequence.length
-    val regionLen = min(regionWindow + readLen - 1, ref.length)
-    var kmerGraph = new KmerGraph(kmerLen, readLen, regionLen, ref)
-    kmerGraph.insertReads(region)
-    kmerGraph.connectGraph
-    //kmer_graph.removeSpurs // TODO(peter, 11/27) debug: not doing spur removal atm.
-    kmerGraph.enumerateAllPaths
+    val regionLen = min(regionWindow + readLen - 1, reference.length)
+    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, removeSpurs)
     kmerGraph
   }
 
@@ -267,8 +264,8 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     var hmm = new HMMAligner
     refHaplotype.scoreReadsLikelihood(hmm, region)
     var orderedHaplotypes = new PriorityQueue[Haplotype]()(HaplotypeOrdering)
-    for (path <- kmerGraph.getAllPaths) {
-      val haplotype = new Haplotype(path.asHaplotypeString)
+    for (path <- kmerGraph.allPaths) {
+      val haplotype = new Haplotype(path.haplotypeString)
       haplotype.scoreReadsLikelihood(hmm, region)
       orderedHaplotypes.enqueue(haplotype)
     }
