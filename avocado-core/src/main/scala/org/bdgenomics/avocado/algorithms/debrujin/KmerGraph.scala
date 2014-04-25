@@ -145,12 +145,13 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
   /**
    * Performs depth first search and scores all paths through the final graph.
    */
-  def enumerateAllPaths(maxDepth: Int): collection.mutable.PriorityQueue[KmerPath] = {
-    val queue = new collection.mutable.PriorityQueue[KmerPath]()
+  def enumerateAllPaths(maxDepth: Int): collection.mutable.SortedSet[KmerPath] = {
+    val paths = collection.mutable.SortedSet[KmerPath]()
 
     def pathToSink(node: Kmer, currentPath: Seq[Kmer], depth: Int): Unit = {
       if (node.nextPrefix.equals(sinkKmer.nextPrefix) || depth > maxDepth) {
-        queue.enqueue(new KmerPath(currentPath :+ node))
+        val path = new KmerPath(currentPath :+ node)
+        paths.add(path)
       }
       val nextNodes = kmerGraph.get(node.nextPrefix)
       if (depth <= maxDepth && nextNodes.isDefined && nextNodes.nonEmpty) {
@@ -159,7 +160,7 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
     }
 
     pathToSink(sourceKmer, Seq.empty, 0)
-    queue
+    paths
   }
 
   def exciseKmer(kmer: Kmer) = {

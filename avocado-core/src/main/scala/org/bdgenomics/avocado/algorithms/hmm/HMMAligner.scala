@@ -16,254 +16,128 @@
 
 package org.bdgenomics.avocado.algorithms.hmm
 
-import org.bdgenomics.adam.avro.ADAMRecord
-import scala.collection.mutable.ArrayBuffer
-import scala.math._
+import scala.annotation.tailrec
 
 object HMMAligner {
   val debug = false
+
+  def align(refSequence: String, testSequence: String, testQualities: String): Alignment = {
+    val hmm = new HMMAligner
+    hmm.alignSequences(refSequence, testSequence, testQualities)
+  }
+
 }
 
 /**
  * Pairwise alignment HMM. See the Durbin textbook (1998), chapter 4.
+ *
+ * All likelihoods are computed in log-space as are the input parameters
  */
-object AlignmentState extends Enumeration {
-  type AlignmentState = Value
-  val Insertion, Match, Mismatch, Deletion, None = Value
-}
+class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
+                 val LOG_GAP_CONTINUE_PENALTY: Double = -2.0,
+                 val LOG_SNP_RATE: Double = -3.0,
+                 val LOG_INDEL_RATE: Double = -4.0) {
 
-/**
- * Pairwise alignment HMM. See the Durbin textbook (1998), chapter 4.
- */
-class HMMAligner(val indelPrior: Double = -4.0,
-                 val mismatchPrior: Double = -3.0 - log10(3.0),
-                 val matchPrior: Double = log10(1.0 - 1.0e-3),
-                 val indelToMatchPrior: Double = -4.0,
-                 val indelToIndelPrior: Double = -4.0) {
-
-  var refAligned: String = null
-
-  var testAligned: String = null
-
-  var matSize = 1
-
-  private var matches: Array[Double] = Array(0.0)
-  private var inserts: Array[Double] = Array(0.0)
-  private var deletes: Array[Double] = Array(0.0)
-
-  private var alignment: ArrayBuffer[(Int, Char)] = null
-
-  private var alignmentLikelihood = Double.NegativeInfinity
-  private var alignmentPrior = Double.NegativeInfinity
-
+  val transitionMatrix = new TransitionMatrix(LOG_GAP_OPEN_PENALTY,
+    LOG_GAP_CONTINUE_PENALTY,
+    LOG_SNP_RATE,
+    LOG_INDEL_RATE)
   /**
    * Aligns sequences.
    *
    * @param refSequence Reference sequence over the active region.
    * @param testSequence Sequence being scored.
    * @param testQualities String of qualities. Not currently used.
-   * @return True if sequence has variants.
+   * @return Alignment which stores the aligned sequences and likelihoods
    */
-  def alignSequences(refSequence: String, testSequence: String, testQualities: String): Boolean = {
+  def alignSequences(refSequence: String, testSequence: String, testQualities: String): Alignment = {
+
+    computePathLikelihood(refSequence, testSequence, testQualities)
+    constructAlignment(refSequence, testSequence, transitionMatrix)
+  }
+
+  /**
+   * Builds the aligned sequences by choosing the most likely state transitions
+   *
+   * @param refSequence Reference sequence over the active region.
+   * @param testSequence Sequence being scored.
+   * @return Alignment which stores the aligned sequences and likelihoods
+   */
+  def constructAlignment(refSequence: String, testSequence: String, transitionMatrix: TransitionMatrix): Alignment = {
+
+    val alignmentLikelihood = transitionMatrix.getAlignmentLikelihood
     val paddedRefLen = refSequence.length + 1
     val paddedTestLen = testSequence.length + 1
     val stride = paddedRefLen
-    computeAlignmentLikelihood(testSequence, refSequence)
 
-    // Traceback to get the aligned sequences.
-    var hasVariants = false
-    var numSnps = 0
-    var numIndels = 0
-    var revAlignment = ""
-    var revAlignedTestSeq = ""
-    var revAlignedRefSeq = ""
-
-    var i = paddedTestLen - 1
-    var j = paddedRefLen - 1
-
-    if (HMMAligner.debug)
-      println(i + ", " + j)
-
-    while (i > 0 && j > 0) {
+    @tailrec
+    def constructAlignmentSequences(i: Int, j: Int, revAlignedRefSeq: String = "", revAlignedTestSeq: String = "", revAlignment: String = "", numSnps: Int = 0, numIndels: Int = 0): Alignment = {
       val idx = i * stride + j
+      if (i <= 0 || j <= 0) {
+        // Compute the prior probability of the alignments, with the Dindel numbers.
+        val hasVariants: Boolean = numSnps > 0 || numIndels > 0
+        val alignmentPrior = LOG_SNP_RATE * numSnps + LOG_INDEL_RATE * numIndels
 
-      if (HMMAligner.debug) {
-        println(i + ", " + j + (": %1.1f" format matches(idx)) + (", %1.1f" format inserts(idx)) +
-          (", %1.1f" format deletes(idx)))
-      }
-
-      /*
-       * Check for scoring at each position, and then suggest next move. At this step, we identify
-       * the next direction to move by looking at the "state" of the current coordinate. We call
-       * our current 'state' by choosing the state with the highest cumulative likelihood.
-       */
-      if (matches(idx) >= inserts(idx) && matches(idx) >= deletes(idx)) {
-        revAlignedTestSeq += testSequence(i - 1)
-        revAlignedRefSeq += refSequence(j - 1)
-        if (testSequence(i - 1) != refSequence(j - 1)) {
-          hasVariants = true
-          numSnps += 1
-          revAlignment += 'X'
-        } else {
-          revAlignment += '='
-        }
-        i -= 1
-        j -= 1
-      } else if (inserts(idx) >= deletes(idx)) {
-        revAlignedTestSeq += testSequence(i - 1)
-        revAlignedRefSeq += '_'
-        hasVariants = true
-        numIndels += 1
-        revAlignment += 'I'
-        i -= 1
+        new Alignment(alignmentLikelihood, alignmentPrior, revAlignedRefSeq.reverse, revAlignedTestSeq.reverse, revAlignment.reverse, hasVariants)
       } else {
-        revAlignedRefSeq += refSequence(j - 1)
-        revAlignedTestSeq += '_'
-        hasVariants = true
-        numIndels += 1
-        revAlignment += 'D'
-        j -= 1
-      }
-    }
-
-    testAligned = revAlignedTestSeq.reverse
-    refAligned = revAlignedRefSeq.reverse
-
-    if (HMMAligner.debug) {
-      println("ta: " + testAligned)
-      println("ra: " + refAligned)
-    }
-
-    var unitAlignment = revAlignment.reverse
-    if (HMMAligner.debug) println(unitAlignment)
-    alignment = new ArrayBuffer[(Int, Char)]
-
-    var alignSpan: Int = 0
-    var alignMove: Char = '.'
-
-    for (i <- 0 until unitAlignment.length) {
-      val move = unitAlignment(i)
-      if (move != alignMove) {
-        if (alignSpan > 0) {
-          val tok = (alignSpan, alignMove)
-          alignment += tok
+        /*
+         * Check for scoring at each position, and then suggest next move. At this step, we identify
+         * the next direction to move by looking at the "state" of the current coordinate. We call
+         * our current 'state' by choosing the state with the highest cumulative likelihood.
+         */
+        val nextDirection = transitionMatrix.getMostLikelyState(idx)
+        nextDirection match {
+          case AlignmentState.Match => {
+            val isSnp = testSequence(i - 1) != refSequence(j - 1)
+            val alignmentCharacter = if (isSnp) 'X' else '='
+            val addSnp = if (isSnp) 1 else 0
+            constructAlignmentSequences(i - 1, j - 1, revAlignedRefSeq + refSequence(j - 1), revAlignedTestSeq + testSequence(i - 1), revAlignment + alignmentCharacter, numSnps + addSnp, numIndels)
+          }
+          case AlignmentState.Insertion => {
+            // Inserted base from reference, add gap in reference alignment, check next base in test
+            constructAlignmentSequences(i - 1, j, revAlignedRefSeq + '_', revAlignedTestSeq + testSequence(i - 1), revAlignment + 'I', numSnps, numIndels + 1)
+          }
+          case AlignmentState.Deletion => {
+            // Deleted base from reference, add gap in text alignment, check next base in reference
+            constructAlignmentSequences(i, j - 1, revAlignedRefSeq + refSequence(j - 1), revAlignedTestSeq + '_', revAlignment + 'D', numSnps, numIndels + 1)
+          }
         }
-        alignSpan = 1
-        alignMove = move
-      } else {
-        alignSpan += 1
       }
+
     }
-    val tok = (alignSpan, alignMove)
-    alignment += tok
 
-    // Compute the prior probability of the alignments, with the Dindel numbers.
-    alignmentPrior = mismatchPrior * numSnps + indelPrior * numIndels
-    if (HMMAligner.debug) println("ap: " + alignmentPrior)
-
-    // Returns whether the alignment has any SNPs or indels.
-    hasVariants
+    // Construct alignment sequence recursively starting at the end of the sequences
+    constructAlignmentSequences(paddedTestLen - 1, paddedRefLen - 1)
   }
 
-  def computeAlignmentLikelihood(testSequence: String, refSequence: String) {
+  /**
+   * Compute the optimal transition matrix based on gap penalties
+   *
+   * @param refSequence Reference sequence over the active region.
+   * @param testSequence Sequence being scored.
+   * @param testQualities String of qualities. Not currently used.
+   * @return TransitionMatrix which stores the likelihoods of each state and every pair of positions in the reference and test
+   */
+  private def computePathLikelihood(refSequence: String, testSequence: String, testQualities: String): TransitionMatrix = {
     val paddedRefLen = refSequence.length + 1
     val paddedTestLen = testSequence.length + 1
     val stride = paddedRefLen
-    val oldMatSize = matSize
-    matSize = max(matSize, paddedTestLen * paddedRefLen)
 
-    if (matSize > oldMatSize) {
-      matches = new Array[Double](matSize)
-      inserts = new Array[Double](matSize)
-      deletes = new Array[Double](matSize)
-    }
+    transitionMatrix.reallocate(paddedRefLen, paddedTestLen)
 
-    // Note: want to use the _test_ haplotype length here, not the ref length.
-    val eta = -log10(1.0 + testSequence.length)
-
-    // Compute the optimal alignment.
-    // TODO(peter, 12/4) shortcut b/w global and local alignment: use a custom
-    // start position in the reference haplotype.
-    matches(0) = 2.0 * eta
-    inserts(0) = Double.NegativeInfinity
-    deletes(0) = Double.NegativeInfinity
-    for (i <- 0 until paddedTestLen) {
-      for (j <- 0 until paddedRefLen) {
-        if (i > 0 || j > 0) {
-          val m = if (i >= 1 && j >= 1) {
-            val testBase = testSequence(i - 1)
-            val refBase = refSequence(j - 1)
-            // TODO(peter, 12/7) there is a second constant term to the prior...
-            val prior = if (testBase == refBase) {
-              matchPrior / (indelPrior * indelPrior)
-            } else {
-              mismatchPrior / (indelPrior * indelPrior)
-            }
-            val idx = (i - 1) * stride + (j - 1)
-            val mMatch = matches(idx)
-            val mInsert = inserts(idx)
-            val mDelete = deletes(idx)
-            val mMax = max(mMatch, max(mInsert, mDelete)) + prior
-            mMax
-          } else {
-            Double.NegativeInfinity
-          }
-          val ins = if (i >= 1) {
-            val idx = (i - 1) * stride + j
-            val insMatch = matches(idx) + indelToMatchPrior
-            val insInsert = inserts(idx) + indelToIndelPrior
-            val insMax = max(insMatch, insInsert)
-            insMax
-          } else {
-            Double.NegativeInfinity
-          }
-          val del = if (j >= 1) {
-            val idx = i * stride + (j - 1)
-            val delMatch = matches(idx) + indelToMatchPrior
-            val delDelete = deletes(idx) + indelToIndelPrior
-            val delMax = max(delMatch, delDelete)
-            delMax
-          } else {
-            Double.NegativeInfinity
-          }
-          val idx = i * stride + j
-          matches(idx) = m
-          inserts(idx) = ins
-          deletes(idx) = del
+    for (testSeqPos <- 0 until paddedTestLen) {
+      for (refSeqPos <- 0 until paddedRefLen) {
+        val m: Double = transitionMatrix.getMatchLikelihood(testSeqPos, refSeqPos, stride, refSequence, testSequence)
+        val ins: Double = transitionMatrix.getInsertionLikelihood(testSeqPos, refSeqPos, stride)
+        val del: Double = transitionMatrix.getDeletionLikelihood(testSeqPos, refSeqPos, stride)
+        if (testSeqPos > 0 || refSeqPos > 0) {
+          val idx = testSeqPos * stride + refSeqPos
+          transitionMatrix.matches(idx) = m
+          transitionMatrix.inserts(idx) = ins
+          transitionMatrix.deletes(idx) = del
         }
       }
     }
-
-    alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
+    transitionMatrix
   }
-
-  /**
-   * Compute the (log10) likelihood of aligning the test sequence to the ref.
-   *
-   * @return Log10 likelihood of alignment.
-   */
-  def getLikelihood(): Double = alignmentLikelihood
-
-  /**
-   * Compute the (log10) prior prob of observing the given alignment.
-   *
-   * @return Prior for alignment.
-   */
-  def getPrior(): Double = alignmentPrior
-
-  /**
-   * Compute the alignment tokens (equivalent to cigar).
-   *
-   * @return Alignment tokens.
-   */
-  def getAlignment(): ArrayBuffer[(Int, Char)] = {
-    alignment.clone
-  }
-
-  /**
-   * Return the aligned sequences.
-   *
-   * @return Tuple of sequences aligned to (ref, test) sequences.
-   */
-  def getAlignedSequences(): (String, String) = (refAligned, testAligned)
 }
