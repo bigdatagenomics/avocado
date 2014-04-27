@@ -45,8 +45,6 @@ class HMMAligner(val indelPrior: Double = -4.0,
 
   var testAligned: String = null
 
-  var refOffset = 0
-
   var matSize = 1
 
   private var matches: Array[Double] = Array(0.0)

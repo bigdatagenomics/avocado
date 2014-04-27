@@ -59,16 +59,12 @@ class ReadCallAssemblySuite extends FunSuite {
   }
 
   test("Test log sum for similar values") {
-    val hp = new HaplotypePair(null, null)
-    val sum = hp.exactLogSumExp10(1.0, 1.0)
-
+    val sum = HaplotypePair.exactLogSumExp10(1.0, 1.0)
     assert(1.3 * 0.99 < sum && 1.3 * 1.01 > sum)
   }
 
   test("Test log sum for dissimilar values") {
-    val hp = new HaplotypePair(null, null)
-    val sum = hp.exactLogSumExp10(1.0, -3.0)
-
+    val sum = HaplotypePair.exactLogSumExp10(1.0, -3.0)
     assert(1.00004342 * 0.99 < sum && 1.00004342 * 1.01 > sum)
   }
 

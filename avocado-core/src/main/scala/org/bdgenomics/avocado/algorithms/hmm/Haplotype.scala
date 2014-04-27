@@ -11,56 +11,30 @@ import org.bdgenomics.adam.rich.RichADAMRecord
  *
  * @param sequence String representing haplotype alignment.
  */
-class Haplotype(val sequence: String) {
-  var perReadLikelihoods = new ArrayBuffer[Double]
-  var readsLikelihood = Double.NegativeInfinity
-  var hasVariants = false
-  var alignment = new ArrayBuffer[(Int, Char)]
+class Haplotype(val sequence: String, region: Seq[RichADAMRecord], val reference: String = "") {
 
-  /**
-   * Score likelihood of reads when assembled into haplotype.
-   *
-   * @param hmm HMM aligner to use.
-   * @param reads Sequence of reads to use.
-   * @return Likelihood that reads are properly aligned.
-   */
-  def scoreReadsLikelihood(hmm: HMMAligner, reads: Seq[RichADAMRecord]): Double = {
-    perReadLikelihoods.clear
-    readsLikelihood = 0.0
-    for (r <- reads) {
-      try {
-        if (HMMAligner.debug) println(r.getSequence.toString + ", " + sequence)
-        hmm.alignSequences(sequence, r.getSequence.toString, null)
-        val readLike = hmm.getLikelihood + hmm.getPrior
-        perReadLikelihoods += readLike
-        readsLikelihood += readLike
-      } catch {
-        case _: Throwable => {
-          perReadLikelihoods += 0.0
-          readsLikelihood += 0.0
-        }
+  val hmm = new HMMAligner()
+  val hasVariants = hmm.alignSequences(reference, sequence, null)
+  val alignment = hmm.getAlignment()
+
+  val perReadLikelihoods: Seq[Double] = region.map( read => {
+    try {
+      hmm.alignSequences(sequence, read.getSequence.toString, null)
+      val readLikelihood = hmm.getLikelihood + hmm.getPrior
+      readLikelihood
+    } catch {
+      case _: Throwable => {
+        0.0
       }
     }
-    readsLikelihood
-  }
+  })
 
-  /**
-   * Aligns reads to reference, and stores cigar details.
-   *
-   * @param hmm HMM aligner to use.
-   * @param refHaplotype Haplotype for reference in this location.
-   * @return True if region has variants.
-   */
-  def alignToReference(hmm: HMMAligner, refHaplotype: Haplotype): Boolean = {
-    // TODO(peter, 12/8) store the alignment details (including the cigar).
-    hasVariants = hmm.alignSequences(refHaplotype.sequence, sequence, null)
-    alignment = hmm.getAlignment
-    hasVariants
-  }
+  val readsLikelihood = perReadLikelihoods.sum
 
   override def toString(): String = {
     sequence
   }
+
 }
 
 /**
@@ -71,36 +45,25 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
 
   /**
    * Compares two haplotypes. Returns (-1, 0, 1) if h1 has (lower, same, higher) read
-   * likelihood than h2.
+   * likelihood than h2. 0 is only returned if they have the same sequence AND likelihood
    *
    * @param h1 First haplotype to compare.
    * @param h2 Second haplotype to compare.
    * @return Ordering info for haplotypes.
    */
   def compare(h1: Haplotype, h2: Haplotype): Int = {
-    if (h1.readsLikelihood < h2.readsLikelihood) {
+    if (h1.sequence == h2.sequence){
+      h1.readsLikelihood.compare(h2.readsLikelihood)
+    }
+    else if (h1.readsLikelihood < h2.readsLikelihood) {
       -1
-    } else if (h1.readsLikelihood > h2.readsLikelihood) {
-      1
     } else {
-      0
+      1
     }
   }
 }
 
-/**
- * Class for a pairing of two haplotypes.
- *
- * @param haplotype1 First haplotype of pair.
- * @param haplotype2 Second haplotype of pair.
- */
-class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype) {
-  var pairLikelihood = Double.NegativeInfinity
-  var hasVariants = false
-
-  override def toString(): String = {
-    haplotype1.sequence + ", " + haplotype2.sequence + ", " + ("%1.3f" format pairLikelihood)
-  }
+object HaplotypePair {
 
   /**
    * Exponentiates two numbers by base of 10, adds together, takes base 10 log, and returns.
@@ -128,40 +91,35 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype) {
     exactLogSumExp10(x1, x2)
   }
 
-  /**
-   * Scores likelihood of two paired haplotypes and their alignment.
-   *
-   * @param hmm HMM aligner to use.
-   * @param reads Sequence of reads that are evidence for haplotype.
-   * @return Phred scaled likelihood.
-   */
-  def scorePairLikelihood(hmm: HMMAligner, reads: Seq[RichADAMRecord]): Double = {
-    var readsProb = 0.0
-    for (i <- 0 until reads.length) {
-      val readLikelihood1 = haplotype1.perReadLikelihoods(i)
-      val readLikelihood2 = haplotype2.perReadLikelihoods(i)
-      readsProb += exactLogSumExp10(readLikelihood1, readLikelihood2) - log10(2.0)
-    }
-    hmm.alignSequences(haplotype2.sequence, haplotype1.sequence, null)
-    val priorProb = hmm.getPrior
-    pairLikelihood = readsProb + priorProb
-    pairLikelihood
+}
+
+/**
+ * Class for a pairing of two haplotypes.
+ *
+ * @param haplotype1 First haplotype of pair.
+ * @param haplotype2 Second haplotype of pair.
+ */
+class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: HMMAligner) {
+
+  val hasVariants = haplotype1.hasVariants || haplotype2.hasVariants
+  val pairLikelihood = scorePairLikelihood
+
+  override def toString(): String = {
+    haplotype1.sequence + ", " + haplotype2.sequence + ", " + ("%1.3f" format pairLikelihood)
   }
 
   /**
-   * Aligns haplotype pair to reference. Joins variants of alignments.
+   * Scores likelihood of two paired haplotypes and their alignment.
    *
-   * @param hmm HMM aligner to use.
-   * @param refHaplotype Reference haplotype for active region.
-   * @return True if region has variants.
+   * @return Phred scaled likelihood.
    */
-  def alignToReference(hmm: HMMAligner, refHaplotype: Haplotype): Boolean = {
-    hasVariants = haplotype1.alignToReference(hmm, refHaplotype)
-    if (haplotype2 != haplotype1) {
-      hasVariants |= haplotype2.alignToReference(hmm, refHaplotype)
-    }
-    hasVariants
+  def scorePairLikelihood: Double = {
+    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map( scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
+    hmm.alignSequences(haplotype2.sequence, haplotype1.sequence, null)
+    val priorProb = hmm.getPrior
+    readsProb + priorProb
   }
+
 }
 
 /**
