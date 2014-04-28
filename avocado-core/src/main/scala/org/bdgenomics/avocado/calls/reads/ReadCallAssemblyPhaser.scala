@@ -60,7 +60,8 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
  * Phase (diploid) haplotypes with kmer assembly on active regions.
  */
 class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
-                             val regionWindow: Int = 200) extends ReadCall {
+                             val regionWindow: Int = 200,
+                             val flankLength: Int = 40) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
 
@@ -145,7 +146,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
   def assemble(region: Seq[RichADAMRecord], reference: String, removeSpurs: Boolean = false): KmerGraph = {
     val readLen = region(0).getSequence.length
     val regionLen = min(regionWindow + readLen - 1, reference.length)
-    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, removeSpurs)
+    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, flankLength, removeSpurs)
     kmerGraph
   }
 
@@ -262,8 +263,8 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     val refHaplotype = new Haplotype(reference, region)
 
     // Score all haplotypes against the reads.
-    val orderedHaplotypes = TreeSet[Haplotype](kmerGraph.allPaths.map( path =>
-      new Haplotype(path.haplotypeString, region, reference)).toSeq:_*)(HaplotypeOrdering.reverse)
+    val orderedHaplotypes = TreeSet[Haplotype](kmerGraph.allPaths.map(path =>
+      new Haplotype(path.haplotypeString, region, reference)).toSeq: _*)(HaplotypeOrdering.reverse)
 
     // Pick the top X-1 haplotypes and the reference haplotype.
     val bestHaplotypes = refHaplotype :: orderedHaplotypes.take(maxHaplotypes - 1).toList
