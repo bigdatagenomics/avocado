@@ -17,7 +17,7 @@ class Haplotype(val sequence: String, region: Seq[RichADAMRecord], val reference
   val hasVariants = hmm.alignSequences(reference, sequence, null)
   val alignment = hmm.getAlignment()
 
-  val perReadLikelihoods: Seq[Double] = region.map( read => {
+  val perReadLikelihoods: Seq[Double] = region.map(read => {
     try {
       hmm.alignSequences(sequence, read.getSequence.toString, null)
       val readLikelihood = hmm.getLikelihood + hmm.getPrior
@@ -52,10 +52,9 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
    * @return Ordering info for haplotypes.
    */
   def compare(h1: Haplotype, h2: Haplotype): Int = {
-    if (h1.sequence == h2.sequence){
+    if (h1.sequence == h2.sequence) {
       h1.readsLikelihood.compare(h2.readsLikelihood)
-    }
-    else if (h1.readsLikelihood < h2.readsLikelihood) {
+    } else if (h1.readsLikelihood < h2.readsLikelihood) {
       -1
     } else {
       1
@@ -114,7 +113,7 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
    * @return Phred scaled likelihood.
    */
   def scorePairLikelihood: Double = {
-    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map( scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
+    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map(scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
     hmm.alignSequences(haplotype2.sequence, haplotype1.sequence, null)
     val priorProb = hmm.getPrior
     readsProb + priorProb

@@ -16,12 +16,23 @@
 
 package org.bdgenomics.avocado.algorithms.debrujin
 
+import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.avro.{ ADAMContig, ADAMRecord }
-import scala.collection.mutable.ArrayBuffer
-import org.scalatest.FunSuite
+import org.bdgenomics.adam.rdd.ADAMContext
+import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.util.SparkFunSuite
+import org.bdgenomics.avocado.calls.reads.ReadCallAssemblyPhaser
+import parquet.filter.UnboundRecordFilter
+import scala.collection.mutable.ArrayBuffer
 
-class KmerGraphSuite extends FunSuite {
+class KmerGraphSuite extends SparkFunSuite {
+
+  def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
+    val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
+    sc.adamLoad[ADAMRecord, UnboundRecordFilter](path).map(r => RichADAMRecord(r))
+  }
 
   def makeRead(sequence: String,
                start: Long,
@@ -63,7 +74,7 @@ class KmerGraphSuite extends FunSuite {
     val reference = "TACCAAT"
     val read = makeRead("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
 
-    val graph = KmerGraph(3, 7, 7, reference)
+    val graph = KmerGraph(3, 7, 7, reference, 3)
     graph.insertRead(read)
     assert(graph.kmers.size === 5)
     assert(graph.prefixSet.contains("TA"))
@@ -90,7 +101,7 @@ class KmerGraphSuite extends FunSuite {
     val read4 = makeRead("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
 
     val readBucket = Seq(read0, read1, read2, read3, read4)
-    val kmerGraph = KmerGraph(4, 7, 7, reference, readBucket)
+    val kmerGraph = KmerGraph(4, 7, 7, reference, readBucket, 4)
 
     assert(kmerGraph.sourceKmer.prefix === "TAC")
     assert(kmerGraph.sourceKmer.suffix === 'C')
@@ -138,7 +149,7 @@ class KmerGraphSuite extends FunSuite {
     val read9 = makeRead("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
-    val kmerGraph = KmerGraph(4, 7, 7, reference, readBucket)
+    val kmerGraph = KmerGraph(4, 7, 7, reference, readBucket, 4)
 
     /*
        * Expect following Kmers:
@@ -172,5 +183,16 @@ class KmerGraphSuite extends FunSuite {
     assert(haplotypes.contains("TACCCATGTAA"))
     assert(haplotypes.contains("TACCCAATGTAA"))
     assert(haplotypes.contains("TACCATGTAA"))
+  }
+
+  sparkTest("put reads into graph for real data") {
+    val reads = na12878_chr20_snp_reads.collect.toSeq
+
+    // make generic assembler to get reference recovery method
+    val rcap = new ReadCallAssemblyPhaser(4, 0, 4)
+    val reference = rcap.getReference(reads)
+
+    val kmerGraph = KmerGraph(20, 101, reference.length, reference, reads, 40)
+    assert(kmerGraph.allPaths.length === 30)
   }
 }

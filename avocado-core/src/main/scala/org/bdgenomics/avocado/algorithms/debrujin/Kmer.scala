@@ -35,6 +35,17 @@ case class Kmer(val kmerSeq: String, val weight: Int = 1) {
   override def toString: String = {
     prefix + "[" + suffix + "]"
   }
+
+  /**
+   * Prints this kmer's connectivity in graphviz format. This is used by the KmerGraph class
+   * for printing the graph as a graphviz graph.
+   *
+   * @return Returns a string describing the directed connectivity between this _k_-mer and
+   * the next _k_-mer it points at.
+   */
+  def toDot: String = {
+    prefix + " -> " + nextPrefix + " ;"
+  }
 }
 
 /**

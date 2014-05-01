@@ -229,6 +229,13 @@
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.adam</groupId>
+      <artifactId>adam-core</artifactId>
+      <version>${adam.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bdgenomics.adam</groupId>
       <artifactId>adam-cli</artifactId>
       <version>${adam.version}</version>
     </dependency>
