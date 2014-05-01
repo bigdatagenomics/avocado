@@ -16,16 +16,11 @@
 
 package org.bdgenomics.avocado.calls.reads
 
-import org.bdgenomics.adam.avro.{ ADAMContig, ADAMRecord, ADAMGenotypeAllele }
-import org.bdgenomics.adam.models.ADAMVariantContext
-import org.bdgenomics.avocado.algorithms.debrujin._
 import org.bdgenomics.avocado.algorithms.hmm._
-import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
-import scala.collection.mutable.{ ArrayBuffer, Buffer, HashMap, HashSet, PriorityQueue, StringBuilder }
 import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
 
 class ReadCallAssemblySuite extends FunSuite {
 

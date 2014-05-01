@@ -75,7 +75,13 @@ class KmerPath(val edges: Seq[Kmer]) extends Ordered[KmerPath] {
     this.haplotypeString == kp.haplotypeString
   }
 
-  def compare(otherPath: KmerPath): Int = {
-    weight.compare(otherPath.weight)
+  override def compare(otherPath: KmerPath): Int = {
+    if (equals(otherPath)) {
+      weight.compare(otherPath.weight)
+    } else if (weight > otherPath.weight) {
+      1
+    } else {
+      -1
+    }
   }
 }

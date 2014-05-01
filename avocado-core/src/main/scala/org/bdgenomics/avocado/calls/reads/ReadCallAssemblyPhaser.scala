@@ -23,7 +23,7 @@ import org.bdgenomics.adam.avro.{
   ADAMRecord,
   ADAMVariant
 }
-import scala.collection.immutable.TreeSet
+import scala.collection.immutable.{ SortedSet, TreeSet }
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
@@ -130,7 +130,6 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     // TODO(peter, 12/6) a very naive active region criterion. Upgrade asap!
     val activeLikelihoodThresh = -2.0
     var refHaplotype = new Haplotype(ref, region)
-    var hmm = new HMMAligner
     val readsLikelihood = refHaplotype.readsLikelihood
     readsLikelihood < activeLikelihoodThresh
   }
@@ -259,12 +258,12 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
                     reference: String,
                     maxHaplotypes: Int = 16): List[ADAMVariantContext] = {
 
-    val hmm = new HMMAligner
-    val refHaplotype = new Haplotype(reference, region)
+    val aligner = new HMMAligner
+    val refHaplotype = new Haplotype(reference, region, aligner, reference)
 
     // Score all haplotypes against the reads.
-    val orderedHaplotypes = TreeSet[Haplotype](kmerGraph.allPaths.map(path =>
-      new Haplotype(path.haplotypeString, region, reference)).toSeq: _*)(HaplotypeOrdering.reverse)
+    val orderedHaplotypes = SortedSet[Haplotype](kmerGraph.allPaths.map(path =>
+      new Haplotype(path.haplotypeString, region, aligner, reference)).toSeq: _*)(HaplotypeOrdering.reverse)
 
     // Pick the top X-1 haplotypes and the reference haplotype.
     val bestHaplotypes = refHaplotype :: orderedHaplotypes.take(maxHaplotypes - 1).toList
@@ -273,7 +272,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     val orderedHaplotypePairBuilder = TreeSet.newBuilder[HaplotypePair](HaplotypePairOrdering.reverse)
     for (i <- 0 until bestHaplotypes.size) {
       for (j <- i until bestHaplotypes.size) {
-        var pair = new HaplotypePair(bestHaplotypes(i), bestHaplotypes(j), hmm)
+        var pair = new HaplotypePair(bestHaplotypes(i), bestHaplotypes(j), aligner)
         orderedHaplotypePairBuilder += pair
       }
     }
@@ -313,8 +312,8 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val calledHaplotype2 = calledHaplotypePair.get.haplotype2
       if (ReadCallAssemblyPhaser.debug) {
         println("Called:")
-        println(calledHaplotype1 + ", " + calledHaplotype1.hasVariants + ", " + calledHaplotype1.alignment)
-        println(calledHaplotype2 + ", " + calledHaplotype2.hasVariants + ", " + calledHaplotype2.alignment)
+        println(calledHaplotype1 + ", " + calledHaplotype1.hasVariants + ", " + calledHaplotype1.referenceAlignment.alignment)
+        println(calledHaplotype2 + ", " + calledHaplotype2.hasVariants + ", " + calledHaplotype2.referenceAlignment.alignment)
       }
       calledHaplotypes += calledHaplotypePair.get.haplotype1
       calledHaplotypes += calledHaplotypePair.get.haplotype2
@@ -327,7 +326,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
         if (haplotype.hasVariants) {
           var variantOffset = 0
           var refOffset = 0
-          for (tok <- haplotype.alignment) {
+          for (tok <- haplotype.referenceAlignment.alignment) {
             val variantLength = tok._1
             val move = tok._2
             if (variantLength > 0 && (move == 'X' || move == 'I' || move == 'D')) {

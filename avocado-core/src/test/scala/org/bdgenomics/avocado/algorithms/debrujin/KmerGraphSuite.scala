@@ -87,7 +87,7 @@ class KmerGraphSuite extends SparkFunSuite {
     assert(graph.kmerSequences.toSet.contains("CCA"))
     assert(graph.kmerSequences.toSet.contains("CAA"))
 
-    assert(graph.allPaths.length === 1)
+    assert(graph.allPaths.size === 1)
     assert(graph.allPaths.head.haplotypeString === "TACCAAT")
     assert(graph.allPaths.head.weight === (reference.length - 2))
   }
@@ -129,7 +129,7 @@ class KmerGraphSuite extends SparkFunSuite {
     assert(kmerGraph.prefixSet.contains("TGT"))
     assert(kmerGraph.prefixSet.contains("GTA"))
 
-    assert(kmerGraph.allPaths.length === 1)
+    assert(kmerGraph.allPaths.size === 1)
     assert(kmerGraph.allPaths.head.haplotypeString === "TACCAATGTAA")
     // middle kmers are covered 4x, dropping off to 1x at ends
     assert(kmerGraph.allPaths.head.weight === (2 * 4 + 2 * 3 + 2 * 2 + 2 * 1))
@@ -177,8 +177,8 @@ class KmerGraphSuite extends SparkFunSuite {
     assert(kmerGraph.prefixSet.contains("TGT"))
     assert(kmerGraph.prefixSet.contains("GTA"))
 
-    assert(kmerGraph.allPaths.length === 4)
-    val haplotypes = kmerGraph.allPaths.map(_.haplotypeString).toSet
+    assert(kmerGraph.allPaths.size === 4)
+    val haplotypes = kmerGraph.allPaths.map(_.haplotypeString)
     assert(haplotypes.contains("TACCAATGTAA"))
     assert(haplotypes.contains("TACCCATGTAA"))
     assert(haplotypes.contains("TACCCAATGTAA"))
@@ -193,6 +193,6 @@ class KmerGraphSuite extends SparkFunSuite {
     val reference = rcap.getReference(reads)
 
     val kmerGraph = KmerGraph(20, 101, reference.length, reference, reads, 40)
-    assert(kmerGraph.allPaths.length === 30)
+    assert(kmerGraph.allPaths.size === 30)
   }
 }
