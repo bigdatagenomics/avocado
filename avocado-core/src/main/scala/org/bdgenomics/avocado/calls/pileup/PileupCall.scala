@@ -48,7 +48,4 @@ abstract class PileupCall extends VariantCall {
     val rods = reads.adamRecords2Rods()
     callRods(rods)
   }
-
-  override def isReadCall(): Boolean = false
-  override def isPileupCall(): Boolean = true
 }
