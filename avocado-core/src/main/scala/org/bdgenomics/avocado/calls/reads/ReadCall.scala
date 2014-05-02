@@ -35,7 +35,5 @@ abstract class ReadCall extends VariantCall {
    */
   def call(pileupGroups: RDD[ADAMRecord]): RDD[ADAMVariantContext]
 
-  override def isReadCall(): Boolean = true
-  override def isPileupCall(): Boolean = false
 }
 

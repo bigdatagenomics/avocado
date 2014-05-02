@@ -75,8 +75,6 @@ abstract class VariantCall extends Serializable with Logging {
 
   def call(rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext]
 
-  def isReadCall(): Boolean
-  def isPileupCall(): Boolean
   def isCallable(): Boolean
 }
 
