@@ -16,22 +16,20 @@
 
 package org.bdgenomics.avocado.algorithms.debrujin
 
-import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.avro.{ ADAMContig, ADAMRecord }
-import org.bdgenomics.adam.rdd.ADAMContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
 import org.bdgenomics.adam.util.SparkFunSuite
 import org.bdgenomics.avocado.calls.reads.ReadCallAssemblyPhaser
-import parquet.filter.UnboundRecordFilter
 import scala.collection.mutable.ArrayBuffer
 
 class KmerGraphSuite extends SparkFunSuite {
 
   def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
-    sc.adamLoad[ADAMRecord, UnboundRecordFilter](path).map(r => RichADAMRecord(r))
+    val reads: RDD[ADAMRecord] = sc.adamLoad(path)
+    reads.map(r => RichADAMRecord(r))
   }
 
   def makeRead(sequence: String,
