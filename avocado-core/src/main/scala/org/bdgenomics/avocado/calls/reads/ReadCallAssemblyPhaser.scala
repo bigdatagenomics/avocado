@@ -288,6 +288,15 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     val calledHaplotypePair = orderedHaplotypePairs.find(_.hasVariants)
     val uncalledHaplotypePair = orderedHaplotypePairs.find(!_.hasVariants).get
 
+    if (ReadCallAssemblyPhaser.debug) {
+      if (calledHaplotypePair.isDefined) {
+        println(calledHaplotypePair.get.haplotype1.referenceAlignment)
+        println(calledHaplotypePair.get.haplotype2.referenceAlignment)
+      }
+      println(uncalledHaplotypePair.haplotype1.referenceAlignment)
+      println(uncalledHaplotypePair.haplotype2.referenceAlignment)
+    }
+
     // Compute the variant error probability and the equivalent phred score,
     // and use them for all called variants.
     val variantErrorProb = if (calledHaplotypePair.isDefined) {

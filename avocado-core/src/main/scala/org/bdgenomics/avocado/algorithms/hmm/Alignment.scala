@@ -18,7 +18,7 @@ package org.bdgenomics.avocado.algorithms.hmm
 
 object AlignmentState extends Enumeration {
   type AlignmentState = Value
-  val Insertion, Match, Mismatch, Deletion = Value
+  val Padding, Insertion, Match, Mismatch, Deletion = Value
 
   def isIndel(state: AlignmentState): Boolean = {
     state match {
@@ -40,5 +40,9 @@ class Alignment(val likelihood: Double, val prior: Double, val alignedReference:
 
     val (run, tail) = unitAlignment.span(_ == unitAlignment.head)
     (run.size, unitAlignment.head) :: generateCompressedStateSequence(tail)
+  }
+
+  override def toString(): String = {
+    alignedReference + ", " + alignedSequence + ", " + alignmentStateSequence + ", " + likelihood + ", " + prior
   }
 }

@@ -18,6 +18,7 @@ package org.bdgenomics.avocado.algorithms.hmm
 
 import scala.math.Ordering
 import org.bdgenomics.adam.rich.RichADAMRecord
+import scala.math._
 
 /**
  * Haplotype generated from HMM alignment.
@@ -27,18 +28,23 @@ import org.bdgenomics.adam.rich.RichADAMRecord
 class Haplotype(val sequence: String, region: Seq[RichADAMRecord], hmm: HMMAligner = new HMMAligner, val reference: String = "") {
 
   lazy val referenceAlignment = hmm.alignSequences(reference, sequence, null)
+  assert(referenceAlignment.hasVariants == (sequence != reference), "HMM calls variant, but sequence matches reference. " + referenceAlignment)
   lazy val hasVariants = referenceAlignment.hasVariants
+  lazy val variantCount = referenceAlignment.alignmentStateSequence
+    .filter(s => s == 'X' || s == 'I' || s == 'D').length
 
-  lazy val perReadLikelihoods: Seq[Double] = region.map(read => {
-    try {
-      val alignment = HMMAligner.align(sequence, read.getSequence.toString, null)
-      alignment.likelihood + alignment.prior
-    } catch {
-      case _: Throwable => {
-        0.0
+  lazy val perReadLikelihoods: Seq[Double] = {
+    region.map(read => {
+      try {
+        val alignment = HMMAligner.align(sequence, read.getSequence.toString, null)
+        alignment.likelihood + alignment.prior
+      } catch {
+        case _: Throwable => {
+          0.0
+        }
       }
-    }
-  })
+    })
+  }
 
   lazy val readsLikelihood = perReadLikelihoods.sum
 
@@ -63,7 +69,9 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
    * @return Ordering info for haplotypes.
    */
   def compare(h1: Haplotype, h2: Haplotype): Int = {
-    if (h1.readsLikelihood < h2.readsLikelihood) {
+    if (h1.sequence == h2.sequence) {
+      h1.readsLikelihood.compare(h2.readsLikelihood)
+    } else if (h1.readsLikelihood < h2.readsLikelihood) {
       -1
     } else {
       1

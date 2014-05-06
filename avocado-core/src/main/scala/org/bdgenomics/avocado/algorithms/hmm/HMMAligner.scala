@@ -42,6 +42,7 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
     LOG_GAP_CONTINUE_PENALTY,
     LOG_SNP_RATE,
     LOG_INDEL_RATE)
+
   /**
    * Aligns sequences.
    *
@@ -78,7 +79,12 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
         val hasVariants: Boolean = numSnps > 0 || numIndels > 0
         val alignmentPrior = LOG_SNP_RATE * numSnps + LOG_INDEL_RATE * numIndels
 
-        new Alignment(alignmentLikelihood, alignmentPrior, revAlignedRefSeq.reverse, revAlignedTestSeq.reverse, revAlignment.reverse, hasVariants)
+        new Alignment(alignmentLikelihood,
+          alignmentPrior,
+          refSequence.take(j).toLowerCase + revAlignedRefSeq.reverse, // pads with first j bases of the reference
+          "_" * j + revAlignedTestSeq.reverse,
+          "P" * j + revAlignment.reverse,
+          hasVariants)
       } else {
         /*
          * Check for scoring at each position, and then suggest next move. At this step, we identify
@@ -98,8 +104,12 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
             constructAlignmentSequences(i - 1, j, revAlignedRefSeq + '_', revAlignedTestSeq + testSequence(i - 1), revAlignment + 'I', numSnps, numIndels + 1)
           }
           case AlignmentState.Deletion => {
-            // Deleted base from reference, add gap in text alignment, check next base in reference
+            // Deleted base from reference, add gap in test alignment, check next base in reference
             constructAlignmentSequences(i, j - 1, revAlignedRefSeq + refSequence(j - 1), revAlignedTestSeq + '_', revAlignment + 'D', numSnps, numIndels + 1)
+          }
+          case AlignmentState.Padding => {
+            // Padded reference sequence, gap in test alignment, check next base in reference
+            constructAlignmentSequences(i, j - 1, revAlignedRefSeq + refSequence(j - 1).toLower, revAlignedTestSeq + '_', revAlignment + 'P', numSnps, numIndels)
           }
         }
       }
@@ -130,11 +140,13 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
         val m: Double = transitionMatrix.getMatchLikelihood(testSeqPos, refSeqPos, stride, refSequence, testSequence)
         val ins: Double = transitionMatrix.getInsertionLikelihood(testSeqPos, refSeqPos, stride)
         val del: Double = transitionMatrix.getDeletionLikelihood(testSeqPos, refSeqPos, stride)
+        val p: Double = transitionMatrix.getPaddingLikelihood(testSeqPos, refSeqPos, stride, testSequence.length)
         if (testSeqPos > 0 || refSeqPos > 0) {
           val idx = testSeqPos * stride + refSeqPos
           transitionMatrix.matches(idx) = m
           transitionMatrix.inserts(idx) = ins
           transitionMatrix.deletes(idx) = del
+          transitionMatrix.padding(idx) = p
         }
       }
     }
