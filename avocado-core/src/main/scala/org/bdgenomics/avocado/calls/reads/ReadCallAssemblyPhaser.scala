@@ -57,7 +57,7 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
     // get config values
     val flankLength = config.getInt("flankLength", 40)
     val kmerLength = config.getInt("kmerLength", 20)
-    val trimSpurs = config.getBoolean("trimSpurs", false)
+    val trimSpurs = config.getBoolean("trimSpurs", true)
 
     new ReadCallAssemblyPhaser(partitions, kmerLength, flankLength, trimSpurs)
   }
@@ -70,7 +70,7 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
 class ReadCallAssemblyPhaser(val partitions: PartitionSet,
                              val kmerLen: Int = 20,
                              val flankLength: Int = 40,
-                             val trimSpurs: Boolean = false) extends ReadCall {
+                             val trimSpurs: Boolean = true) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
 

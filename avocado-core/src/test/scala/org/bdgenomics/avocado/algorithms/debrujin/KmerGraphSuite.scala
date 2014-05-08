@@ -196,5 +196,32 @@ class KmerGraphSuite extends SparkFunSuite {
 
     val kmerGraph = KmerGraph(20, 101, reference.length, reference, reads, 40)
     assert(kmerGraph.allPaths.size === 30)
+    assert(kmerGraph.kmers.size === 678)
+
+    kmerGraph.removeSpurs()
+    assert(kmerGraph.allPaths.size === 30)
+    assert(kmerGraph.kmers.size === 409)
+  }
+
+  test("check spur trimming function on simple graph") {
+
+    val reference = "TACCAATGTAA"
+    val read0 = makeRead("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = makeRead("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = makeRead("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = makeRead("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = makeRead("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = makeRead("CCAATAT", 2L, "7M", "5G1", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+
+    val readBucket = Seq(read0, read1, read2, read3, read4, read5)
+    val kmerGraph = KmerGraph(4, 7, 7, reference, readBucket, 4)
+
+    assert(kmerGraph.allPaths.size === 1)
+    assert(kmerGraph.kmers.size === 10)
+
+    kmerGraph.removeSpurs()
+
+    assert(kmerGraph.allPaths.size === 1)
+    assert(kmerGraph.kmers.size === 8)
   }
 }
