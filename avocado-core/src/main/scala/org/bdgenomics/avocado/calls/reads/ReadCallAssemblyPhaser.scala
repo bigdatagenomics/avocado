@@ -24,7 +24,7 @@ import org.bdgenomics.adam.avro.{
   ADAMVariant
 }
 import scala.collection.immutable.{ SortedSet, TreeSet }
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.adam.models.{ ADAMVariantContext, ReferenceRegion }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
 import org.bdgenomics.adam.rich.RichADAMRecord._
@@ -32,9 +32,11 @@ import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.algorithms.debrujin._
 import org.bdgenomics.avocado.algorithms.hmm._
 import org.bdgenomics.avocado.calls.VariantCallCompanion
+import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
-import org.apache.spark.rdd.{ RDD }
+import org.apache.spark.SparkContext._
+import org.apache.spark.rdd.RDD
 import scala.collection.mutable.HashSet
 import scala.math._
 
@@ -49,9 +51,15 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
   val debug = false
 
   def apply(stats: AvocadoConfigAndStats,
-            config: SubnodeConfiguration): ReadCallAssemblyPhaser = {
+            config: SubnodeConfiguration,
+            partitions: PartitionSet): ReadCallAssemblyPhaser = {
 
-    new ReadCallAssemblyPhaser()
+    // get config values
+    val flankLength = config.getInt("flankLength", 40)
+    val kmerLength = config.getInt("kmerLength", 20)
+    val trimSpurs = config.getBoolean("trimSpurs", false)
+
+    new ReadCallAssemblyPhaser(partitions, kmerLength, flankLength, trimSpurs)
   }
 
 }
@@ -59,9 +67,10 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
 /**
  * Phase (diploid) haplotypes with kmer assembly on active regions.
  */
-class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
-                             val regionWindow: Int = 200,
-                             val flankLength: Int = 40) extends ReadCall {
+class ReadCallAssemblyPhaser(val partitions: PartitionSet,
+                             val kmerLen: Int = 20,
+                             val flankLength: Int = 40,
+                             val trimSpurs: Boolean = false) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
 
@@ -144,7 +153,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
 
   def assemble(region: Seq[RichADAMRecord], reference: String, removeSpurs: Boolean = false): KmerGraph = {
     val readLen = region(0).getSequence.length
-    val regionLen = min(regionWindow + readLen - 1, reference.length)
+    val regionLen = reference.length
     var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, flankLength, removeSpurs)
     kmerGraph
   }
@@ -382,11 +391,22 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
    * @return An RDD containing called variants.
    */
   override def call(reads: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
-    log.info("Grouping reads into active regions.")
-    val richReads = reads.map(RichADAMRecord(_))
-    val regions = richReads.groupBy(r => r.getStart / regionWindow)
+    // broadcast partition set
+    val bcastPset = reads.context.broadcast(partitions)
 
+    // group reads
+    log.info("Grouping reads into regions.")
+    val richReads = reads.map(RichADAMRecord(_))
+    val regions = richReads.flatMap(r => {
+      val rr = ReferenceRegion(r.record).get
+      val partitions = bcastPset.value.getPartition(rr, flankLength)
+      partitions.map(p => (p, r))
+    }).groupByKey()
+
+    // generate region maps
     val regionsAndReference = regions.map(kv => (getReference(kv._2), kv._2))
+
+    // filtering inactive regions
     val activeRegions = regionsAndReference.filter(kv => isRegionActive(kv._2, kv._1))
 
     log.info("Calling variants with local assembly.")
@@ -395,7 +415,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
       val ref = x._1
       val region = x._2
       if (ref.length > 0 && region.length > 0) {
-        val kmerGraph = assemble(region, ref)
+        val kmerGraph = assemble(region, ref, trimSpurs)
         phaseAssembly(region, kmerGraph, ref)
       } else {
         List()
