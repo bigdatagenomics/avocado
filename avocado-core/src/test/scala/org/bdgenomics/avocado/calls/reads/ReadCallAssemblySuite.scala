@@ -18,19 +18,24 @@ package org.bdgenomics.avocado.calls.reads
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
 import org.bdgenomics.adam.util.SparkFunSuite
 import org.bdgenomics.adam.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
 import org.bdgenomics.avocado.algorithms.hmm._
+import org.bdgenomics.avocado.partitioners.PartitionSet
 import parquet.filter.UnboundRecordFilter
 import scala.collection.JavaConversions._
+import scala.collection.immutable.SortedMap
 
 class ReadCallAssemblySuite extends SparkFunSuite {
 
-  val rcap_short = new ReadCallAssemblyPhaser(4, 0)
-  val rcap_long = new ReadCallAssemblyPhaser(20, 1000, 40)
+  val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
+  val rcap_short = new ReadCallAssemblyPhaser(emptyPartition, 4, 4)
+  val rcap_long = new ReadCallAssemblyPhaser(emptyPartition, 20, 40)
+  val rcap_long_trim = new ReadCallAssemblyPhaser(emptyPartition, 20, 40, 5, true, Some(0.05))
 
   def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
@@ -213,7 +218,26 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     val reference = rcap_long.getReference(reads)
 
     val kmerGraph = rcap_long.assemble(reads, reference)
+
     val variants = rcap_long.phaseAssembly(reads, kmerGraph, reference)
+
+    assert(variants.length === 1)
+    assert(variants.head.position.pos === 225057L)
+    assert(variants.head.variant.variant.getReferenceAllele === "A")
+    assert(variants.head.variant.variant.getVariantAllele === "G")
+    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(alleles.length === 2)
+    assert(alleles.head === ADAMGenotypeAllele.Ref)
+    assert(alleles.last === ADAMGenotypeAllele.Alt)
+  }
+
+  sparkTest("call doesn't change after \"aggressive\" trimming") {
+    val reads = na12878_chr20_snp_reads.collect.toSeq
+    val reference = rcap_long_trim.getReference(reads)
+
+    val kmerGraph = rcap_long_trim.assemble(reads, reference)
+
+    val variants = rcap_long_trim.phaseAssembly(reads, kmerGraph, reference)
 
     assert(variants.length === 1)
     assert(variants.head.position.pos === 225057L)
