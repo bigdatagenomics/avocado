@@ -81,7 +81,7 @@ class KmerGraphSuite extends SparkFunSuite {
     val reference = "TACCAAT"
     val read = makeRead("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
 
-    val graph = KmerGraph(3, 7, 7, reference, 3)
+    val graph = KmerGraph(3, 7, 7, reference, 3, 5)
     graph.insertRead(read)
     assert(graph.kmers.size === 5)
     assert(graph.prefixSet.contains("TA"))
@@ -264,5 +264,13 @@ class KmerGraphSuite extends SparkFunSuite {
 
     assert(kmerGraph.kmers.size === 659)
     assert(kmerGraph.allPaths.size === 12)
+  }
+
+  test("generate a limited number of haplotypes for a graph with repeats") {
+    val reference = "TACCAAAAATGTAA"
+    val read0 = makeRead("TACCAAAAATGTAA", 0L, "15M", "15", 15,
+      Seq(50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50), 0)
+    val kmerGraph = KmerGraph(4, 15, 15, reference, Seq(read0), 4)
+    assert(kmerGraph.allPaths.size === 7)
   }
 }

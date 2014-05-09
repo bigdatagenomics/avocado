@@ -63,8 +63,9 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
     } else {
       None
     }
+    val maxEntries = config.getInt("maxEntries", 5)
 
-    new ReadCallAssemblyPhaser(partitions, kmerLength, flankLength, trimSpurs, trimThreshold)
+    new ReadCallAssemblyPhaser(partitions, kmerLength, flankLength, maxEntries, trimSpurs, trimThreshold)
   }
 
 }
@@ -75,6 +76,7 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
 class ReadCallAssemblyPhaser(val partitions: PartitionSet,
                              val kmerLen: Int = 20,
                              val flankLength: Int = 40,
+                             val maxEntries: Int = 5,
                              val trimSpurs: Boolean = true,
                              val lowCoverageTrimmingThreshold: Option[Double] = None) extends ReadCall {
 
@@ -165,6 +167,7 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
       reference,
       region,
       flankLength,
+      maxEntries,
       trimSpurs,
       lowCoverageTrimmingThreshold)
     kmerGraph

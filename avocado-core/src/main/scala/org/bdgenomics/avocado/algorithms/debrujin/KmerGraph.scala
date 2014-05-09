@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.algorithms.debrujin
 import org.bdgenomics.adam.avro.ADAMRecord
 import org.bdgenomics.adam.rich.RichADAMRecord
 import scala.annotation.tailrec
-import scala.collection.mutable.{ HashSet }
+import scala.collection.mutable.{ HashSet, HashMap, SortedSet }
 
 object KmerGraph {
 
@@ -117,7 +117,9 @@ object KmerGraph {
    * @param reference Reference sequence.
    * @param reads Reads to insert into graph.
    * @param flankLength Length of flanking sequence to take from reference sequence.
+   * @param maxEntries Maximum number of times a loop can be entered.
    * @param removeSpurs If true, removes spurs (low quality paths) from the graph.
+   * @param lowCoverageTrimmingThreshold Threshold for trimming nodes that are not covered by many reads.
    * @return Returns a new de Brujin graph.
    */
   def apply(kmerLength: Int,
@@ -126,10 +128,11 @@ object KmerGraph {
             reference: String,
             reads: Seq[RichADAMRecord],
             flankLength: Int,
+            maxEntries: Int = 5,
             removeSpurs: Boolean = false,
             lowCoverageTrimmingThreshold: Option[Double] = None): KmerGraph = {
 
-    val graph = new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength)
+    val graph = new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength, maxEntries)
     graph.insertReads(reads)
     if (removeSpurs || lowCoverageTrimmingThreshold.isDefined) {
       lowCoverageTrimmingThreshold.foreach(t => graph.trimLowCoverageKmers(t))
@@ -138,8 +141,13 @@ object KmerGraph {
     graph
   }
 
-  def apply(kmerLength: Int, readLength: Int, regionLength: Int, reference: String, flankLength: Int): KmerGraph = {
-    new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength)
+  def apply(kmerLength: Int,
+            readLength: Int,
+            regionLength: Int,
+            reference: String,
+            flankLength: Int,
+            maxEntries: Int): KmerGraph = {
+    new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength, maxEntries)
   }
 }
 
@@ -152,7 +160,12 @@ object KmerGraph {
  * @param reference Reference sequence.
  * @param flankLength Length of flanking sequence to take from reference sequence.
  */
-class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int, val reference: String, flankLength: Int) {
+class KmerGraph(val kmerLength: Int,
+                val readLength: Int,
+                val regionLength: Int,
+                val reference: String,
+                flankLength: Int,
+                maxEntries: Int) {
 
   assert(flankLength >= kmerLength, "Flanking sequence length must be longer than the k-mer length.")
 
@@ -175,7 +188,7 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
 
   // Paths through the kmer graph are in order of decreasing total mult.
   val maxPathDepth = regionLength + readLength - kmerLength + 1
-  lazy val allPaths = enumerateAllPaths(maxPathDepth)
+  lazy val allPaths = enumerateAllPaths(maxPathDepth, maxEntries)
 
   def insertReads(reads: Seq[RichADAMRecord]) = {
     val kmerSequences = reads.flatMap(read => KmerGraph.getKmerSequences(read, kmerLength))
@@ -201,17 +214,32 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
   /**
    * Performs depth first search and scores all paths through the final graph.
    */
-  def enumerateAllPaths(maxDepth: Int): collection.mutable.SortedSet[KmerPath] = {
-    val paths = collection.mutable.SortedSet[KmerPath]()
+  def enumerateAllPaths(maxDepth: Int, maxEntries: Int): SortedSet[KmerPath] = {
+    val paths = SortedSet[KmerPath]()
+    val hitCount = HashMap[String, Int]()
 
     def pathToSink(node: Kmer, currentPath: Seq[Kmer], depth: Int): Unit = {
-      if (node.nextPrefix.equals(sinkKmer.nextPrefix) || depth > maxDepth) {
+      val seq = node.kmerSeq
+      // how many times have we gone into this kmer?
+      val hits = hitCount.getOrElse(seq, 0)
+
+      if (node.nextPrefix.equals(sinkKmer.nextPrefix)) {
+        // if we've hit the end, add our path to the list
         val path = new KmerPath(currentPath :+ node)
         paths.add(path)
-      }
-      val nextNodes = kmerGraph.get(node.nextPrefix)
-      if (depth <= maxDepth && nextNodes.isDefined && nextNodes.nonEmpty) {
-        nextNodes.get.map(next => pathToSink(next, currentPath :+ node, depth + 1))
+      } else if (depth <= maxDepth && hits <= maxEntries) {
+        // entering kmer
+        hitCount(seq) = hits + 1
+
+        // walk next kmers
+        val nextNodes = kmerGraph.get(node.nextPrefix)
+
+        if (nextNodes.isDefined && nextNodes.nonEmpty) {
+          nextNodes.get.map(next => pathToSink(next, currentPath :+ node, depth + 1))
+        }
+
+        // exiting kmer
+        hitCount(seq) = hits
       }
     }
 
