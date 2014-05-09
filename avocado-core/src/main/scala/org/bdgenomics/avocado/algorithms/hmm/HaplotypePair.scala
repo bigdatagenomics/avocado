@@ -58,13 +58,18 @@ object HaplotypePair {
 class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: HMMAligner = new HMMAligner) {
 
   lazy val hasVariants = haplotype1.hasVariants || haplotype2.hasVariants
-  lazy val pairLikelihood = scorePairLikelihood
+  lazy val (pairLikelihood, readAssignments) = scorePairLikelihood
   lazy val variantCount = haplotype1.variantCount + haplotype2.variantCount
 
   override def toString(): String = {
     haplotype1.sequence + ", " + haplotype1.hasVariants + ", " +
       haplotype2.sequence + ", " + haplotype2.hasVariants + ", " +
-      ("%1.3f" format pairLikelihood) + ", " + hasVariants
+      ("%1.3f" format pairLikelihood) + ", " + hasVariants +
+      (0 until readAssignments.length).map(i => {
+        readAssignments(i) + " <- " +
+          haplotype1.perReadLikelihoods(i) + ", " +
+          haplotype2.perReadLikelihoods(i)
+      }).reduce(_ + "\n" + _)
   }
 
   /**
@@ -72,9 +77,13 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
    *
    * @return Phred scaled likelihood.
    */
-  def scorePairLikelihood: Double = {
-    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map(scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
-    readsProb
+  def scorePairLikelihood: (Double, Array[Int]) = {
+    val readLikelihoods = Array(haplotype1.perReadLikelihoods.toArray, haplotype2.perReadLikelihoods.toArray)
+    val haplotypeLengths = Array(haplotype1.sequence.length.toLong, haplotype2.sequence.length.toLong)
+
+    // run argmax
+    // TODO: expose parameters for argmax fit
+    HaplotypePairArgmax(haplotypeLengths, readLikelihoods, 10, 0.05, 0.5)
   }
 
   val sequences: Set[String] = Set(haplotype1.sequence, haplotype2.sequence)

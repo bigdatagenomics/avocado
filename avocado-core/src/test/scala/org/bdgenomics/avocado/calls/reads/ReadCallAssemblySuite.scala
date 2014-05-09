@@ -34,7 +34,8 @@ class ReadCallAssemblySuite extends SparkFunSuite {
 
   def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
-    sc.adamLoad[ADAMRecord, UnboundRecordFilter](path).map(r => RichADAMRecord(r))
+    val rdd: RDD[ADAMRecord] = sc.adamLoad(path)
+    rdd.map(r => RichADAMRecord(r))
   }
 
   def make_read(sequence: String,
@@ -106,7 +107,7 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     val read6 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
     val read7 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
     val read8 = make_read("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 8)
-    //val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
+    val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8)
     val kmerGraph = rcap_short.assemble(readBucket, reference)
@@ -201,6 +202,23 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     assert(variants.head.position.pos === 4L)
     assert(variants.head.variant.variant.getReferenceAllele === "CA")
     assert(variants.head.variant.variant.getVariantAllele === "C")
+    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(alleles.length === 2)
+    assert(alleles.head === ADAMGenotypeAllele.Ref)
+    assert(alleles.last === ADAMGenotypeAllele.Alt)
+  }
+
+  sparkTest("call A->G snp on NA12878 chr20 @ 225058") {
+    val reads = na12878_chr20_snp_reads.collect.toSeq
+    val reference = rcap_long.getReference(reads)
+
+    val kmerGraph = rcap_long.assemble(reads, reference)
+    val variants = rcap_long.phaseAssembly(reads, kmerGraph, reference)
+
+    assert(variants.length === 1)
+    assert(variants.head.position.pos === 225057L)
+    assert(variants.head.variant.variant.getReferenceAllele === "A")
+    assert(variants.head.variant.variant.getVariantAllele === "G")
     val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
     assert(alleles.head === ADAMGenotypeAllele.Ref)
