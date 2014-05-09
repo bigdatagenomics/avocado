@@ -22,7 +22,7 @@ package org.bdgenomics.avocado.algorithms.debrujin
  * @param kmerSeq sequence that will be split into k-1 len prefix and single char suffix
  * @param weight
  */
-case class Kmer(val kmerSeq: String, val weight: Int = 1) {
+case class Kmer(val kmerSeq: String, val weight: Int = 1, val inFlank: Boolean = false) {
 
   val k = kmerSeq.size
   val prefix: String = kmerSeq.substring(0, k - 1)

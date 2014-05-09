@@ -31,7 +31,7 @@ object KmerGraph {
    * @return Returns a seq of strings with length _k_.
    */
   private def getKmerSequences(read: ADAMRecord, k: Int): Seq[String] = {
-    val readSeq = read.getSequence.toString
+    val readSeq: String = read.getSequence.toString
     getKmerSequences(readSeq, k)
   }
 
@@ -48,9 +48,60 @@ object KmerGraph {
     offsets.map(idx => sequence.substring(idx, idx + k))
   }
 
-  private def buildPrefixMap(kmerSequences: Seq[String]): Map[String, Set[Kmer]] = {
+  @tailrec private[debrujin] final def mergeGraphs(graph1: Map[String, Set[Kmer]],
+                                                   graph2: Map[String, Set[Kmer]]): Map[String, Set[Kmer]] = {
+    def mergeKmer(set: Set[Kmer], kmer: Kmer): Set[Kmer] = {
+      // get all matching kmers
+      val likeKmers = set.filter(_.kmerSeq == kmer.kmerSeq)
+
+      if (likeKmers.size >= 1) {
+        // are any of the kmers in flanking sequence?
+        val inFlank = likeKmers.map(_.inFlank).reduce(_ || _) || kmer.inFlank
+
+        // update multiplicity of kmer
+        set.filter(_.kmerSeq != kmer.kmerSeq) + new Kmer(kmer.kmerSeq,
+          likeKmers.map(_.weight).sum,
+          inFlank)
+      } else {
+        set + kmer
+      }
+    }
+
+    @tailrec def mergeKmerSet(prefix: String,
+                              set1: Set[Kmer],
+                              set2: Set[Kmer]): (String, Set[Kmer]) = {
+      if (set2.isEmpty) {
+        (prefix, set1)
+      } else {
+        val newSet1 = mergeKmer(set1, set2.head)
+        mergeKmerSet(prefix, newSet1, set2.drop(1))
+      }
+    }
+
+    def mergePrefix(graph: Map[String, Set[Kmer]],
+                    node: (String, Set[Kmer])): Map[String, Set[Kmer]] = {
+      val (prefix, set) = node
+
+      // if prefix in graph, merge, else add
+      if (graph.contains(prefix)) {
+        graph.filterKeys(_ != node) + mergeKmerSet(prefix, graph(prefix), set)
+      } else {
+        graph + node
+      }
+    }
+
+    if (graph2.isEmpty) {
+      graph1
+    } else {
+      val merged = mergePrefix(graph1, graph2.head)
+      mergeGraphs(merged, graph2.drop(1))
+    }
+  }
+
+  private[debrujin] def buildPrefixMap(kmerSequences: Seq[String],
+                                       isFlank: Boolean = false): Map[String, Set[Kmer]] = {
     val kmers = kmerSequences.groupBy(x => x) // group by sequence
-      .map(kv => Kmer(kv._1, kv._2.size)) // generate kmer w/ sequence and count
+      .map(kv => Kmer(kv._1, kv._2.size, isFlank)) // generate kmer w/ sequence and count
       .groupBy(kmer => kmer.prefix)
 
     kmers.map(kv => (kv._1, kv._2.toSet))
@@ -75,11 +126,15 @@ object KmerGraph {
             reference: String,
             reads: Seq[RichADAMRecord],
             flankLength: Int,
-            removeSpurs: Boolean = false): KmerGraph = {
+            removeSpurs: Boolean = false,
+            lowCoverageTrimmingThreshold: Option[Double] = None): KmerGraph = {
 
     val graph = new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength)
     graph.insertReads(reads)
-    if (removeSpurs) graph.removeSpurs()
+    if (removeSpurs || lowCoverageTrimmingThreshold.isDefined) {
+      lowCoverageTrimmingThreshold.foreach(t => graph.trimLowCoverageKmers(t))
+      graph.removeSpurs()
+    }
     graph
   }
 
@@ -136,11 +191,11 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
     val startFlank = reference.take(flankLength)
     val endFlank = reference.takeRight(flankLength)
     val kmerSequences = KmerGraph.getKmerSequences(startFlank, kmerLength) ++ KmerGraph.getKmerSequences(endFlank, kmerLength)
-    addSequencesToGraph(kmerSequences)
+    addSequencesToGraph(kmerSequences, true)
   }
 
-  def addSequencesToGraph(kmerSequences: Seq[String]) {
-    kmerGraph = kmerGraph ++ KmerGraph.buildPrefixMap(kmerSequences)
+  def addSequencesToGraph(kmerSequences: Seq[String], isFlank: Boolean = false) {
+    kmerGraph = KmerGraph.mergeGraphs(kmerGraph, KmerGraph.buildPrefixMap(kmerSequences, isFlank))
   }
 
   /**
@@ -162,6 +217,29 @@ class KmerGraph(val kmerLength: Int, val readLength: Int, val regionLength: Int,
 
     pathToSink(sourceKmer, Seq.empty, 0)
     paths
+  }
+
+  /**
+   * Removes low coverage kmers from the graph. This is used to remove graph bubbles that do
+   * not have significant evidence, which limits the number of haplotypes created. After this
+   * is called, spur removal should be run. Removes kmers that have coverage lower than a given
+   * ratio times the median kmer coverage. Median is chosen instead of mean to avoid biasing
+   * versus repeats.
+   *
+   * @param ratio Ratio used to set coverage threshold.
+   *
+   * @see removeSpurs
+   */
+  def trimLowCoverageKmers(ratio: Double) {
+    // get median coverage of kmers that are covered by more than 1 read
+    val kmerWeights = kmers.map(_.weight).filter(_ > 1).toSeq.sortWith(_ < _)
+    val median = kmerWeights(kmerWeights.length / 2)
+
+    // threshold for trimming
+    val threshold = (median.toDouble * ratio).toInt
+
+    kmerGraph = kmerGraph.mapValues(s => s.filter(k => k.weight >= threshold || k.inFlank))
+      .filter(kv => !kv._2.isEmpty)
   }
 
   /**
