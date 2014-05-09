@@ -35,7 +35,7 @@ class ReadCallAssemblySuite extends SparkFunSuite {
   val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
   val rcap_short = new ReadCallAssemblyPhaser(emptyPartition, 4, 4)
   val rcap_long = new ReadCallAssemblyPhaser(emptyPartition, 20, 40)
-  val rcap_long_trim = new ReadCallAssemblyPhaser(emptyPartition, 20, 40, true, Some(0.05))
+  val rcap_long_trim = new ReadCallAssemblyPhaser(emptyPartition, 20, 40, 5, true, Some(0.05))
 
   def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
