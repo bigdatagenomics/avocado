@@ -19,6 +19,7 @@ package org.bdgenomics.avocado.calls.pileup
 import org.bdgenomics.adam.avro.{ Base, ADAMGenotype, ADAMPileup }
 import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
 import org.bdgenomics.avocado.calls.VariantCallCompanion
+import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
@@ -32,7 +33,8 @@ object MPileupCallSimpleSNP extends VariantCallCompanion {
   val callName = "MultipleSamplesSimpleSNP"
 
   def apply(stats: AvocadoConfigAndStats,
-            config: SubnodeConfiguration): PileupCallSimpleSNP = {
+            config: SubnodeConfiguration,
+            partitions: PartitionSet): PileupCallSimpleSNP = {
 
     val ploidy = config.getInt("ploidy", 2)
     val minorAlleleFrequency = config.getDouble("minorAlleleFrequency", 0.1)

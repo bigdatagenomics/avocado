@@ -18,10 +18,13 @@ package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.avro.{ ADAMContig, ADAMRecord }
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
 import org.bdgenomics.adam.util.SparkFunSuite
 import org.bdgenomics.avocado.calls.reads.ReadCallAssemblyPhaser
+import org.bdgenomics.avocado.partitioners.PartitionSet
+import scala.collection.immutable.SortedMap
 import scala.collection.mutable.ArrayBuffer
 
 class KmerGraphSuite extends SparkFunSuite {
@@ -187,10 +190,38 @@ class KmerGraphSuite extends SparkFunSuite {
     val reads = na12878_chr20_snp_reads.collect.toSeq
 
     // make generic assembler to get reference recovery method
-    val rcap = new ReadCallAssemblyPhaser(4, 0, 4)
+    val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
+    val rcap = new ReadCallAssemblyPhaser(emptyPartition, 4, 4)
     val reference = rcap.getReference(reads)
 
     val kmerGraph = KmerGraph(20, 101, reference.length, reference, reads, 40)
     assert(kmerGraph.allPaths.size === 30)
+    assert(kmerGraph.kmers.size === 678)
+
+    kmerGraph.removeSpurs()
+    assert(kmerGraph.allPaths.size === 30)
+    assert(kmerGraph.kmers.size === 409)
+  }
+
+  test("check spur trimming function on simple graph") {
+
+    val reference = "TACCAATGTAA"
+    val read0 = makeRead("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = makeRead("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = makeRead("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = makeRead("CAATGTA", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = makeRead("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read5 = makeRead("CCAATAT", 2L, "7M", "5G1", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
+
+    val readBucket = Seq(read0, read1, read2, read3, read4, read5)
+    val kmerGraph = KmerGraph(4, 7, 7, reference, readBucket, 4)
+
+    assert(kmerGraph.allPaths.size === 1)
+    assert(kmerGraph.kmers.size === 10)
+
+    kmerGraph.removeSpurs()
+
+    assert(kmerGraph.allPaths.size === 1)
+    assert(kmerGraph.kmers.size === 8)
   }
 }

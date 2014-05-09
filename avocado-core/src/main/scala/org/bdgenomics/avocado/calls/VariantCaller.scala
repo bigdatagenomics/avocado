@@ -23,6 +23,7 @@ import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.avocado.calls.pileup.{ MPileupCallSimpleSNP, PileupCallSimpleSNP, PileupCallUnspecified }
 import org.bdgenomics.avocado.calls.reads.{ ReadCallAssemblyPhaser, ReadCallUnspecified }
+import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object VariantCaller {
@@ -36,12 +37,13 @@ object VariantCaller {
   def apply(callName: String,
             callAlgorithm: String,
             stats: AvocadoConfigAndStats,
-            config: HierarchicalConfiguration): VariantCall = {
+            config: HierarchicalConfiguration,
+            partitions: PartitionSet): VariantCall = {
     val call = calls.find(_.callName == callAlgorithm)
 
     call match {
       case Some(c) => {
-        c.apply(stats, config, callName)
+        c.apply(stats, config, callName, partitions)
       }
       case None => throw new IllegalArgumentException("Invalid variant calling algorithm provided.")
     }

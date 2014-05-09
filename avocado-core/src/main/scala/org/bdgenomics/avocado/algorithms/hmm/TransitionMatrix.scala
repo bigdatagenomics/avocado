@@ -38,7 +38,7 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
 
   // P( indel -> match) = 1 - P(indel -> indel) = 1 - P( gap-continue)
   // in log-space
-  val LOG_GAP_CLOSE = log10(1 - pow(10, LOG_GAP_CONTINUE))
+  val LOG_GAP_CLOSE = -log10(1 - pow(10, LOG_GAP_CONTINUE))
 
   // P( match) = 1 - P(mismatch)
   val MATCH_PROB = 1 - pow(10, LOG_SNP_RATE)
