@@ -58,8 +58,13 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
     val flankLength = config.getInt("flankLength", 40)
     val kmerLength = config.getInt("kmerLength", 20)
     val trimSpurs = config.getBoolean("trimSpurs", true)
+    val trimThreshold: Option[Double] = if (config.containsKey("lowCoverageTrimmingThreshold")) {
+      Some(config.getDouble("lowCoverageTrimmingThreshold"))
+    } else {
+      None
+    }
 
-    new ReadCallAssemblyPhaser(partitions, kmerLength, flankLength, trimSpurs)
+    new ReadCallAssemblyPhaser(partitions, kmerLength, flankLength, trimSpurs, trimThreshold)
   }
 
 }
@@ -70,7 +75,8 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
 class ReadCallAssemblyPhaser(val partitions: PartitionSet,
                              val kmerLen: Int = 20,
                              val flankLength: Int = 40,
-                             val trimSpurs: Boolean = true) extends ReadCall {
+                             val trimSpurs: Boolean = true,
+                             val lowCoverageTrimmingThreshold: Option[Double] = None) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
 
@@ -150,11 +156,17 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
    * @param reference String representing reference over the region.
    * @return Kmer graph corresponding to region.
    */
-
-  def assemble(region: Seq[RichADAMRecord], reference: String, removeSpurs: Boolean = false): KmerGraph = {
+  def assemble(region: Seq[RichADAMRecord], reference: String): KmerGraph = {
     val readLen = region(0).getSequence.length
     val regionLen = reference.length
-    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, flankLength, removeSpurs)
+    var kmerGraph = KmerGraph(kmerLen,
+      readLen,
+      regionLen,
+      reference,
+      region,
+      flankLength,
+      trimSpurs,
+      lowCoverageTrimmingThreshold)
     kmerGraph
   }
 
@@ -415,7 +427,7 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
       val ref = x._1
       val region = x._2
       if (ref.length > 0 && region.length > 0) {
-        val kmerGraph = assemble(region, ref, trimSpurs)
+        val kmerGraph = assemble(region, ref)
         phaseAssembly(region, kmerGraph, ref)
       } else {
         List()
