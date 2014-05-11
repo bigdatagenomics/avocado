@@ -97,9 +97,21 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
     // not be completely covered by reads, in which case the MD tags are
     // insufficient, so we ultimately want to resolve using the ref itself,
     // and not just the reads.
-    val posRefs =
-      region.map(read => (read.getStart, read.mdTag.map(_.getReference(read))))
-        .sortBy(_._1)
+    val posRefs = region.flatMap(read => {
+      try {
+        if (read.mdTag.isDefined) {
+          Some((read.getStart, read.mdTag.get.getReference(read)))
+        } else {
+          log.warn("No reference recovered for read " + read.getReadName + " as MD tag was missing.")
+          None
+        }
+      } catch {
+        case _: Throwable => {
+          log.warn("No reference recovered for read " + read.getReadName + " due to issue with MD tag.")
+          None
+        }
+      }
+    }).sortBy(_._1)
     val startPos = posRefs(0)._1
     var reference = ""
     for ((position, readRef) <- posRefs) {
@@ -113,24 +125,21 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
       //
       // Bail: [-----ref-----)
       //                         [---read---)
-      if (readRef.isDefined) {
-        val readReference = readRef.get
+      val readReference = readRef
 
-        val relPos = position - startPos
-        val offset = reference.length - relPos.toInt
-        if (offset >= 0 && offset < readReference.length) {
-          try {
-            reference += readReference.substring(offset)
-          } catch {
-            case (e: StringIndexOutOfBoundsException) => {
-              log.warn("String index out of bounds at: " + reference + ", " + readReference + ", " + offset)
-            }
+      val relPos = position - startPos
+      val offset = reference.length - relPos.toInt
+      if (offset < 0) {
+        reference += readReference
+        log.warn("Have gap in reference at " + startPos)
+      } else if (offset < readReference.length) {
+        try {
+          reference += readReference.substring(offset)
+        } catch {
+          case (e: StringIndexOutOfBoundsException) => {
+            log.error("String index out of bounds at: " + reference + ", " + readReference + ", " + offset)
           }
-        } else if (offset < 0) {
-          return ""
         }
-      } else {
-        log.warn("No reference discovered for read due to missing MDTag or unmapped read")
       }
     }
     reference
@@ -282,12 +291,45 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
                     reference: String,
                     maxHaplotypes: Int = 16): List[ADAMVariantContext] = {
 
+    // info for logging
+    val start = region.map(_.getStart).min
+    val end = region.flatMap(_.end).max
+    val refName = region.head.getContig.getContigName
+
     val aligner = new HMMAligner
     val refHaplotype = new Haplotype(reference, region, aligner, reference)
 
     // Score all haplotypes against the reads.
-    val orderedHaplotypes = SortedSet[Haplotype](kmerGraph.allPaths.map(path =>
-      new Haplotype(path.haplotypeString, region, aligner, reference)).toSeq: _*)(HaplotypeOrdering.reverse)
+    val orderedHaplotypes = SortedSet[Haplotype](kmerGraph.allPaths.flatMap(path => {
+      try {
+        Some(new Haplotype(path.haplotypeString, region, aligner, reference))
+      } catch {
+        case _: Throwable => None
+      }
+    }).toSeq: _*)(HaplotypeOrdering.reverse)
+
+    // print logging info
+    if (orderedHaplotypes.size > 0) {
+      val refLen = reference.length
+      val hapNum = orderedHaplotypes.size
+      val hapLens = orderedHaplotypes.map(_.sequence.length)
+      val minLen = hapLens.min
+      val maxLen = hapLens.max
+      val avgLen = (hapLens.sum.toDouble / hapNum.toDouble).toInt
+      val readCount = region.length
+      log.info("In region with refName " + refName + " from " + start + " to " + end +
+        ", have " + readCount + " reads and " + hapNum +
+        " haplotypes with minimum length " + minLen +
+        ", maximum length " + maxLen + ", average length " + avgLen +
+        ", and reference length " + refLen + ".")
+    } else {
+      val readCount = region.length
+      log.info("In region with refName " + refName + " from " + start + " to " + end +
+        ", have " + readCount + " reads but no alt haplotypes.")
+
+      // return early
+      return List()
+    }
 
     // Pick the top X-1 haplotypes and the reference haplotype.
     val bestHaplotypes = refHaplotype :: orderedHaplotypes.take(maxHaplotypes - 1).toList
@@ -334,7 +376,7 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
 
     // TODO(peter, 12/8) Call variants, _without_ incorporating phasing for now.
     if (calledHaplotypePair.isDefined) {
-      var variants = List[ADAMGenotype]()
+      var variants = List[ADAMVariantContext]()
       val sortedRegion = region.sortBy(_.getStart)
       val firstRead = sortedRegion(0)
       val refPos = firstRead.getStart
@@ -374,15 +416,21 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
                 case 'I' => VariantType.Insertion
                 case 'D' => VariantType.Deletion
               }
-              val variant = emitVariantCall(variantType, variantLength,
-                variantOffset, refOffset,
-                haplotype.sequence, refHaplotype.sequence,
-                heterozygousRef,
-                heterozygousNonref,
-                variantPhred,
-                refPos,
-                sampleName, refName)
-              variants = variants ::: variant
+              try {
+                val variant = emitVariantCall(variantType, variantLength,
+                  variantOffset, refOffset,
+                  haplotype.sequence, refHaplotype.sequence,
+                  heterozygousRef,
+                  heterozygousNonref,
+                  variantPhred,
+                  refPos,
+                  sampleName, refName)
+                variants = variants ::: genotypesToVariantContext(variant)
+              } catch {
+                case _: Throwable => {
+                  log.warn("Variant call oddity experienced at " + (variantOffset + refPos) + " on " + refName)
+                }
+              }
             }
             if (move != 'D') {
               variantOffset += variantLength
@@ -393,8 +441,12 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
           }
         }
       }
-      genotypesToVariantContext(variants)
+      log.info("Called " + variants.length + " variants in region with refName " +
+        refName + " from " + start + " to " + end + ".")
+      variants
     } else {
+      log.info("Called no variants in region with refName " + refName + " from " +
+        start + " to " + end + ".")
       List()
     }
   }
@@ -418,21 +470,28 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
       partitions.map(p => (p, r))
     }).groupByKey()
 
-    // generate region maps
-    val regionsAndReference = regions.map(kv => (getReference(kv._2), kv._2))
+    log.info("avocado: Have " + regions.count + " regions.")
 
-    // filtering inactive regions
-    val activeRegions = regionsAndReference.filter(kv => isRegionActive(kv._2, kv._1))
+    // generate region maps
+    val regionsAndReference: RDD[(String, Seq[RichADAMRecord])] = regions.map(kv => (getReference(kv._2), kv._2))
 
     log.info("Calling variants with local assembly.")
 
-    activeRegions.flatMap(x => {
+    // TODO: add back active region filtering criteria
+    regionsAndReference.flatMap(x => {
       val ref = x._1
       val region = x._2
       if (ref.length > 0 && region.length > 0) {
         val kmerGraph = assemble(region, ref)
         phaseAssembly(region, kmerGraph, ref)
+      } else if (ref.length == 0 && region.length > 0) {
+        val start = region.map(_.getStart).min
+        val end = region.flatMap(_.end).max
+        val name = region.head.getContig.getContigName
+        log.warn("Had null reference: " + name + " from " + start + " to " + end)
+        List()
       } else {
+        log.warn("Had null reads/reference. " + ref.length)
         List()
       }
     })

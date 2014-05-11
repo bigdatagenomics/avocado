@@ -121,7 +121,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
     var rdd = reads.keyBy(r => ReferenceRegion(r))
       .filter(kv => kv._1.isDefined)
       .map(kv => (kv._1.get, kv._2))
-      .cache()
+    //.cache()
 
     var callsets = List[(VariantCall, RDD[ADAMRecord])]()
     val partitioners = partitionsZipped.map(p => Partitioner(reads, config, p._1, p._2, stats))
@@ -141,10 +141,14 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
       val call = VariantCaller(callName, callAlg, stats, config, partitions)
 
       // filter reads that are in the partition into a new call set and add the call
-      callsets = (call, rdd.filter(kv => partitions.isInSet(kv._1)).map(kv => kv._2)) :: callsets
+      val filteredReads = rdd.filter(kv => partitions.isInSet(kv._1))
+        .map(kv => kv._2)
+      log.info("avocado: have " + filteredReads.count + " reads in " + p.companion.partitionerName)
+      callsets = (call, filteredReads) :: callsets
 
       // filter out reads that are wholly contained in the last partitoner
       rdd = rdd.filter(kv => partitions.isOutsideOfSet(kv._1))
+      log.info("avocado: have " + rdd.count() + " reads left.")
     })
 
     // filter out variant calls that are not actually callable
@@ -159,13 +163,15 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
    * @return RDD containing reads that have been sorted and deduped.
    */
   def preProcessReads(reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
-    var processedReads = reads.cache
+    var processedReads = reads //.cache
+
+    log.info("avocado: Preprocessing " + processedReads.count + " reads.")
 
     // loop over preprocessing stages and apply
     preprocessingStagesZippedWithNames.foreach(p => {
       val (stageName, stageAlgorithm) = p
 
-      log.info("Running " + stageName)
+      log.info("avocado: Running " + stageName)
 
       // run this preprocessing stage
       processedReads = Preprocessor(processedReads, stageName, stageAlgorithm, config)
@@ -190,7 +196,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
       // get call and rdd pair
       val (call, rdd) = pair
 
-      log.info("Running " + call.companion.callName)
+      log.info("avocado: Running " + call.companion.callName + " on " + rdd.count + " reads.")
 
       // apply call
       call.call(rdd)
@@ -206,7 +212,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
    * @return Post-processed variants.
    */
   def postProcessVariants(variants: RDD[ADAMVariantContext], stats: AvocadoConfigAndStats): RDD[ADAMVariantContext] = {
-    var rdd = variants.cache()
+    var rdd = variants //.cache()
 
     // loop over post processing steps
     postprocessorsZipped.foreach(p => {
