@@ -19,6 +19,7 @@ package org.bdgenomics.avocado.calls.reads
 import org.bdgenomics.adam.avro.ADAMRecord
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.avocado.calls.VariantCallCompanion
+import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.{ SparkContext, Logging }
@@ -29,7 +30,8 @@ object ReadCallUnspecified extends VariantCallCompanion {
   val callName = "ReadUnspecified"
 
   def apply(stats: AvocadoConfigAndStats,
-            config: SubnodeConfiguration): ReadCallUnspecified = {
+            config: SubnodeConfiguration,
+            partitions: PartitionSet): ReadCallUnspecified = {
 
     new ReadCallUnspecified()
   }

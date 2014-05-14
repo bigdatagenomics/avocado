@@ -138,7 +138,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
       val partitions = p.computePartitions()
 
       // generate variant caller
-      val call = VariantCaller(callName, callAlg, stats, config)
+      val call = VariantCaller(callName, callAlg, stats, config, partitions)
 
       // filter reads that are in the partition into a new call set and add the call
       callsets = (call, rdd.filter(kv => partitions.isInSet(kv._1)).map(kv => kv._2)) :: callsets

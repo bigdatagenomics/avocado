@@ -23,20 +23,24 @@ import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenot
 import org.bdgenomics.adam.converters.GenotypesToVariantsConverter
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 trait VariantCallCompanion {
 
   val callName: String
 
-  protected def apply(stats: AvocadoConfigAndStats, config: SubnodeConfiguration): VariantCall
+  protected def apply(stats: AvocadoConfigAndStats,
+                      config: SubnodeConfiguration,
+                      partitions: PartitionSet): VariantCall
 
   final def apply(stats: AvocadoConfigAndStats,
                   globalConfig: HierarchicalConfiguration,
-                  callSetName: String): VariantCall = {
+                  callSetName: String,
+                  partitions: PartitionSet): VariantCall = {
     val config: SubnodeConfiguration = globalConfig.configurationAt(callSetName)
 
-    apply(stats, config)
+    apply(stats, config, partitions)
   }
 
 }

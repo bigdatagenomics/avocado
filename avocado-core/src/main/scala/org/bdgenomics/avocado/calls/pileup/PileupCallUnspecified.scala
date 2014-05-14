@@ -18,6 +18,7 @@ package org.bdgenomics.avocado.calls.pileup
 
 import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
 import org.bdgenomics.avocado.calls.VariantCallCompanion
+import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.{ SparkContext, Logging }
@@ -28,7 +29,8 @@ object PileupCallUnspecified extends VariantCallCompanion {
   val callName = "PileupUnspecified"
 
   def apply(stats: AvocadoConfigAndStats,
-            config: SubnodeConfiguration): PileupCallUnspecified = {
+            config: SubnodeConfiguration,
+            partitions: PartitionSet): PileupCallUnspecified = {
 
     new PileupCallUnspecified()
   }
