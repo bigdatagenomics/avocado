@@ -19,6 +19,7 @@ package org.bdgenomics.avocado.partitioners
 import org.bdgenomics.adam.models.ReferenceRegion
 import scala.annotation.tailrec
 import scala.collection.immutable.{ SortedMap, TreeSet, SortedSet }
+import scala.math.max
 
 class PartitionSet(protected val regionMapping: SortedMap[ReferenceRegion, Int]) extends Serializable {
 
@@ -83,7 +84,7 @@ class PartitionSet(protected val regionMapping: SortedMap[ReferenceRegion, Int])
    */
   final def getPartition(region: ReferenceRegion, flankLength: Long): List[Int] = {
     getPartition(ReferenceRegion(region.referenceName,
-      region.start - flankLength,
+      max(region.start - flankLength, 0),
       region.end + flankLength))
   }
 

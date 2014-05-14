@@ -27,6 +27,15 @@ import scala.math._
  */
 class Haplotype(val sequence: String, region: Seq[RichADAMRecord], hmm: HMMAligner = new HMMAligner, val reference: String = "") {
 
+  def reg: String = {
+    val start = region.map(_.getStart).min
+    val end = region.flatMap(_.end).max
+    val name = region.head.getContig.getContigName
+    name + ", " + start + ", " + end
+  }
+
+  assert(reference.length > 0, "Reference has length 0 on " + reg + ".")
+  assert(sequence.length > 0, "Haplotype has length 0 on " + reg + ".")
   lazy val referenceAlignment = hmm.alignSequences(reference, sequence, null)
   assert(referenceAlignment.hasVariants == (sequence != reference), "HMM calls variant, but sequence matches reference. " + referenceAlignment)
   lazy val hasVariants = referenceAlignment.hasVariants
