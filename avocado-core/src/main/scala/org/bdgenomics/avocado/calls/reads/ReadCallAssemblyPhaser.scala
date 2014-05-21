@@ -269,6 +269,27 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
         .build()
 
       List(genotype)
+    } else if (heterozygousNonref) {
+      val alleles = List(ADAMGenotypeAllele.OtherAlt, ADAMGenotypeAllele.Alt)
+
+      val contig = ADAMContig.newBuilder
+        .setContigName(refName)
+        .build
+      val variant = ADAMVariant.newBuilder
+        .setContig(contig)
+        .setReferenceAllele(refAllele)
+        .setVariantAllele(altAllele)
+        .setPosition(refPos + refOffset)
+        .build
+      val genotype = ADAMGenotype.newBuilder()
+        .setVariant(variant)
+        .setSampleId(sampleName)
+        .setGenotypeQuality(phred)
+        .setExpectedAlleleDosage(1.0f)
+        .setAlleles(alleles)
+        .build()
+
+      List(genotype)
     } else if (!heterozygousRef && !heterozygousNonref) {
       val alleles = List(ADAMGenotypeAllele.Alt, ADAMGenotypeAllele.Alt)
 
