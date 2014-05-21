@@ -21,11 +21,13 @@ import scala.annotation.tailrec
 object HMMAligner {
   val debug = false
 
-  def align(refSequence: String, testSequence: String, testQualities: String): Alignment = {
-    val hmm = new HMMAligner
+  def align(refSequence: String,
+            testSequence: String,
+            testQualities: String,
+            transitionProbabilities: TransitionMatrixConfiguration = new TransitionMatrixConfiguration()): Alignment = {
+    val hmm = new HMMAligner(transitionProbabilities)
     hmm.alignSequences(refSequence, testSequence, testQualities)
   }
-
 }
 
 /**
@@ -33,15 +35,9 @@ object HMMAligner {
  *
  * All likelihoods are computed in log-space as are the input parameters
  */
-class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
-                 val LOG_GAP_CONTINUE_PENALTY: Double = -2.0,
-                 val LOG_SNP_RATE: Double = -3.0,
-                 val LOG_INDEL_RATE: Double = -4.0) {
+class HMMAligner(val transitionProbabilities: TransitionMatrixConfiguration = new TransitionMatrixConfiguration()) {
 
-  val transitionMatrix = new TransitionMatrix(LOG_GAP_OPEN_PENALTY,
-    LOG_GAP_CONTINUE_PENALTY,
-    LOG_SNP_RATE,
-    LOG_INDEL_RATE)
+  val transitionMatrix = TransitionMatrix(transitionProbabilities)
 
   /**
    * Aligns sequences.
@@ -77,7 +73,8 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
       if (i <= 0 || j <= 0) {
         // Compute the prior probability of the alignments, with the Dindel numbers.
         val hasVariants: Boolean = numSnps > 0 || numIndels > 0
-        val alignmentPrior = LOG_SNP_RATE * numSnps + LOG_INDEL_RATE * numIndels
+        val alignmentPrior = (transitionProbabilities.LOG_SNP_RATE * numSnps +
+          transitionProbabilities.LOG_INDEL_RATE * numIndels)
 
         new Alignment(alignmentLikelihood,
           alignmentPrior,

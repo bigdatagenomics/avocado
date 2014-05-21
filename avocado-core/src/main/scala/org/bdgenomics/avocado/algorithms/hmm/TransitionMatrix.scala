@@ -16,8 +16,39 @@
 
 package org.bdgenomics.avocado.algorithms.hmm
 
-import scala.math._
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.bdgenomics.avocado.algorithms.hmm.AlignmentState._
+import scala.math._
+
+object TransitionMatrixConfiguration {
+
+  def apply(config: SubnodeConfiguration): TransitionMatrixConfiguration = {
+    new TransitionMatrixConfiguration(config.getDouble("LOG_GAP_OPEN"),
+      config.getDouble("LOG_GAP_CONTINUE"),
+      config.getDouble("LOG_SNP_RATE"),
+      config.getDouble("LOG_INDEL_RATE"),
+      config.getDouble("LOG_PADDING_PENALTY"))
+  }
+
+}
+
+case class TransitionMatrixConfiguration(LOG_GAP_OPEN: Double = -4.0,
+                                         LOG_GAP_CONTINUE: Double = -2.0,
+                                         LOG_SNP_RATE: Double = -3.0,
+                                         LOG_INDEL_RATE: Double = -4.0,
+                                         LOG_PADDING_PENALTY: Double = -0.0) extends Serializable {
+}
+
+object TransitionMatrix {
+
+  def apply(config: TransitionMatrixConfiguration): TransitionMatrix = {
+    new TransitionMatrix(config.LOG_GAP_OPEN,
+      config.LOG_GAP_CONTINUE,
+      config.LOG_SNP_RATE,
+      config.LOG_INDEL_RATE,
+      config.LOG_PADDING_PENALTY)
+  }
+}
 
 class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
                        val LOG_GAP_CONTINUE: Double = -2.0,

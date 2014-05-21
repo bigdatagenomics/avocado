@@ -25,7 +25,11 @@ import scala.math._
  *
  * @param sequence String representing haplotype alignment.
  */
-class Haplotype(val sequence: String, region: Seq[RichADAMRecord], hmm: HMMAligner = new HMMAligner, val reference: String = "") {
+class Haplotype(val sequence: String,
+                region: Seq[RichADAMRecord],
+                hmm: HMMAligner = new HMMAligner,
+                val reference: String = "",
+                readAlignerConfig: TransitionMatrixConfiguration = TransitionMatrixConfiguration()) {
 
   def reg: String = {
     val start = region.map(_.getStart).min
@@ -45,7 +49,7 @@ class Haplotype(val sequence: String, region: Seq[RichADAMRecord], hmm: HMMAlign
   lazy val perReadLikelihoods: Seq[Double] = {
     region.map(read => {
       try {
-        val alignment = HMMAligner.align(sequence, read.getSequence.toString, null)
+        val alignment = HMMAligner.align(sequence, read.getSequence.toString, null, readAlignerConfig)
         alignment.likelihood + alignment.prior
       } catch {
         case _: Throwable => {
