@@ -24,7 +24,7 @@ import org.apache.spark.rdd.RDD
 object Input {
 
   // all our input stages
-  val stages = List(AlignedReadsInputStage)
+  val stages = List(AlignedReadsInputStage, SnapInputStage)
 
   /**
    * Builds the input stage that corresponds to the given stage name, and returns the read data
