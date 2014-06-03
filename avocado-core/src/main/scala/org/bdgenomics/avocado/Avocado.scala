@@ -22,7 +22,12 @@ import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
 import org.kohsuke.args4j.{ Option => option, Argument }
-import org.bdgenomics.adam.avro.{ ADAMVariant, ADAMRecord, ADAMNucleotideContigFragment }
+import org.bdgenomics.adam.avro.{
+  ADAMVariant,
+  ADAMRecord,
+  ADAMNucleotideContigFragment,
+  ADAMGenotype
+}
 import org.bdgenomics.adam.cli.{
   ADAMSparkCommand,
   ADAMCommandCompanion,
@@ -259,11 +264,11 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
 
     // post process variants
     log.info("Post-processing variants.")
-    val processedVariants: RDD[ADAMVariant] = postProcessVariants(calledVariants, stats).map(variantContext => variantContext.variant)
+    val processedGenotypes: RDD[ADAMGenotype] = postProcessVariants(calledVariants, stats).flatMap(variantContext => variantContext.genotypes)
 
     // save variants to output file
     log.info("Writing calls to disk.")
-    processedVariants.adamSave(args.variantOutput,
+    processedGenotypes.adamSave(args.variantOutput,
       args.blockSize,
       args.pageSize,
       args.compressionCodec,

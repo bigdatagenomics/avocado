@@ -23,8 +23,7 @@ import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object Postprocessor {
 
-  private val stages = List[PostprocessingStage](FilterStrandBias,
-    FilterDepth)
+  private val stages = List[PostprocessingStage](FilterDepth)
 
   assert(stages.map(_.stageName).length == stages.map(_.stageName).distinct.length,
     "Postprocessing stages have duplicated names.")
