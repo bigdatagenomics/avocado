@@ -65,7 +65,26 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
     }
     val maxEntries = config.getInt("maxEntries", 5)
 
-    new ReadCallAssemblyPhaser(partitions, kmerLength, flankLength, maxEntries, trimSpurs, trimThreshold)
+    // get aligner configs
+    val haplotypeAlignerConfig = try {
+      TransitionMatrixConfiguration(config.configurationAt("haplotypeAligner"))
+    } catch {
+      case _: Throwable => TransitionMatrixConfiguration()
+    }
+    val readAlignerConfig = try {
+      TransitionMatrixConfiguration(config.configurationAt("readAligner"))
+    } catch {
+      case _: Throwable => TransitionMatrixConfiguration()
+    }
+
+    new ReadCallAssemblyPhaser(partitions,
+      kmerLength,
+      flankLength,
+      maxEntries,
+      trimSpurs,
+      trimThreshold,
+      haplotypeAlignerConfig,
+      readAlignerConfig)
   }
 
 }
@@ -78,7 +97,9 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
                              val flankLength: Int = 40,
                              val maxEntries: Int = 5,
                              val trimSpurs: Boolean = true,
-                             val lowCoverageTrimmingThreshold: Option[Double] = None) extends ReadCall {
+                             val lowCoverageTrimmingThreshold: Option[Double] = None,
+                             val haplotypeAlignerConfig: TransitionMatrixConfiguration = TransitionMatrixConfiguration(),
+                             val readAlignerConfig: TransitionMatrixConfiguration = TransitionMatrixConfiguration()) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
 
@@ -296,8 +317,8 @@ class ReadCallAssemblyPhaser(val partitions: PartitionSet,
     val end = region.flatMap(_.end).max
     val refName = region.head.getContig.getContigName
 
-    val aligner = new HMMAligner
-    val refHaplotype = new Haplotype(reference, region, aligner, reference)
+    val aligner = new HMMAligner(haplotypeAlignerConfig)
+    val refHaplotype = new Haplotype(reference, region, aligner, reference, readAlignerConfig)
 
     // Score all haplotypes against the reads.
     val orderedHaplotypes = SortedSet[Haplotype](kmerGraph.allPaths.flatMap(path => {
