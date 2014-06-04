@@ -22,7 +22,7 @@ import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenot
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.avocado.calls.pileup.{ MPileupCallSimpleSNP, PileupCallSimpleSNP, PileupCallUnspecified }
-import org.bdgenomics.avocado.calls.reads.{ ReadCallAssemblyPhaser, ReadCallUnspecified }
+import org.bdgenomics.avocado.calls.reads.{ ReadCallAssemblyPhaser, ReadCallUnspecified, ReadCallExternal }
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
@@ -32,7 +32,8 @@ object VariantCaller {
     MPileupCallSimpleSNP,
     PileupCallUnspecified,
     ReadCallAssemblyPhaser,
-    ReadCallUnspecified)
+    ReadCallUnspecified,
+    ReadCallExternal)
 
   def apply(callName: String,
             callAlgorithm: String,
