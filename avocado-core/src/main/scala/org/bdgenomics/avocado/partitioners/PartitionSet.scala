@@ -89,6 +89,17 @@ class PartitionSet(protected val regionMapping: SortedMap[ReferenceRegion, Int])
   }
 
   /**
+   * Returns the reference coordinates associated with a given region index.
+   *
+   * @param idx Index to search for.
+   * @return ReferenceRegion describing region coordinates.
+   */
+  def getRegion(idx: Int): Option[ReferenceRegion] = {
+    val r = regionMapping.find(kv => kv._2 == idx)
+    r.map(p => p._1)
+  }
+
+  /**
    * Returns whether a region is contained in a partition inside of this set.
    *
    * @param region Region of interest.
