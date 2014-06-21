@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014. Regents of the University of California
+ * Copyright (c) 2014. Regents of the University of California
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,11 @@ import parquet.filter.UnboundRecordFilter
 import scala.collection.JavaConversions._
 import scala.collection.immutable.SortedMap
 
-class ReadCallAssemblySuite extends SparkFunSuite {
+trait ReadCallHaplotypesSuite extends SparkFunSuite {
 
   val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
-  val rcap_short = new ReadCallAssemblyPhaser(emptyPartition, 4, 4)
-  val rcap_long = new ReadCallAssemblyPhaser(emptyPartition, 20, 40)
-  val rcap_long_trim = new ReadCallAssemblyPhaser(emptyPartition, 20, 40, 5, true, Some(0.05))
+  val rc_short: ReadCallHaplotypes
+  val rc_long: ReadCallHaplotypes
 
   def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
@@ -70,16 +69,6 @@ class ReadCallAssemblySuite extends SparkFunSuite {
       .build())
   }
 
-  test("Test log sum for similar values") {
-    val sum = HaplotypePair.exactLogSumExp10(1.0, 1.0)
-    assert(1.3 * 0.99 < sum && 1.3 * 1.01 > sum)
-  }
-
-  test("Test log sum for dissimilar values") {
-    val sum = HaplotypePair.exactLogSumExp10(1.0, -3.0)
-    assert(1.00004342 * 0.99 < sum && 1.00004342 * 1.01 > sum)
-  }
-
   test("\"Call\" hom ref, ~10x coverage") {
     val reference = "TACCAATGTAA"
     val read0 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
@@ -94,9 +83,9 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
-    val kmerGraph = rcap_short.assemble(readBucket, reference)
+    val kmerGraph = rc_short.generateHaplotypes(readBucket, reference)
 
-    val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
+    val variants = rc_short.scoreHaplotypes(readBucket, kmerGraph, reference)
 
     assert(variants.length === 0)
   }
@@ -115,9 +104,9 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8)
-    val kmerGraph = rcap_short.assemble(readBucket, reference)
+    val kmerGraph = rc_short.generateHaplotypes(readBucket, reference)
 
-    val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
+    val variants = rc_short.scoreHaplotypes(readBucket, kmerGraph, reference)
 
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
@@ -143,9 +132,9 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     val read9 = make_read("CATGTAA", 4L, "7M", "0A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
-    val kmerGraph = rcap_short.assemble(readBucket, reference)
+    val kmerGraph = rc_short.generateHaplotypes(readBucket, reference)
 
-    val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
+    val variants = rc_short.scoreHaplotypes(readBucket, kmerGraph, reference)
 
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
@@ -171,9 +160,9 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
-    val kmerGraph = rcap_short.assemble(readBucket, reference)
+    val kmerGraph = rc_short.generateHaplotypes(readBucket, reference)
 
-    val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
+    val variants = rc_short.scoreHaplotypes(readBucket, kmerGraph, reference)
 
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
@@ -187,10 +176,10 @@ class ReadCallAssemblySuite extends SparkFunSuite {
 
   test("Call simple het DEL, ~10x coverage") {
     val reference = "TACCAATGTAA"
-    val read0 = make_read("TACCATG", 0L, "4M1D2M", "4^A2", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
-    val read1 = make_read("ACCATGT", 1L, "3M1D3M", "3^A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
-    val read2 = make_read("CCATGTA", 2L, "2M1D4M", "2^A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
-    val read3 = make_read("CATGTAA", 3L, "1M1D5M", "1^A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read0 = make_read("TACCATG", 0L, "4M1D3M", "4^A3", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCATGT", 1L, "3M1D4M", "3^A4", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCATGTA", 2L, "2M1D5M", "2^A5", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CATGTAA", 3L, "1M1D6M", "1^A6", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
     val read4 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
     val read5 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
     val read6 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
@@ -199,9 +188,9 @@ class ReadCallAssemblySuite extends SparkFunSuite {
     val read9 = make_read("AATGTAA", 4L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 9)
 
     val readBucket = Seq(read0, read1, read2, read3, read4, read5, read6, read7, read8, read9)
-    val kmerGraph = rcap_short.assemble(readBucket, reference)
+    val kmerGraph = rc_short.generateHaplotypes(readBucket, reference)
 
-    val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
+    val variants = rc_short.scoreHaplotypes(readBucket, kmerGraph, reference)
 
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
@@ -215,29 +204,13 @@ class ReadCallAssemblySuite extends SparkFunSuite {
 
   sparkTest("call A->G snp on NA12878 chr20 @ 225058") {
     val reads = na12878_chr20_snp_reads.collect.toSeq
-    val reference = rcap_long.getReference(reads)
+    val reference = rc_long.getReference(reads)
 
-    val kmerGraph = rcap_long.assemble(reads, reference)
+    val kmerGraph = rc_long.generateHaplotypes(reads, reference)
 
-    val variants = rcap_long.phaseAssembly(reads, kmerGraph, reference)
-
-    assert(variants.length === 1)
-    assert(variants.head.position.pos === 225057L)
-    assert(variants.head.variant.variant.getReferenceAllele === "A")
-    assert(variants.head.variant.variant.getVariantAllele === "G")
-    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
-    assert(alleles.length === 2)
-    assert(alleles.head === ADAMGenotypeAllele.Ref)
-    assert(alleles.last === ADAMGenotypeAllele.Alt)
-  }
-
-  sparkTest("call doesn't change after \"aggressive\" trimming") {
-    val reads = na12878_chr20_snp_reads.collect.toSeq
-    val reference = rcap_long_trim.getReference(reads)
-
-    val kmerGraph = rcap_long_trim.assemble(reads, reference)
-
-    val variants = rcap_long_trim.phaseAssembly(reads, kmerGraph, reference)
+    val variants = rc_long.scoreHaplotypes(reads, kmerGraph, reference, Some(ReferenceRegion("chr20",
+      225000L,
+      225100L)))
 
     assert(variants.length === 1)
     assert(variants.head.position.pos === 225057L)
