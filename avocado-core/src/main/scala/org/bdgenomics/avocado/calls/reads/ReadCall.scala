@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013. Regents of the University of California
+ * Copyright (c) 2013-2014. Regents of the University of California
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ abstract class ReadCall extends VariantCall {
    * @param[in] pileupGroups An RDD containing reads.
    * @return An RDD containing called variants.
    */
-  def call(pileupGroups: RDD[ADAMRecord]): RDD[ADAMVariantContext]
+  def call(reads: RDD[ADAMRecord]): RDD[ADAMVariantContext]
 
 }
 
