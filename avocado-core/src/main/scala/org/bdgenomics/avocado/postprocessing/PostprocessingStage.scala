@@ -51,7 +51,7 @@ private[postprocessing] trait GenotypeFilter extends Serializable {
    * @return If not all genotypes have been filtered out, a new variant context, else none.
    */
   def createNewVC(vc: ADAMVariantContext): Option[ADAMVariantContext] = {
-    val filteredGt = filterGenotypes(vc.genotypes)
+    val filteredGt = filterGenotypes(vc.genotypes.toSeq)
 
     if (filteredGt.length > 0) {
       Some(ADAMVariantContext.buildFromGenotypes(filteredGt))
