@@ -483,7 +483,7 @@ abstract class ReadCallHaplotypes(
 
     // generate region maps
     val regionsAndReference: RDD[(String, Seq[RichADAMRecord], Option[ReferenceRegion])] = regions.map(kv => {
-      (getReference(kv._2), kv._2, bcastPset.value.getRegion(kv._1))
+      (getReference(kv._2.toSeq), kv._2.toSeq, bcastPset.value.getRegion(kv._1))
     })
 
     log.info("Calling variants with local assembly.")
