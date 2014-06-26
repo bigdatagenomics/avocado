@@ -26,7 +26,7 @@
   <licenses>
     <license>
       <name>Apache License</name>
-      <url>https://raw.github.com/bigdatagenomics/adam/master/LICENSE.txt</url>
+      <url>https://raw.github.com/bigdatagenomics/avocado/master/LICENSE.txt</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
@@ -58,6 +58,32 @@
     <outputDirectory>target/scala-${scala.version}/classes</outputDirectory>
     <testOutputDirectory>target/scala-${scala.version}/test-classes</testOutputDirectory>
     <plugins>
+      <plugin>
+        <groupId>com.mycila.maven-license-plugin</groupId>
+        <artifactId>maven-license-plugin</artifactId>
+        <version>1.10.b1</version>
+        <configuration>
+          <header>LICENSE_header.txt</header>
+          <strictCheck>true</strictCheck>
+          <properties>
+            <owner>Big Data Genomics Developers</owner>
+            <email>adam-developers@googlegroups.com</email>
+          </properties>
+          <includes>
+            <include>**/src/main/scala/**</include>
+            <include>**/src/test/scala/**</include>
+            <include>**/src/main/java/**</include>
+            <include>**/src/test/scala/**</include>
+          </includes>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
