@@ -72,8 +72,8 @@ private[reads] class ReadCallExternal(contigLengths: Map[String, Long],
     }
 
     def writeHeader() {
-      // this also is a stink. samtools writes the set header...
-      writeHeader("")
+      // this also is a stink...
+      writeHeader("") //getFileHeader.getTextHeader)
     }
   }
 
@@ -93,8 +93,10 @@ private[reads] class ReadCallExternal(contigLengths: Map[String, Long],
       // cram data into standard in and flush
       records.foreach(r => {
         if (count % 1000 == 0) {
-          println("Have written " + count + " reads.")
+          stream.flush
+          println("flush succeeded")
         }
+        println("Have written " + count + " reads.")
 
         count += 1
 
@@ -114,52 +116,66 @@ private[reads] class ReadCallExternal(contigLengths: Map[String, Long],
     Sorting.stableSort(reads, (kv1: (ReferencePosition, SAMRecordWritable), kv2: (ReferencePosition, SAMRecordWritable)) => {
       kv1._1.compare(kv2._1) == -1
     })
+    println("have " + reads.length + " reads")
 
-    // get temp directory for vcf output
-    val tempDir = Files.createTempDirectory("vcf_out")
+    // we can get empty partitions if we:
+    // - have contigs that do not have reads mapped to them
+    // - don't have unmapped reads in our dataset
+    if (reads.length == 0) {
+      // can't write a bam file of length 0 ;)
+      Iterator()
+    } else {
+      // get temp directory for vcf output
+      val tempDir = Files.createTempDirectory("vcf_out")
 
-    // build snap process
-    val pb = new ProcessBuilder(cmd.replaceAll("::VCFOUT::", tempDir.toAbsolutePath.toString + "/calls.vcf"))
+      // build snap process
+      val cmdUpdated = cmd.replaceAll("::VCFOUT::",
+        tempDir.toAbsolutePath.toString + "/calls.vcf")
+      println("running: " + cmdUpdated)
+      val pb = new ProcessBuilder(cmdUpdated.split(" ").toList)
 
-    // redirect error and get i/o streams
-    pb.redirectError(ProcessBuilder.Redirect.INHERIT)
+      // redirect error and get i/o streams
+      pb.redirectError(ProcessBuilder.Redirect.INHERIT)
 
-    // start process and get pipes
-    val process = pb.start()
-    val inp = process.getOutputStream()
+      // start process and get pipes
+      val process = pb.start()
+      val inp = process.getOutputStream()
 
-    // get thread pool with two threads
-    val pool: ExecutorService = Executors.newFixedThreadPool(2)
+      // get thread pool with two threads
+      val pool: ExecutorService = Executors.newFixedThreadPool(2)
 
-    // build java list of things to execute
-    pool.submit(new ExternalWriter(reads, header.header, inp))
+      // build java list of things to execute
+      pool.submit(new ExternalWriter(reads, header.header, inp))
 
-    // wait for process to finish
-    process.waitFor()
+      // wait for process to finish
+      process.waitFor()
 
-    // shut down pool
-    pool.shutdown()
+      // shut down pool
+      pool.shutdown()
 
-    // get vcf data - no index
-    val vcfFile = new VCFFileReader(new File(tempDir.toAbsolutePath.toString + "/calls.vcf"))
-    val iterator = vcfFile.iterator()
-    var records = List[VariantContextWritable]()
+      println("process completed")
 
-    // loop and collect records
-    while (iterator.hasNext()) {
-      val record = iterator.next()
+      // get vcf data - no index
+      val vcfFile = new VCFFileReader(new File(tempDir.toAbsolutePath.toString + "/calls.vcf"), false)
+      val iterator = vcfFile.iterator()
+      var records = List[VariantContextWritable]()
 
-      // wrap variant context and append
-      val vcw = new VariantContextWritable()
-      vcw.set(record)
-      records = vcw :: records
+      // loop and collect records
+      while (iterator.hasNext()) {
+        val record = iterator.next()
+
+        // wrap variant context and append
+        val vcw = new VariantContextWritable()
+        vcw.set(record)
+        records = vcw :: records
+      }
+
+      // need to close iterator - another code smell, but is required by samtools
+      iterator.close()
+
+      // convert back to iterator and return
+      records.toIterator
     }
-
-    // need to close iterator - another code smell, but is required by samtools
-    iterator.close()
-
-    // convert back to iterator and return
-    records.toIterator
   }
 
   def call(rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
@@ -173,9 +189,14 @@ private[reads] class ReadCallExternal(contigLengths: Map[String, Long],
     // broadcast header
     val hdrBcast = reads.context.broadcast(SAMFileHeaderWritable(header))
 
+    println("have " + reads.count + " reads")
+
     // key reads by position and repartition
-    val readsByPosition = reads.keyBy(r => ReferencePosition(r.get.getReferenceName, r.get.getAlignmentStart))
+    val readsByPosition = reads.keyBy(r => ReferencePosition(r.get.getReferenceName.toString, r.get.getAlignmentStart))
       .partitionBy(new GenomicRegionPartitioner(numPart, contigLengths))
+
+    println("have " + readsByPosition.count + " reads after partitioning")
+    readsByPosition.foreachPartition(i => println("have " + i.length + " reads per partition"))
 
     // map partitions to external program
     val variants = readsByPosition.mapPartitions(r => callVariants(r, hdrBcast.value))
