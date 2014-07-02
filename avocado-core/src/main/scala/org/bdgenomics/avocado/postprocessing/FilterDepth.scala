@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.postprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.ADAMGenotype
+import org.bdgenomics.formats.avro.ADAMGenotype
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 

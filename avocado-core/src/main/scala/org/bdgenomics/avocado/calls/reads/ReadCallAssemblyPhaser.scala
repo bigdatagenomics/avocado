@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.calls.reads
 
-import org.bdgenomics.adam.avro.{
+import org.bdgenomics.formats.avro.{
   ADAMContig,
   ADAMGenotype,
   ADAMGenotypeAllele,

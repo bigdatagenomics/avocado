@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.preprocessing
 
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.adam.models.SnpTable
 import org.bdgenomics.adam.rdd.ADAMContext._
 import java.io.File

@@ -51,7 +51,7 @@ class HaplotypePairArgmaxSuite extends FunSuite {
     assert(aOut(1) > 0.74 && aOut(1) < 0.76)
   }
 
-  test("throw assert for invalid formats passed to ratio") {
+  test("throw assert for invalid formats.avro passed to ratio") {
     intercept[AssertionError] {
       HaplotypePairArgmax.ratio(Array[Double]())
     }

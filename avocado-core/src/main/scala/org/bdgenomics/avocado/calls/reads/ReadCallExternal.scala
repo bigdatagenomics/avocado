@@ -25,7 +25,7 @@ import java.util.concurrent.{ ExecutorService, Executors }
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.adam.converters.VariantContextConverter
 import org.bdgenomics.adam.models.{ SAMFileHeaderWritable, ADAMVariantContext, ReferencePosition }
 import org.bdgenomics.adam.rdd.ADAMContext._

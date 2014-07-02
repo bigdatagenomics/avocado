@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.preprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 
 trait PreprocessingStage {
 

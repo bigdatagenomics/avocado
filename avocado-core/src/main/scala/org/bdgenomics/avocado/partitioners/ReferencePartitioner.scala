@@ -20,7 +20,7 @@ package org.bdgenomics.avocado.partitioners
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 trait ReferencePartitionerCompanion {

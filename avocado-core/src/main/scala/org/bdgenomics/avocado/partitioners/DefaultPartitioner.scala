@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.partitioners
 
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration

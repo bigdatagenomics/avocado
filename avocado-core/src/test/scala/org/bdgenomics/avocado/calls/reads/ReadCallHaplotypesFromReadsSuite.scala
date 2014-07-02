@@ -24,7 +24,7 @@ import org.bdgenomics.adam.rdd.ADAMContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
 import org.bdgenomics.adam.util.SparkFunSuite
-import org.bdgenomics.adam.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
+import org.bdgenomics.formats.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
 import org.bdgenomics.avocado.algorithms.hmm._
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import parquet.filter.UnboundRecordFilter

@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.input
 
-import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
+import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
 import org.bdgenomics.adam.predicates.UniqueMappedReadPredicate
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.apache.commons.configuration.SubnodeConfiguration

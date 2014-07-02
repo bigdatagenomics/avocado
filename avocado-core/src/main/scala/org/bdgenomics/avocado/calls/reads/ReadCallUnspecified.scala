@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.calls.reads
 
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.avocado.calls.VariantCallCompanion
 import org.bdgenomics.avocado.partitioners.PartitionSet

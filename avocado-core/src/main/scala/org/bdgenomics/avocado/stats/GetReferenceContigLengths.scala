@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.stats
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.ADAMNucleotideContigFragment
+import org.bdgenomics.formats.avro.ADAMNucleotideContigFragment
 
 private[stats] object GetReferenceContigLengths {
 

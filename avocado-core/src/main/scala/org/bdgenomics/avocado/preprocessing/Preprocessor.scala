@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.preprocessing
 
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
 
