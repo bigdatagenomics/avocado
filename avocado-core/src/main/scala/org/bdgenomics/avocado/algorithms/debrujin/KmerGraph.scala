@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.algorithms.debrujin
 
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.adam.rich.RichADAMRecord
 import scala.annotation.tailrec
 import scala.collection.mutable.{ HashSet, HashMap, SortedSet }

@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.calls.pileup
 
-import org.bdgenomics.adam.avro.{ Base, ADAMContig, ADAMGenotype, ADAMPileup, ADAMVariant }
+import org.bdgenomics.formats.avro.{ Base, ADAMContig, ADAMGenotype, ADAMPileup, ADAMVariant }
 import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.calls.VariantCallCompanion

@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.postprocessing
 
-import org.bdgenomics.adam.avro.{ ADAMContig, ADAMGenotype, ADAMVariant }
+import org.bdgenomics.formats.avro.{ ADAMContig, ADAMGenotype, ADAMVariant }
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.scalatest.FunSuite

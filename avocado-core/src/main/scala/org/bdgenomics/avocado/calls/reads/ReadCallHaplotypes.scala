@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.calls.reads
 
 import net.sf.samtools.{ CigarElement, CigarOperator }
-import org.bdgenomics.adam.avro.{
+import org.bdgenomics.formats.avro.{
   ADAMContig,
   ADAMGenotype,
   ADAMGenotypeAllele,

@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.calls
 
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype }
+import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype }
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.avocado.calls.pileup.{ MPileupCallSimpleSNP, PileupCallSimpleSNP, PileupCallUnspecified }

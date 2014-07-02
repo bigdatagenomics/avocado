@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.calls.pileup
 
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMRDDFunctions
 import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }

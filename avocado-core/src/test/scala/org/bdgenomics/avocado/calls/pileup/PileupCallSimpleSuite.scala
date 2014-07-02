@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.calls.pileup
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.{ ADAMPileup, Base }
+import org.bdgenomics.formats.avro.{ ADAMPileup, Base }
 import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
 import scala.collection.JavaConversions._
 import org.scalatest.FunSuite

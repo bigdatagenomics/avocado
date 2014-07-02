@@ -20,7 +20,7 @@ package org.bdgenomics.avocado.calls.reads
 import org.bdgenomics.avocado.calls.VariantCall
 import org.apache.spark.{ SparkContext, Logging }
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.ADAMRecord
+import org.bdgenomics.formats.avro.ADAMRecord
 import org.bdgenomics.adam.models.ADAMVariantContext
 
 /**

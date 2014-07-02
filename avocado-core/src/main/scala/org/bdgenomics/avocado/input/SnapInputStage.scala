@@ -25,7 +25,7 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
 import org.apache.spark.SparkContext._
 import org.apache.spark.{ Logging, SparkContext }
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
+import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
 import org.bdgenomics.adam.converters.SAMRecordConverter
 import org.bdgenomics.adam.io.InterleavedFastqInputFormat
 import org.bdgenomics.adam.rdd.ADAMContext._

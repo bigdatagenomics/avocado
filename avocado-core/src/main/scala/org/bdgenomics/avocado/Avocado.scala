@@ -23,7 +23,7 @@ import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
 import org.kohsuke.args4j.{ Option => option, Argument }
-import org.bdgenomics.adam.avro.{
+import org.bdgenomics.formats.avro.{
   ADAMVariant,
   ADAMRecord,
   ADAMNucleotideContigFragment,
