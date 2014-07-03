@@ -29,7 +29,7 @@ import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
 import org.bdgenomics.adam.converters.SAMRecordConverter
 import org.bdgenomics.adam.io.InterleavedFastqInputFormat
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.models.{ RecordGroupDictionary, SequenceDictionary }
+import org.bdgenomics.adam.models.{ RecordGroup, RecordGroupDictionary, SequenceDictionary }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import net.sf.samtools.{ SAMFileReader, SAMRecord, SAMReadGroupRecord, SAMRecordIterator }
 import scala.collection.JavaConversions._
@@ -302,16 +302,16 @@ private[input] class SnapRunner(cmd: List[String]) extends Serializable with Log
     }
 
     // collect read group names
-    val readGroupNames = records.flatMap(getReadGroupName)
+    val readGroups = records.map(r => RecordGroup(r.getReadGroup))
       .toSeq
       .distinct
-    val readGroups = new RecordGroupDictionary(readGroupNames)
+    val readGroupDict = new RecordGroupDictionary(readGroups)
 
     // necessary data for conversion
     val recordConverter = new SAMRecordConverter
 
     // convert reads to ADAM and return
-    val newRecs = records.map(recordConverter.convert(_, dict, readGroups))
+    val newRecs = records.map(recordConverter.convert(_, dict, readGroupDict))
 
     // shut down pool
     pool.shutdown()
