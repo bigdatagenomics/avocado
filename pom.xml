@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <parent>
+    <groupId>org.sonatype.oss</groupId>
+    <artifactId>oss-parent</artifactId>
+    <version>7</version>
+    <relativePath/>
+  </parent>
+  
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.bdgenomics.avocado</groupId>
-  <artifactId>avocado</artifactId>
-  <version>0.0.2</version>
+  <artifactId>avocado-parent</artifactId>
+  <version>0.0.2-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>avocado: A Variant Caller, Distributed</name>
-
+  
   <properties>
     <adam.version>0.12.1-SNAPSHOT</adam.version>
-    <avro.version>1.7.4</avro.version>
+    <avro.version>1.7.6</avro.version>
     <java.version>1.7</java.version>
     <scala.version>2.10.3</scala.version>
     <scala.version.prefix>2.10</scala.version.prefix>
@@ -18,11 +25,13 @@
     <!-- Edit the following line to configure the Hadoop (HDFS) version. -->
     <hadoop.version>2.2.0</hadoop.version>
   </properties>
-
+  
   <modules>
     <module>avocado-sufficient-statistics</module>
     <module>avocado-core</module>
+    <module>avocado-cli</module>
   </modules>
+
   <licenses>
     <license>
       <name>Apache License</name>
@@ -48,7 +57,7 @@
       <organizationUrl>http://www.cs.berkeley.edu/</organizationUrl>
     </developer>
   </developers>
-
+  
   <issueManagement>
     <system>github</system>
     <url>https://github.com/bigdatagenomics/avocado/issues</url>
@@ -142,7 +151,6 @@
           </javacArgs>
         </configuration>
       </plugin>
-
       <!-- disable surefire -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -157,20 +165,6 @@
         <groupId>org.scalatest</groupId>
         <artifactId>scalatest-maven-plugin</artifactId>
         <version>1.0-RC2</version>
-        <configuration>
-          <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
-          <junitxml>.</junitxml>
-          <filereports>AvocadoTestSuite.txt</filereports>
-          <argLine>-Xmx1024m</argLine>
-        </configuration>
-        <executions>
-          <execution>
-            <id>test</id>
-            <goals>
-              <goal>test</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <groupId>org.scalariform</groupId>
@@ -204,94 +198,79 @@
     </repository>
   </repositories>
 
-  <dependencies>
+  <dependencyManagement>
+    <dependencies>
       <dependency>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-client</artifactId>
-          <version>${hadoop.version}</version>
-          <exclusions>
-              <exclusion>
-                  <groupId>asm</groupId>
-                  <artifactId>asm</artifactId>
-              </exclusion>
-              <exclusion>
-                  <groupId>org.jboss.netty</groupId>
-                  <artifactId>netty</artifactId>
-              </exclusion>
-              <exclusion>
-                  <groupId>org.codehaus.jackson</groupId>
-                  <artifactId>*</artifactId>
-              </exclusion>
-              <exclusion>
-                  <groupId>org.sonatype.sisu.inject</groupId>
-                  <artifactId>*</artifactId>
-              </exclusion>
-          </exclusions>
+        <groupId>org.bdgenomics.avocado</groupId>
+        <artifactId>avocado-core</artifactId>
+        <version>${project.version}</version>
       </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-      <version>${hadoop.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>asm</groupId>
-          <artifactId>asm</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.jboss.netty</groupId>
-          <artifactId>netty</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.codehaus.jackson</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.sonatype.sisu.inject</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.bdgenomics.adam</groupId>
-      <artifactId>adam-core</artifactId>
-      <version>${adam.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.bdgenomics.adam</groupId>
-      <artifactId>adam-core</artifactId>
-      <version>${adam.version}</version>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.bdgenomics.adam</groupId>
-      <artifactId>adam-cli</artifactId>
-      <version>${adam.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_${scala.version.prefix}</artifactId>
-      <version>1.9.2</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>commons-configuration</groupId>
-      <artifactId>commons-configuration</artifactId>
-      <version>1.10</version>
-    </dependency>
-    <dependency>
-      <groupId>args4j</groupId>
-      <artifactId>args4j</artifactId>
-      <version>2.0.23</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-core_${scala.version.prefix}</artifactId>
-      <version>${spark.version}</version>
-    </dependency>
-  </dependencies>
+      <dependency>
+        <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-client</artifactId>
+        <version>${hadoop.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>asm</groupId>
+            <artifactId>asm</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.jboss.netty</groupId>
+            <artifactId>netty</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.sonatype.sisu.inject</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.bdgenomics.adam</groupId>
+        <artifactId>adam-core</artifactId>
+        <version>${adam.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.bdgenomics.adam</groupId>
+        <artifactId>adam-core</artifactId>
+        <version>${adam.version}</version>
+        <type>test-jar</type>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.bdgenomics.adam</groupId>
+        <artifactId>adam-cli</artifactId>
+        <version>${adam.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.scalatest</groupId>
+        <artifactId>scalatest_${scala.version.prefix}</artifactId>
+        <version>1.9.2</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>commons-configuration</groupId>
+        <artifactId>commons-configuration</artifactId>
+        <version>1.10</version>
+      </dependency>
+      <dependency>
+        <groupId>args4j</groupId>
+        <artifactId>args4j</artifactId>
+        <version>2.0.23</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_${scala.version.prefix}</artifactId>
+        <version>${spark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro</artifactId>
+        <version>${avro.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 </project>

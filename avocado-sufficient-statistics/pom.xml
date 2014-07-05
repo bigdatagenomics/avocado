@@ -2,15 +2,16 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <groupId>org.bdgenomics.avocado</groupId>
-    <artifactId>avocado</artifactId>
-    <version>0.0.2</version>
+    <artifactId>avocado-parent</artifactId>
+    <version>0.0.2-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>avocado-sufficient-statistics</artifactId>
-  <version>0.0.2</version>
+  <version>0.0.2-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>avocado: sufficient statistics packaging code/format</name>
 
@@ -46,6 +47,7 @@
       </plugin>
     </plugins>
   </build>
+
   <repositories>
     <repository>
       <id>sonatype-nexus-snapshots</id>
@@ -58,11 +60,11 @@
       </snapshots>
     </repository>
   </repositories>
+
   <dependencies>
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <version>${avro.version}</version>
     </dependency>
   </dependencies>
 </project>

@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.bdgenomics.avocado
+package org.bdgenomics.avocado.cli
 
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.commons.configuration.plist.PropertyListConfiguration
