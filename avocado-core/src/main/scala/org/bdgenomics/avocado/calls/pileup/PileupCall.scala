@@ -22,7 +22,6 @@ import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMRDDFunctions
 import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
 import org.bdgenomics.avocado.calls.VariantCall
-import org.bdgenomics.avocado.Avocado
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
 
