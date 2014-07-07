@@ -70,11 +70,6 @@ private[reads] class ReadCallExternal(contigLengths: Map[String, Long],
     def writeAlignment(record: SAMRecordWritable) {
       writeAlignment(record.get)
     }
-
-    def writeHeader() {
-      // this also is a stink...
-      writeHeader("") //getFileHeader.getTextHeader)
-    }
   }
 
   class ExternalWriter(records: Array[(ReferencePosition, SAMRecordWritable)],
@@ -83,9 +78,8 @@ private[reads] class ReadCallExternal(contigLengths: Map[String, Long],
     def run() {
       val writer = new BAMStreamWriter(stream)
 
-      // write header
+      // set header - header is written on first writeAlignment call
       writer.setHeader(header)
-      writer.writeHeader()
 
       var count = 0
       println("Starting to write records.")
