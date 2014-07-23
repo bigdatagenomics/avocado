@@ -1,10 +1,11 @@
 *.swp
 *~
-#*
+*#*
 *.bam*
 *.adam*
 *.vcf*
 target
+*.log
 
 # Intellij
 .idea/

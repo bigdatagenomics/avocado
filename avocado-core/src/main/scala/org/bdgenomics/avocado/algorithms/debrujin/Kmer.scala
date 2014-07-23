@@ -17,6 +17,8 @@
  */
 package org.bdgenomics.avocado.algorithms.debrujin
 
+import scala.math.pow
+
 /**
  * A kmer has a prefix of length k - 1 and a unit length suffix.
  *
@@ -58,6 +60,7 @@ class KmerPath(val edges: Seq[Kmer]) extends Ordered[KmerPath] {
 
   val weight: Int = edges.map(_.weight).reduce(_ + _)
   val len = edges.size
+  val meanWeight: Double = weight.toDouble / len.toDouble
   /**
    * Builds haplotype string from a kmer path using overlap between kmers.
    *
