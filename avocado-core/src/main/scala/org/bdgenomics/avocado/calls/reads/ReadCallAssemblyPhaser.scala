@@ -38,6 +38,7 @@ import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
+import scala.annotation.tailrec
 import scala.collection.mutable.HashSet
 import scala.math._
 
@@ -95,11 +96,15 @@ class ReadCallAssemblyPhaser(val _partitions: PartitionSet,
                              val trimSpurs: Boolean = true,
                              val lowCoverageTrimmingThreshold: Option[Double] = None,
                              val _haplotypeAlignerConfig: TransitionMatrixConfiguration = TransitionMatrixConfiguration(),
-                             val _readAlignerConfig: TransitionMatrixConfiguration = TransitionMatrixConfiguration()) extends ReadCallHaplotypes(
+                             val _readAlignerConfig: TransitionMatrixConfiguration = TransitionMatrixConfiguration(),
+                             val weightThreshold: Double = 0.1,
+                             val minAlts: Int = 2) extends ReadCallHaplotypes(
   _partitions,
   _flankLength,
   _haplotypeAlignerConfig,
   _readAlignerConfig) {
+
+  assert(minAlts >= 1, "Cannot set min alt count to less than 1.")
 
   override val companion: VariantCallCompanion = ReadCallAssemblyPhaser
 
@@ -116,6 +121,8 @@ class ReadCallAssemblyPhaser(val _partitions: PartitionSet,
   override def generateHaplotypes(region: Seq[RichADAMRecord], reference: String): Seq[String] = {
     val readLen = region(0).getSequence.length
     val regionLen = reference.length
+
+    val tg = System.nanoTime
     var kmerGraph = KmerGraph(kmerLen,
       readLen,
       regionLen,
@@ -125,6 +132,31 @@ class ReadCallAssemblyPhaser(val _partitions: PartitionSet,
       maxEntries,
       trimSpurs,
       lowCoverageTrimmingThreshold)
-    kmerGraph.allPaths.map(_.haplotypeString).toSeq
+
+    val paths = kmerGraph.allPaths
+
+    @tailrec def dropAlts(neededWeight: Double,
+                          minHaplotypes: Int,
+                          haplotypes: Seq[KmerPath],
+                          pickedHaplotypes: Seq[KmerPath] = Seq()): Seq[KmerPath] = {
+      // return if we're down to the minimum number of haplotypes, or if we would take
+      // the current head haplotype
+      if (haplotypes.length == 0 ||
+        (pickedHaplotypes.length >= minHaplotypes &&
+          haplotypes.head.meanWeight < neededWeight)) {
+        pickedHaplotypes
+      } else {
+        dropAlts(neededWeight,
+          minHaplotypes,
+          haplotypes.drop(1),
+          pickedHaplotypes ++ haplotypes.take(1))
+      }
+    }
+
+    val maxWeight = paths.map(_.meanWeight).reduce(_ max _)
+    val keepWeight = (1.0 - weightThreshold) * maxWeight
+
+    dropAlts(keepWeight, minAlts, paths.toSeq.sortBy(_.meanWeight).reverse)
+      .map(_.haplotypeString)
   }
 }

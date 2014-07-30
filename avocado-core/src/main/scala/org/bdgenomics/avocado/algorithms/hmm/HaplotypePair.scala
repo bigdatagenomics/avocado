@@ -56,20 +56,23 @@ object HaplotypePair {
  * @param haplotype1 First haplotype of pair.
  * @param haplotype2 Second haplotype of pair.
  */
-class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: HMMAligner = new HMMAligner) {
+class HaplotypePair(val haplotype1: Haplotype,
+                    val haplotype2: Haplotype,
+                    hmm: HMMAligner = new HMMAligner) {
 
   lazy val hasVariants = haplotype1.hasVariants || haplotype2.hasVariants
   lazy val (pairLikelihood, readAssignments) = scorePairLikelihood
   lazy val variantCount = haplotype1.variantCount + haplotype2.variantCount
 
   override def toString(): String = {
-    haplotype1.sequence + ", " + haplotype1.hasVariants + ", " +
-      haplotype2.sequence + ", " + haplotype2.hasVariants + ", " +
-      ("%1.3f" format pairLikelihood) + ", " + hasVariants +
+    haplotype1.sequence + ", " + haplotype1.hasVariants + "\n" +
+      haplotype2.sequence + ", " + haplotype2.hasVariants + "\n" +
+      ("%1.3f" format pairLikelihood) + ", " + hasVariants + "\n" +
       (0 until readAssignments.length).map(i => {
         readAssignments(i) + " <- " +
           haplotype1.perReadLikelihoods(i) + ", " +
-          haplotype2.perReadLikelihoods(i)
+          haplotype2.perReadLikelihoods(i) + ", Δ = " +
+          (haplotype1.perReadLikelihoods(i) - haplotype2.perReadLikelihoods(i))
       }).reduce(_ + "\n" + _)
   }
 

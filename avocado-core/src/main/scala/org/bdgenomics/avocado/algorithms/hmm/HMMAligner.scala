@@ -36,7 +36,7 @@ object HMMAligner {
  *
  * All likelihoods are computed in log-space as are the input parameters
  */
-class HMMAligner(val transitionProbabilities: TransitionMatrixConfiguration = new TransitionMatrixConfiguration()) {
+class HMMAligner(val transitionProbabilities: TransitionMatrixConfiguration = new TransitionMatrixConfiguration()) extends Aligner {
 
   val transitionMatrix = TransitionMatrix(transitionProbabilities)
 

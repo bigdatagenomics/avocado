@@ -19,6 +19,7 @@ package org.bdgenomics.avocado.algorithms.hmm
 
 import scala.math.Ordering
 import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.util.PhredUtils
 import scala.math._
 
 /**
@@ -39,6 +40,9 @@ class Haplotype(val sequence: String,
     name + ", " + start + ", " + end
   }
 
+  val fastAligner = new FastAligner(sequence, region.head.record.getSequence.length)
+  val exactAligner = new ExactReadAligner(sequence, region.head.record.getSequence.length)
+
   assert(reference.length > 0, "Reference has length 0 on " + reg + ".")
   assert(sequence.length > 0, "Haplotype has length 0 on " + reg + ".")
   lazy val referenceAlignment = hmm.alignSequences(reference, sequence, null)
@@ -47,19 +51,18 @@ class Haplotype(val sequence: String,
   lazy val variantCount = referenceAlignment.alignmentStateSequence
     .filter(s => s == 'X' || s == 'I' || s == 'D').length
 
-  lazy val perReadLikelihoods: Seq[Double] = {
+  lazy val perReadAlignments: Seq[Alignment] = {
     region.map(read => {
       try {
-        val alignment = HMMAligner.align(sequence, read.getSequence.toString, null, readAlignerConfig)
-        alignment.likelihood + alignment.prior
+        fastAligner.alignSequences(sequence, read.getSequence.toString, read.getQual.toString)
       } catch {
         case _: Throwable => {
-          0.0
+          exactAligner.alignSequences(sequence, read.getSequence.toString, read.getQual.toString)
         }
       }
     })
   }
-
+  lazy val perReadLikelihoods: Seq[Double] = perReadAlignments.map(_.likelihood)
   lazy val readsLikelihood = perReadLikelihoods.sum
 
   override def toString(): String = {
