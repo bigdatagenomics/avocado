@@ -111,6 +111,8 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
   assert(callZipped.length == partitionsZipped.length,
     "Must have a 1-to-1 mapping between partitioners and calls.")
 
+  val debug = args.debug
+
   private def getStringArrayFromConfig(name: String): Array[String] = {
     config.getStringArray(name).map(_.toString)
   }
@@ -149,12 +151,16 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
       // filter reads that are in the partition into a new call set and add the call
       val filteredReads = rdd.filter(kv => partitions.isInSet(kv._1))
         .map(kv => kv._2)
-      log.info("avocado: have " + filteredReads.count + " reads in " + p.companion.partitionerName)
+      if (debug) {
+        log.info("avocado: have " + filteredReads.count + " reads in " + p.companion.partitionerName)
+      }
       callsets = (call, filteredReads) :: callsets
 
       // filter out reads that are wholly contained in the last partitoner
       rdd = rdd.filter(kv => partitions.isOutsideOfSet(kv._1))
-      log.info("avocado: have " + rdd.count() + " reads left.")
+      if (debug) {
+        log.info("avocado: have " + rdd.count() + " reads left.")
+      }
     })
 
     // filter out variant calls that are not actually callable
@@ -171,7 +177,9 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
   def preProcessReads(reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
     var processedReads = reads //.cache
 
-    log.info("avocado: Preprocessing " + processedReads.count + " reads.")
+    if (debug) {
+      log.info("avocado: Preprocessing " + processedReads.count + " reads.")
+    }
 
     // loop over preprocessing stages and apply
     preprocessingStagesZippedWithNames.foreach(p => {
@@ -202,7 +210,9 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
       // get call and rdd pair
       val (call, rdd) = pair
 
-      log.info("avocado: Running " + call.companion.callName + " on " + rdd.count + " reads.")
+      if (debug) {
+        log.info("avocado: Running " + call.companion.callName + " on " + rdd.count + " reads.")
+      }
 
       // apply call
       call.call(rdd)
