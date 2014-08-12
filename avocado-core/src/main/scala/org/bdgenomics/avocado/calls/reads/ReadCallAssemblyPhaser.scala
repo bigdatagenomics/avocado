@@ -133,7 +133,18 @@ class ReadCallAssemblyPhaser(val _partitions: PartitionSet,
       trimSpurs,
       lowCoverageTrimmingThreshold)
 
-    val paths = kmerGraph.allPaths
+    val paths: scala.collection.mutable.SortedSet[KmerPath] = try {
+      kmerGraph.allPaths
+    } catch {
+      case soe: java.lang.StackOverflowError => {
+        log.error("Caught stack overflow error when assembling region on " +
+          region.head.getContig.getContigName + " from " +
+          region.head.getStart + " to " + region.last.end.get +
+          ". Will only compute reference likelihoods here.")
+
+        scala.collection.mutable.SortedSet()
+      }
+    }
 
     @tailrec def dropAlts(neededWeight: Double,
                           minHaplotypes: Int,
@@ -153,7 +164,7 @@ class ReadCallAssemblyPhaser(val _partitions: PartitionSet,
       }
     }
 
-    val maxWeight = paths.map(_.meanWeight).reduce(_ max _)
+    val maxWeight = paths.map(_.meanWeight).fold(0.0)(_ max _)
     val keepWeight = (1.0 - weightThreshold) * maxWeight
 
     dropAlts(keepWeight, minAlts, paths.toSeq.sortBy(_.meanWeight).reverse)
