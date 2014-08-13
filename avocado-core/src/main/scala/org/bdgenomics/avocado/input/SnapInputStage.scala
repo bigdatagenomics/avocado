@@ -23,6 +23,7 @@ import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.hadoop.io.{ LongWritable, Text }
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
 import org.apache.spark.SparkContext._
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{ Logging, SparkContext }
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
@@ -31,10 +32,10 @@ import org.bdgenomics.adam.io.InterleavedFastqInputFormat
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.models.{ RecordGroup, RecordGroupDictionary, SequenceDictionary }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
-import net.sf.samtools.{ SAMFileReader, SAMRecord, SAMReadGroupRecord, SAMRecordIterator }
+import net.sf.samtools._
 import scala.collection.JavaConversions._
 
-private[input] object SnapInputStage extends InputStage {
+private[input] object SnapInputStage extends InputStage with Logging {
 
   val stageName = "SnapInputStage"
 
@@ -65,6 +66,7 @@ private[input] object SnapInputStage extends InputStage {
 
     val numMachines = config.getInt("numMachines")
     val coresPerMachine = config.getInt("coresPerMachine")
+    val debug = config.getBoolean("debug", false)
 
     /* Implement the following flags for SNAP:
      * 
@@ -174,7 +176,8 @@ private[input] object SnapInputStage extends InputStage {
     val cmd: List[String] = cmdOpts.flatMap((o: Option[String]) => o).reverse
 
     // set up snap runner
-    val runner = new SnapRunner(cmd)
+    val rg = if (config.containsKey("defaultReadGroup")) config.getString("defaultReadGroup") else "FASTQ"
+    val runner = new SnapRunner(cmd, rg)
 
     // read fastq in from file
     val fastqIn: RDD[(Void, Text)] = sc.newAPIHadoopFile(inputPath,
@@ -182,16 +185,26 @@ private[input] object SnapInputStage extends InputStage {
       classOf[Void],
       classOf[Text])
 
-    val fastqAsStrings: RDD[String] = fastqIn.map(kv => kv._2.toString)
-      .coalesce(numMachines)
+    if (debug) {
+      log.info("SNAP input DebugString:\n" + fastqIn.toDebugString)
+    }
+    val fastqAsText: RDD[Text] = fastqIn.coalesce(numMachines, false).map(_._2)
+    if (debug) {
+      log.info("SNAP coalesced input DebugString:\n" + fastqAsText.toDebugString)
+    }
 
     // necessary data for conversion
-    val seqDictBcast = fastqAsStrings.context.broadcast(reference.adamGetSequenceDictionary)
+    val seqDictBcast = fastqAsText.context.broadcast(reference.adamGetSequenceDictionary)
 
     // align reads using snap
-    val reads = fastqAsStrings.mapPartitionsWithIndex(runner.mapReads(_, _, seqDictBcast.value))
+    val reads = fastqAsText.mapPartitionsWithIndex(runner.mapReads(_, _, seqDictBcast.value))
 
-    reads.coalesce(numMachines * coresPerMachine, true)
+    val result = reads.coalesce(numMachines * coresPerMachine * 4, true).persist(StorageLevel.DISK_ONLY_2)
+    if (debug) {
+      log.info("SNAP output DebugString:\n" + result.toDebugString)
+    }
+    log.info("produced " + result.count + " reads")
+    result
   }
 }
 
@@ -203,48 +216,85 @@ private[input] object SnapInputStage extends InputStage {
  *
  * @param cmd Command line arguments to run, split up at whitespace.
  */
-private[input] class SnapRunner(cmd: List[String]) extends Serializable with Logging {
+private[input] class SnapRunner(cmd: List[String], rg: String)
+    extends Serializable with Logging {
 
   log.info("Running SNAP as: " + cmd.reduce(_ + " " + _))
 
-  class SnapWriter(fastqStrings: Array[String],
-                   stream: OutputStream) extends Callable[List[SAMRecord]] {
-    def call(): List[SAMRecord] = {
+  class SnapWriter(fastqStrings: Iterator[Text],
+                   stream: OutputStream) extends Callable[Iterator[SAMRecord]] {
+    def call(): Iterator[SAMRecord] = {
 
       // cram data into standard in and flush
-      fastqStrings.foreach(s => stream.write(s.getBytes))
+      log.info("writing FASTQ strings for SNAP")
+      var n = 0
+      fastqStrings.foreach(s => {
+        stream.write(s.getBytes)
+        n += 1;
+        if (n % 100000 == 0) {
+          stream.flush;
+          log.info("wrote " + n + " FASTQ strings for SNAP")
+        }
+      })
 
       // flush and close stream
       stream.flush()
       stream.close()
+      log.info("wrote all " + n + " FASTQ strings for SNAP")
 
       // this is a hack; require compatibility with Callable, which needs return
-      List[SAMRecord]()
+      Iterator[SAMRecord]()
     }
   }
 
-  class SnapReader(stream: InputStream)
-      extends Callable[List[SAMRecord]] {
+  class SnapReader(stream: InputStream, process: Process, pool: ExecutorService)
+      extends Callable[Iterator[SAMRecord]] {
 
-    def call(): List[SAMRecord] = {
+    def call(): Iterator[SAMRecord] = {
 
-      // push std out from snap into sam file reader
-      val reader = new SAMFileReader(stream)
-
-      // get iterator from sam file reader
-      val iter: SAMRecordIterator = reader.iterator()
-
-      var records = List[SAMRecord]()
-
-      // loop through our poor iterator
-      while (iter.hasNext()) {
-        records ::= iter.next()
+      class WrapIterator(inner: Iterator[SAMRecord])
+          extends Iterator[SAMRecord] {
+        var n = 0
+        def next(): SAMRecord = {
+          n += 1
+          if (n % 100000 == 0) {
+            log.info("read " + n + " SAM records from SNAP")
+          }
+          var again = true
+          var result = new SAMRecord(new SAMFileHeader)
+          while (again) {
+            again = false
+            try {
+              result = inner.next()
+            } catch {
+              case ex: Exception =>
+                log.warn("exception reading file" + ex)
+                again = true
+            }
+          }
+          result
+        }
+        def hasNext(): Boolean = {
+          val more = inner.hasNext()
+          if (!more) {
+            log.info("read all " + n + " SAM records from SNAP")
+            /*
+            val result = process.waitFor()
+            if (result != 0) {
+              log.error("SNAP exited with error code " + result)
+            } else {
+              log.info("SNAP process finished")
+            }
+            pool.shutdown()
+            */
+          }
+          more
+        }
       }
 
-      // close iterator, because that makes god damn sense
-      iter.close()
-
-      records
+      // push std out from snap into sam file reader
+      // todo: ensure it gets closed?
+      new WrapIterator(new SAMFileReader(stream).iterator())
     }
   }
 
@@ -258,7 +308,7 @@ private[input] class SnapRunner(cmd: List[String]) extends Serializable with Log
    * @param dict Sequence dictionary describing reference contigs.
    * @return An iterator containing aligned reads.
    */
-  def mapReads(idx: Int, fastqStrings: Iterator[String], dict: SequenceDictionary): Iterator[ADAMRecord] = {
+  def mapReads(idx: Int, fastqStrings: Iterator[Text], dict: SequenceDictionary): Iterator[ADAMRecord] = {
 
     // build snap process
     val pb = new ProcessBuilder(cmd)
@@ -267,54 +317,27 @@ private[input] class SnapRunner(cmd: List[String]) extends Serializable with Log
     pb.redirectError(ProcessBuilder.Redirect.INHERIT)
 
     // start process and get pipes
-    log.info("Starting SNAP on partition " + idx + "...")
+    log.info("Starting SNAP on partition " + idx + " on host " + java.net.InetAddress.getLocalHost().getHostName())
     val process = pb.start()
     val inp = process.getOutputStream()
     val out = process.getInputStream()
 
     // get thread pool with two threads
-    val pool: ExecutorService = Executors.newFixedThreadPool(2)
+    val pool: ExecutorService = Executors.newFixedThreadPool(1)
 
-    // build java list of things to execute
-    val exec: java.util.List[Callable[List[SAMRecord]]] = List(new SnapWriter(fastqStrings.toArray, inp),
-      new SnapReader(out))
+    // build collection of things to execute, fork into separate thread
+    pool.submit(new SnapWriter(fastqStrings, inp))
 
-    // launch writer and reader in pool
-    val futures: List[Future[List[SAMRecord]]] = pool.invokeAll(exec)
-
-    // wait for process shutdown
-    process.waitFor()
-    log.info("SNAP is done running on partition " + idx + ".")
-
-    // get read data
-    val rec = futures.map(_.get())
-    val records = rec(1) // select the records from the reader
-
-    /**
-     * Gets the name of the read group associated with a read.
-     *
-     * @param r Read to get read group from.
-     * @return Option containing read group name if available.
-     */
-    def getReadGroupName(r: SAMRecord): Option[String] = Option(r.getReadGroup) match {
-      case Some(rgr: SAMReadGroupRecord) => Some(rgr.getReadGroupId)
-      case None                          => None
-    }
-
-    // collect read group names
-    val readGroups = records.map(r => RecordGroup(r.getReadGroup))
-      .toSeq
-      .distinct
-    val readGroupDict = new RecordGroupDictionary(readGroups)
+    // get read data from SNAP stdout, shutdown process & pool at end
+    val records = new SnapReader(out, process, pool).call()
 
     // necessary data for conversion
+    val readGroupDict = new RecordGroupDictionary(List(new RecordGroup(rg, rg)))
     val recordConverter = new SAMRecordConverter
 
     // convert reads to ADAM and return
+    log.info("converting to ADAM")
     val newRecs = records.map(recordConverter.convert(_, dict, readGroupDict))
-
-    // shut down pool
-    pool.shutdown()
 
     newRecs.toIterator
   }
