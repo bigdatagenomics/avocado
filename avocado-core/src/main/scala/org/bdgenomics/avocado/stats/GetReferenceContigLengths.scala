@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.stats
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMNucleotideContigFragment
+import org.bdgenomics.formats.avro.NucleotideContigFragment
 
 private[stats] object GetReferenceContigLengths {
 
@@ -29,7 +29,7 @@ private[stats] object GetReferenceContigLengths {
    * @param rdd RDD of reference contigs.
    * @return List of contig lengths.
    */
-  def apply(rdd: RDD[ADAMNucleotideContigFragment]): Map[String, Long] = {
+  def apply(rdd: RDD[NucleotideContigFragment]): Map[String, Long] = {
     rdd.map(c => (c.getContig.getContigName.toString, c.getContig.getContigLength.toLong)).distinct.collect.toMap
   }
 

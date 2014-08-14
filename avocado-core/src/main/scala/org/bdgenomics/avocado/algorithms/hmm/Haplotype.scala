@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.algorithms.hmm
 
 import scala.math.Ordering
-import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.bdgenomics.adam.util.PhredUtils
 import scala.math._
 
@@ -28,14 +28,14 @@ import scala.math._
  * @param sequence String representing haplotype alignment.
  */
 class Haplotype(val sequence: String,
-                region: Seq[RichADAMRecord],
+                region: Seq[RichAlignmentRecord],
                 hmm: HMMAligner = new HMMAligner,
                 val reference: String = "",
                 readAlignerConfig: TransitionMatrixConfiguration = TransitionMatrixConfiguration()) {
 
   def reg: String = {
     val start = region.map(_.getStart).min
-    val end = region.flatMap(_.end).max
+    val end = region.map(_.getEnd).max
     val name = region.head.getContig.getContigName
     name + ", " + start + ", " + end
   }

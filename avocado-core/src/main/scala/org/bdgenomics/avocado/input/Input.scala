@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.input
 
-import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
+import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
@@ -39,8 +39,8 @@ object Input {
    */
   def apply(sc: SparkContext,
             inputPath: String,
-            reference: RDD[ADAMNucleotideContigFragment],
-            config: HierarchicalConfiguration): RDD[ADAMRecord] = {
+            reference: RDD[NucleotideContigFragment],
+            config: HierarchicalConfiguration): RDD[AlignmentRecord] = {
     // get input stage to use; if none is specified, default to input being aligned reads
     val stageName: String = config.getString("inputStage", "AlignedReads")
 

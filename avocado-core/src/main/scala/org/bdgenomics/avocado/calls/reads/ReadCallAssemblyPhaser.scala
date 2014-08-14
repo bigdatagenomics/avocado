@@ -18,17 +18,17 @@
 package org.bdgenomics.avocado.calls.reads
 
 import org.bdgenomics.formats.avro.{
-  ADAMContig,
-  ADAMGenotype,
-  ADAMGenotypeAllele,
-  ADAMRecord,
-  ADAMVariant
+  Contig,
+  Genotype,
+  GenotypeAllele,
+  AlignmentRecord,
+  Variant
 }
 import scala.collection.immutable.{ SortedSet, TreeSet }
-import org.bdgenomics.adam.models.{ ADAMVariantContext, ReferenceRegion }
+import org.bdgenomics.adam.models.{ VariantContext, ReferenceRegion }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rich.RichADAMRecord
-import org.bdgenomics.adam.rich.RichADAMRecord._
+import org.bdgenomics.adam.rich.RichAlignmentRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord._
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.algorithms.debrujin._
 import org.bdgenomics.avocado.algorithms.hmm._
@@ -118,7 +118,7 @@ class ReadCallAssemblyPhaser(val _partitions: PartitionSet,
    * @param reference String representing reference over the region.
    * @return Haplotype strings corresponding to the region.
    */
-  override def generateHaplotypes(region: Seq[RichADAMRecord], reference: String): Seq[String] = {
+  override def generateHaplotypes(region: Seq[RichAlignmentRecord], reference: String): Seq[String] = {
     val readLen = region(0).getSequence.length
     val regionLen = reference.length
 
@@ -139,7 +139,7 @@ class ReadCallAssemblyPhaser(val _partitions: PartitionSet,
       case soe: java.lang.StackOverflowError => {
         log.error("Caught stack overflow error when assembling region on " +
           region.head.getContig.getContigName + " from " +
-          region.head.getStart + " to " + region.last.end.get +
+          region.head.getStart + " to " + region.last.getEnd +
           ". Will only compute reference likelihoods here.")
 
         scala.collection.mutable.SortedSet()

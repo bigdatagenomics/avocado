@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.preprocessing
 
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.models.SnpTable
 import org.bdgenomics.adam.rdd.ADAMContext._
 import java.io.File
@@ -28,7 +28,7 @@ object RecalibrateBaseQualities extends PreprocessingStage {
 
   val stageName = "recalibrateBaseQualities"
 
-  def apply(rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
+  def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
 
     val sc = rdd.sparkContext
     // check for snp table

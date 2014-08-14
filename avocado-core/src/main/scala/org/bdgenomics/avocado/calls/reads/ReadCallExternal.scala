@@ -25,15 +25,15 @@ import java.util.concurrent.{ ExecutorService, Executors }
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.converters.VariantContextConverter
-import org.bdgenomics.adam.models.{ SAMFileHeaderWritable, ADAMVariantContext, ReferencePosition }
+import org.bdgenomics.adam.models.{ SAMFileHeaderWritable, VariantContext => ADAMVariantContext, ReferencePosition }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.GenomicRegionPartitioner
 import org.bdgenomics.avocado.calls.{ VariantCall, VariantCallCompanion }
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
-import org.broadinstitute.variant.variantcontext.VariantContext
+import org.broadinstitute.variant.variantcontext.{ VariantContext => BroadVariantContext }
 import org.broadinstitute.variant.vcf.VCFFileReader
 import net.sf.samtools.{ SAMFileHeader, SAMRecord, BAMFileWriter, SAMFileWriterImpl }
 import scala.collection.JavaConversions._
@@ -185,7 +185,7 @@ private[reads] class ReadCallExternal(contigLengths: Map[String, Long],
     }
   }
 
-  def call(rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+  def call(rdd: RDD[AlignmentRecord]): RDD[ADAMVariantContext] = {
 
     if (debug) {
       log.info("variant input DebugString:\n" + rdd.toDebugString)

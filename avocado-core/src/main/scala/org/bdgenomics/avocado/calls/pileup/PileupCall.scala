@@ -17,10 +17,10 @@
  */
 package org.bdgenomics.avocado.calls.pileup
 
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMRDDFunctions
-import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
+import org.bdgenomics.adam.models.{ Rod, VariantContext }
 import org.bdgenomics.avocado.calls.VariantCall
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
@@ -36,7 +36,7 @@ abstract class PileupCall extends VariantCall {
    * @param pileups An RDD of pileups.
    * @return An RDD containing called variants.
    */
-  def callRods(pileups: RDD[ADAMRod]): RDD[ADAMVariantContext]
+  def callRods(pileups: RDD[Rod]): RDD[VariantContext]
 
   /**
    * Converts reads to rods, then calls rod based variant caller.
@@ -44,7 +44,7 @@ abstract class PileupCall extends VariantCall {
    * @param reads An RDD of reads.
    * @return An RDD containing called variants.
    */
-  def call(reads: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+  def call(reads: RDD[AlignmentRecord]): RDD[VariantContext] = {
     val rods = reads.adamRecords2Rods()
     callRods(rods)
   }

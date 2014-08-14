@@ -18,10 +18,10 @@
 package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.{ ADAMContig, ADAMRecord }
+import org.bdgenomics.formats.avro.{ Contig, AlignmentRecord }
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.bdgenomics.adam.util.SparkFunSuite
 import org.bdgenomics.avocado.calls.reads.ReadCallAssemblyPhaser
 import org.bdgenomics.avocado.partitioners.PartitionSet
@@ -30,16 +30,16 @@ import scala.collection.mutable.ArrayBuffer
 
 class KmerGraphSuite extends SparkFunSuite {
 
-  def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
+  def na12878_chr20_snp_reads: RDD[RichAlignmentRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
-    val reads: RDD[ADAMRecord] = sc.adamLoad(path)
-    reads.map(r => RichADAMRecord(r))
+    val reads: RDD[AlignmentRecord] = sc.adamLoad(path)
+    reads.map(r => RichAlignmentRecord(r))
   }
 
-  def more_na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
+  def more_na12878_chr20_snp_reads: RDD[RichAlignmentRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058_longer.sam").getFile
-    val reads: RDD[ADAMRecord] = sc.adamLoad(path)
-    reads.map(r => RichADAMRecord(r))
+    val reads: RDD[AlignmentRecord] = sc.adamLoad(path)
+    reads.map(r => RichAlignmentRecord(r))
   }
 
   def makeRead(sequence: String,
@@ -48,13 +48,13 @@ class KmerGraphSuite extends SparkFunSuite {
                mdtag: String,
                length: Int,
                qualities: Seq[Int],
-               id: Int = 0): RichADAMRecord = {
+               id: Int = 0): RichAlignmentRecord = {
 
-    val contig = ADAMContig.newBuilder()
+    val contig = Contig.newBuilder()
       .setContigName("chr1")
       .build()
 
-    RichADAMRecord(ADAMRecord.newBuilder()
+    RichAlignmentRecord(AlignmentRecord.newBuilder()
       .setReadName("read" + id.toString)
       .setStart(start)
       .setReadMapped(true)

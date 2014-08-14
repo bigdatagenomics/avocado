@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.preprocessing
 
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
 
@@ -29,10 +29,10 @@ object Preprocessor {
     CoalesceReads,
     RealignIndels)
 
-  def apply(rdd: RDD[ADAMRecord],
+  def apply(rdd: RDD[AlignmentRecord],
             stageName: String,
             stageAlgorithm: String,
-            config: HierarchicalConfiguration): RDD[ADAMRecord] = {
+            config: HierarchicalConfiguration): RDD[AlignmentRecord] = {
 
     // get configuration for this stage
     val stageConfig = config.configurationAt(stageName)

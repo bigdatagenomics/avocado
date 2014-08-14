@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.input
 
-import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMNucleotideContigFragment }
+import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
@@ -37,6 +37,6 @@ private[input] trait InputStage {
   def apply(sc: SparkContext,
             inputPath: String,
             config: SubnodeConfiguration,
-            reference: RDD[ADAMNucleotideContigFragment]): RDD[ADAMRecord]
+            reference: RDD[NucleotideContigFragment]): RDD[AlignmentRecord]
 
 }

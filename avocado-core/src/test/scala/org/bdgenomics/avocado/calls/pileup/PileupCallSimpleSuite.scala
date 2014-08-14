@@ -19,8 +19,8 @@ package org.bdgenomics.avocado.calls.pileup
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.{ ADAMPileup, Base }
-import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
+import org.bdgenomics.formats.avro.{ Pileup, Base }
+import org.bdgenomics.adam.models.{ Rod, VariantContext }
 import scala.collection.JavaConversions._
 import org.scalatest.FunSuite
 import scala.math.abs
@@ -35,11 +35,11 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("Collect the max non-ref base for homozygous SNP") {
-    val pl = List(ADAMPileup.newBuilder()
+    val pl = List(Pileup.newBuilder()
       .setReadBase(Base.A)
       .setReferenceBase(Base.C)
       .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.A)
         .setReferenceBase(Base.C)
         .build())
@@ -53,11 +53,11 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("Collect the max non-ref base for hetereozygous SNP") {
-    val pl = List(ADAMPileup.newBuilder()
+    val pl = List(Pileup.newBuilder()
       .setReadBase(Base.C)
       .setReferenceBase(Base.C)
       .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.A)
         .setReferenceBase(Base.C)
         .build())
@@ -71,15 +71,15 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("Collect the max non-ref base for homozygous SNP that is not biallelic") {
-    val pl = List(ADAMPileup.newBuilder()
+    val pl = List(Pileup.newBuilder()
       .setReadBase(Base.A)
       .setReferenceBase(Base.C)
       .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.A)
         .setReferenceBase(Base.C)
         .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.T)
         .setReferenceBase(Base.C)
         .build())
@@ -93,11 +93,11 @@ class PileupCallSimpleSuite extends FunSuite {
   }
 
   test("Do not collect the max non-ref base for homozygous ref.") {
-    val pl = List(ADAMPileup.newBuilder()
+    val pl = List(Pileup.newBuilder()
       .setReadBase(Base.C)
       .setReferenceBase(Base.C)
       .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.C)
         .setReferenceBase(Base.C)
         .build())
@@ -114,27 +114,27 @@ class PileupCallSimpleSuite extends FunSuite {
 
     val l = List(0.0, 0.0, 0.0)
 
-    assert(l === call.compensate(l, List[ADAMPileup]()))
+    assert(l === call.compensate(l, List[Pileup]()))
   }
 
   test("score genotype for single sample, all bases ref") {
     val call = new PileupCallSimpleSNP(2)
 
-    val pl = List(ADAMPileup.newBuilder()
+    val pl = List(Pileup.newBuilder()
       .setReadBase(Base.C)
       .setReferenceBase(Base.C)
       .setMapQuality(30)
       .setSangerQuality(30)
       .setCountAtPosition(1)
       .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.C)
         .setReferenceBase(Base.C)
         .setMapQuality(40)
         .setSangerQuality(40)
         .setCountAtPosition(1)
         .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.C)
         .setReferenceBase(Base.C)
         .setMapQuality(40)
@@ -157,21 +157,21 @@ class PileupCallSimpleSuite extends FunSuite {
   test("score genotype for single sample, mix of ref/non-ref bases") {
     val call = new PileupCallSimpleSNP(2)
 
-    val pl = List(ADAMPileup.newBuilder()
+    val pl = List(Pileup.newBuilder()
       .setReadBase(Base.C)
       .setReferenceBase(Base.C)
       .setMapQuality(30)
       .setSangerQuality(30)
       .setCountAtPosition(1)
       .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.C)
         .setReferenceBase(Base.C)
         .setMapQuality(40)
         .setSangerQuality(40)
         .setCountAtPosition(1)
         .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.A)
         .setReferenceBase(Base.C)
         .setMapQuality(40)
@@ -195,21 +195,21 @@ class PileupCallSimpleSuite extends FunSuite {
   test("score genotype for single sample, all bases non-ref") {
     val call = new PileupCallSimpleSNP(2)
 
-    val pl = List(ADAMPileup.newBuilder()
+    val pl = List(Pileup.newBuilder()
       .setReadBase(Base.A)
       .setReferenceBase(Base.C)
       .setMapQuality(30)
       .setSangerQuality(30)
       .setCountAtPosition(1)
       .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.A)
         .setReferenceBase(Base.C)
         .setMapQuality(40)
         .setSangerQuality(40)
         .setCountAtPosition(1)
         .build(),
-      ADAMPileup.newBuilder()
+      Pileup.newBuilder()
         .setReadBase(Base.A)
         .setReferenceBase(Base.C)
         .setMapQuality(40)

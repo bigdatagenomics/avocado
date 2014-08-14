@@ -22,9 +22,9 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.bdgenomics.adam.util.SparkFunSuite
-import org.bdgenomics.formats.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
+import org.bdgenomics.formats.avro.{ GenotypeAllele, AlignmentRecord, Contig }
 import org.bdgenomics.avocado.algorithms.hmm._
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import parquet.filter.UnboundRecordFilter
@@ -48,10 +48,10 @@ class ReadCallAssemblyPhaserSuite extends ReadCallHaplotypesSuite {
     assert(variants.length === 1)
     assert(variants.head.position.pos === 225057L)
     assert(variants.head.variant.variant.getReferenceAllele === "A")
-    assert(variants.head.variant.variant.getVariantAllele === "G")
-    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(variants.head.variant.variant.getAlternateAllele === "G")
+    val alleles: List[GenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
-    assert(alleles.head === ADAMGenotypeAllele.Ref)
-    assert(alleles.last === ADAMGenotypeAllele.Alt)
+    assert(alleles.head === GenotypeAllele.Ref)
+    assert(alleles.last === GenotypeAllele.Alt)
   }
 }

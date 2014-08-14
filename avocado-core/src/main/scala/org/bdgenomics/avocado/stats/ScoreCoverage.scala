@@ -17,16 +17,16 @@
  */
 package org.bdgenomics.avocado.stats
 
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
 private[stats] object ScoreCoverage {
 
   // TODO: correct for whole genome without gaps, incorrect if gaps are present
-  def apply(rdd: RDD[ADAMRecord]): Double = {
+  def apply(rdd: RDD[AlignmentRecord]): Double = {
 
     def coverageReducer(t1: (Long, Long, Long), t2: (Long, Long, Long)): (Long, Long, Long) = {
       (t1._1 min t2._1,
@@ -34,9 +34,9 @@ private[stats] object ScoreCoverage {
         t1._3 + t2._3)
     }
 
-    def readToParams(r: ADAMRecord): (Long, Long, Long) = {
+    def readToParams(r: AlignmentRecord): (Long, Long, Long) = {
       val s = r.getStart
-      val e = r.end.get
+      val e = r.getEnd
       (s, e, e - s + 1)
     }
 

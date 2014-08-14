@@ -19,13 +19,13 @@ package org.bdgenomics.avocado.preprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 
 object CoalesceReads extends PreprocessingStage {
 
   val stageName = "coalesceReads"
 
-  def apply(rdd: RDD[ADAMRecord], config: SubnodeConfiguration): RDD[ADAMRecord] = {
+  def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
     val partitions = config.getInt("partitions")
 
     rdd.coalesce(partitions, true)

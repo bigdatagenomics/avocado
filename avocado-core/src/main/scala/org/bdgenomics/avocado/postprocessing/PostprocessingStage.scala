@@ -19,17 +19,17 @@ package org.bdgenomics.avocado.postprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMGenotype
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.formats.avro.Genotype
+import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 private[postprocessing] trait PostprocessingStage {
 
   val stageName: String
 
-  def apply(rdd: RDD[ADAMVariantContext],
+  def apply(rdd: RDD[VariantContext],
             stats: AvocadoConfigAndStats,
-            config: SubnodeConfiguration): RDD[ADAMVariantContext]
+            config: SubnodeConfiguration): RDD[VariantContext]
 
 }
 
@@ -42,7 +42,7 @@ private[postprocessing] trait GenotypeFilter extends Serializable {
    * @param genotypes Genotypes to filter.
    * @return Filtered genotypes.
    */
-  def filterGenotypes(genotypes: Seq[ADAMGenotype]): Seq[ADAMGenotype]
+  def filterGenotypes(genotypes: Seq[Genotype]): Seq[Genotype]
 
   /**
    * Applies filtering and creates a new variant context, if called genotypes still exist.
@@ -51,11 +51,11 @@ private[postprocessing] trait GenotypeFilter extends Serializable {
    * @param vc Variant context on which to filter.
    * @return If not all genotypes have been filtered out, a new variant context, else none.
    */
-  def createNewVC(vc: ADAMVariantContext): Option[ADAMVariantContext] = {
+  def createNewVC(vc: VariantContext): Option[VariantContext] = {
     val filteredGt = filterGenotypes(vc.genotypes.toSeq)
 
     if (filteredGt.length > 0) {
-      Some(ADAMVariantContext.buildFromGenotypes(filteredGt))
+      Some(VariantContext.buildFromGenotypes(filteredGt))
     } else {
       None
     }
@@ -67,7 +67,7 @@ private[postprocessing] trait GenotypeFilter extends Serializable {
    * @param rdd RDD of variant contexts.
    * @return An RDD containing variant contexts after filtering.
    */
-  def filter(rdd: RDD[ADAMVariantContext]): RDD[ADAMVariantContext] = {
+  def filter(rdd: RDD[VariantContext]): RDD[VariantContext] = {
     rdd.flatMap(vc => createNewVC(vc))
   }
 }

@@ -17,24 +17,25 @@
  */
 package org.bdgenomics.avocado.postprocessing
 
-import org.bdgenomics.formats.avro.{ ADAMContig, ADAMGenotype, ADAMVariant }
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
+import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.scalatest.FunSuite
 
 class FilterDepthSuite extends FunSuite {
 
   test("do not filter genotypes that have no depth info") {
-    val contig = ADAMContig.newBuilder
+    val contig = Contig.newBuilder
       .setContigName("0")
       .build
-    val variant = ADAMVariant.newBuilder
+    val variant = Variant.newBuilder
       .setContig(contig)
-      .setPosition(0)
+      .setStart(0)
+      .setEnd(1)
       .setReferenceAllele("A")
-      .setVariantAllele("C")
+      .setAlternateAllele("C")
       .build
-    val gt1 = ADAMGenotype.newBuilder
+    val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .build()
 
@@ -45,16 +46,17 @@ class FilterDepthSuite extends FunSuite {
   }
 
   test("do not filter genotypes that have sufficient coverage") {
-    val contig = ADAMContig.newBuilder
+    val contig = Contig.newBuilder
       .setContigName("0")
       .build
-    val variant = ADAMVariant.newBuilder
+    val variant = Variant.newBuilder
       .setContig(contig)
-      .setPosition(0)
+      .setStart(0)
+      .setEnd(1)
       .setReferenceAllele("A")
-      .setVariantAllele("C")
+      .setAlternateAllele("C")
       .build
-    val gt1 = ADAMGenotype.newBuilder
+    val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setReadDepth(10)
       .build()
@@ -66,16 +68,17 @@ class FilterDepthSuite extends FunSuite {
   }
 
   test("filter genotypes that have low coverage") {
-    val contig = ADAMContig.newBuilder
+    val contig = Contig.newBuilder
       .setContigName("0")
       .build
-    val variant = ADAMVariant.newBuilder
+    val variant = Variant.newBuilder
       .setContig(contig)
-      .setPosition(0)
+      .setStart(0)
+      .setEnd(1)
       .setReferenceAllele("A")
-      .setVariantAllele("C")
+      .setAlternateAllele("C")
       .build
-    val gt1 = ADAMGenotype.newBuilder
+    val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setReadDepth(5)
       .build()
@@ -87,20 +90,21 @@ class FilterDepthSuite extends FunSuite {
   }
 
   test("do not filter genotypes that have no depth info or that have sufficient coverage") {
-    val contig = ADAMContig.newBuilder
+    val contig = Contig.newBuilder
       .setContigName("0")
       .build
-    val variant = ADAMVariant.newBuilder
+    val variant = Variant.newBuilder
       .setContig(contig)
-      .setPosition(0)
+      .setStart(0)
+      .setEnd(1)
       .setReferenceAllele("A")
-      .setVariantAllele("C")
+      .setAlternateAllele("C")
       .build
-    val gt1 = ADAMGenotype.newBuilder
+    val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("me")
       .build()
-    val gt2 = ADAMGenotype.newBuilder
+    val gt2 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("you")
       .setReadDepth(15)
@@ -113,20 +117,21 @@ class FilterDepthSuite extends FunSuite {
   }
 
   test("do not filter genotypes that have no depth info but filter low coverage calls") {
-    val contig = ADAMContig.newBuilder
+    val contig = Contig.newBuilder
       .setContigName("0")
       .build
-    val variant = ADAMVariant.newBuilder
+    val variant = Variant.newBuilder
       .setContig(contig)
-      .setPosition(0)
+      .setStart(0)
+      .setEnd(1)
       .setReferenceAllele("A")
-      .setVariantAllele("C")
+      .setAlternateAllele("C")
       .build
-    val gt1 = ADAMGenotype.newBuilder
+    val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("me")
       .build()
-    val gt2 = ADAMGenotype.newBuilder
+    val gt2 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("you")
       .setReadDepth(6)
