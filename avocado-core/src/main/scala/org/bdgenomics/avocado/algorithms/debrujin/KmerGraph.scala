@@ -17,8 +17,8 @@
  */
 package org.bdgenomics.avocado.algorithms.debrujin
 
-import org.bdgenomics.formats.avro.ADAMRecord
-import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord
 import scala.annotation.tailrec
 import scala.collection.mutable.{ HashSet, HashMap, SortedSet }
 
@@ -31,7 +31,7 @@ object KmerGraph {
    * @param k _k_-mer length
    * @return Returns a seq of strings with length _k_.
    */
-  private def getKmerSequences(read: ADAMRecord, k: Int): Seq[String] = {
+  private def getKmerSequences(read: AlignmentRecord, k: Int): Seq[String] = {
     val readSeq: String = read.getSequence.toString
     getKmerSequences(readSeq, k)
   }
@@ -127,7 +127,7 @@ object KmerGraph {
             readLength: Int,
             regionLength: Int,
             reference: String,
-            reads: Seq[RichADAMRecord],
+            reads: Seq[RichAlignmentRecord],
             flankLength: Int,
             maxEntries: Int = 5,
             removeSpurs: Boolean = false,
@@ -191,12 +191,12 @@ class KmerGraph(val kmerLength: Int,
   val maxPathDepth = regionLength + readLength - kmerLength + 1
   lazy val allPaths = enumerateAllPaths(maxPathDepth, maxEntries)
 
-  def insertReads(reads: Seq[RichADAMRecord]) = {
+  def insertReads(reads: Seq[RichAlignmentRecord]) = {
     val kmerSequences = reads.flatMap(read => KmerGraph.getKmerSequences(read, kmerLength))
     addSequencesToGraph(kmerSequences)
   }
 
-  def insertRead(read: ADAMRecord) = {
+  def insertRead(read: AlignmentRecord) = {
     val kmerSequences = KmerGraph.getKmerSequences(read, kmerLength)
     addSequencesToGraph(kmerSequences)
   }

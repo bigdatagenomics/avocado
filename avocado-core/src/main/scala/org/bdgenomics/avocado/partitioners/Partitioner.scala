@@ -19,14 +19,14 @@ package org.bdgenomics.avocado.partitioners
 
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object Partitioner {
 
   val partitioners = List(DefaultPartitioner)
 
-  def apply(rdd: RDD[ADAMRecord],
+  def apply(rdd: RDD[AlignmentRecord],
             globalConfig: HierarchicalConfiguration,
             partitionName: String,
             partitionerAlgorithm: String,

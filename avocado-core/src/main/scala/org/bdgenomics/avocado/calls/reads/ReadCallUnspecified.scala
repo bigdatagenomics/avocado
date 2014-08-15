@@ -17,8 +17,8 @@
  */
 package org.bdgenomics.avocado.calls.reads
 
-import org.bdgenomics.formats.avro.ADAMRecord
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.calls.VariantCallCompanion
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -48,7 +48,7 @@ class ReadCallUnspecified extends ReadCall {
   /**
    * Empty calling method.
    */
-  def call(pileupGroups: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+  def call(pileupGroups: RDD[AlignmentRecord]): RDD[VariantContext] = {
     throw new IllegalArgumentException(companion.callName + " is not callable.")
   }
 

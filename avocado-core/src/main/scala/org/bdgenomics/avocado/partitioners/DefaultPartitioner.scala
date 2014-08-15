@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.partitioners
 
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.apache.commons.configuration.SubnodeConfiguration
@@ -45,7 +45,7 @@ object DefaultPartitioner extends ReferencePartitionerCompanion {
    * @param stats Statistics module for configuring partitioner.
    * @return Returns a default partitioner.
    */
-  def apply(rdd: RDD[ADAMRecord],
+  def apply(rdd: RDD[AlignmentRecord],
             subnodeConfiguration: SubnodeConfiguration,
             stats: AvocadoConfigAndStats): ReferencePartitioner = {
 

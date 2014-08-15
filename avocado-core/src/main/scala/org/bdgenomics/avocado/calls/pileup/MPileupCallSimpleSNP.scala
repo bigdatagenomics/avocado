@@ -17,8 +17,8 @@
  */
 package org.bdgenomics.avocado.calls.pileup
 
-import org.bdgenomics.formats.avro.{ Base, ADAMGenotype, ADAMPileup }
-import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
+import org.bdgenomics.formats.avro.{ Base, Genotype, Pileup }
+import org.bdgenomics.adam.models.{ Rod, VariantContext }
 import org.bdgenomics.avocado.calls.VariantCallCompanion
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -63,10 +63,10 @@ class MPileupCallSimpleSNP(ploidy: Int,
    * Takes in a single pileup rod from a single sample at a single locus. For simplicity, we assume that
    * all sites are biallelic.
    *
-   * @param[in] rod ADAMRod
+   * @param[in] rod Rod
    * @return List of variants seen at site. List can contain 0 or 1 elements - value goes to flatMap.
    */
-  protected override def callSNP(rod: ADAMRod): List[ADAMVariantContext] = {
+  protected override def callSNP(rod: Rod): List[VariantContext] = {
     val samples = rod.splitBySamples
 
     // score off of rod info
@@ -90,7 +90,7 @@ class MPileupCallSimpleSNP(ploidy: Int,
     val compensatedLikelihoods = likelihoods.map(compensate(_, majAlleleFrequency(0)))
 
     // genotype/variant lists
-    var g = List[ADAMGenotype]()
+    var g = List[Genotype]()
 
     // get most often seen non-reference base
     val maxNonRefBase = getMaxNonRefBase(rod.pileups)
@@ -99,7 +99,7 @@ class MPileupCallSimpleSNP(ploidy: Int,
     for (i <- 0 until likelihoods.length) {
       val l = compensatedLikelihoods(i)
 
-      val sg: List[ADAMGenotype] = writeCallInfo(samples(i).pileups.head, l, maxNonRefBase)
+      val sg: List[Genotype] = writeCallInfo(samples(i).pileups.head, l, maxNonRefBase)
 
       g = g ::: sg
     }

@@ -20,9 +20,9 @@ package org.bdgenomics.avocado.calls
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
-import org.bdgenomics.formats.avro.{ ADAMRecord, ADAMPileup, ADAMVariant, ADAMGenotype }
+import org.bdgenomics.formats.avro.{ AlignmentRecord, Pileup, Variant, Genotype }
 import org.bdgenomics.adam.converters.GenotypesToVariantsConverter
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -53,32 +53,32 @@ abstract class VariantCall extends Serializable with Logging {
 
   val companion: VariantCallCompanion
 
-  def process(rdd: RDD[ADAMRecord]): RDD[ADAMRecord] = {
+  def process(rdd: RDD[AlignmentRecord]): RDD[AlignmentRecord] = {
     var readsToProcess = rdd.cache
 
     readsToProcess
   }
 
-  def processAndCall(rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+  def processAndCall(rdd: RDD[AlignmentRecord]): RDD[VariantContext] = {
     val processedReads = process(rdd)
     call(rdd)
   }
 
-  final def genotypesToVariantContext(genotypes: List[ADAMGenotype],
-                                      samples: Int = 1): List[ADAMVariantContext] = {
+  final def genotypesToVariantContext(genotypes: List[Genotype],
+                                      samples: Int = 1): List[VariantContext] = {
 
     val grouped = genotypes.groupBy(
-      g => (g.getVariant.getContig.getContigName.toString, g.getVariant.getVariantAllele))
+      g => (g.getVariant.getContig.getContigName.toString, g.getVariant.getAlternateAllele))
       .map(kv => {
         val (k, g) = kv
 
-        ADAMVariantContext.buildFromGenotypes(g)
+        VariantContext.buildFromGenotypes(g)
       })
 
     grouped.toList
   }
 
-  def call(rdd: RDD[ADAMRecord]): RDD[ADAMVariantContext]
+  def call(rdd: RDD[AlignmentRecord]): RDD[VariantContext]
 
   def isCallable(): Boolean
 }

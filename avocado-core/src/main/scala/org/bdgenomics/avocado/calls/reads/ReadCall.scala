@@ -20,8 +20,8 @@ package org.bdgenomics.avocado.calls.reads
 import org.bdgenomics.avocado.calls.VariantCall
 import org.apache.spark.{ SparkContext, Logging }
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMRecord
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.adam.models.VariantContext
 
 /**
  * Abstract class for calling variants on reads.
@@ -34,7 +34,7 @@ abstract class ReadCall extends VariantCall {
    * @param[in] pileupGroups An RDD containing reads.
    * @return An RDD containing called variants.
    */
-  def call(reads: RDD[ADAMRecord]): RDD[ADAMVariantContext]
+  def call(reads: RDD[AlignmentRecord]): RDD[VariantContext]
 
 }
 

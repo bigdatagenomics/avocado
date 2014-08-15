@@ -19,8 +19,8 @@ package org.bdgenomics.avocado.postprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMGenotype
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.formats.avro.Genotype
+import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 private[postprocessing] object FilterDepth extends PostprocessingStage {
@@ -38,9 +38,9 @@ private[postprocessing] object FilterDepth extends PostprocessingStage {
    * @param config Config from which to pull config data.
    * @return A filtered RDD.
    */
-  def apply(rdd: RDD[ADAMVariantContext],
+  def apply(rdd: RDD[VariantContext],
             stats: AvocadoConfigAndStats,
-            config: SubnodeConfiguration): RDD[ADAMVariantContext] = {
+            config: SubnodeConfiguration): RDD[VariantContext] = {
 
     val depth = if (config.containsKey("absoluteDepth") && !config.containsKey("relativeDepth")) {
       config.getInt("absoluteDepth")
@@ -66,12 +66,12 @@ private[postprocessing] class DepthFilter(depth: Int) extends GenotypeFilter {
    * @param genotypes List of genotypes called at this site.
    * @return List of genotypes after filtering.
    */
-  def filterGenotypes(genotypes: Seq[ADAMGenotype]): Seq[ADAMGenotype] = {
+  def filterGenotypes(genotypes: Seq[Genotype]): Seq[Genotype] = {
     val keyed = genotypes.map(g => (Option(g.getReadDepth), g))
 
-    val genotypesNoStats: Seq[ADAMGenotype] = keyed.filter(t => t._1.isEmpty)
+    val genotypesNoStats: Seq[Genotype] = keyed.filter(t => t._1.isEmpty)
       .map(t => t._2)
-    val genotypesWithStats: Seq[ADAMGenotype] = keyed.filter(t => t._1.isDefined)
+    val genotypesWithStats: Seq[Genotype] = keyed.filter(t => t._1.isDefined)
       .filter(kv => kv._1.get >= depth)
       .map(kv => kv._2)
 

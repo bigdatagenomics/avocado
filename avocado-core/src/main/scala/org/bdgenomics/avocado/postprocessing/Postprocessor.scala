@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.postprocessing
 
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.ADAMVariantContext
+import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 object Postprocessor {
@@ -29,11 +29,11 @@ object Postprocessor {
   assert(stages.map(_.stageName).length == stages.map(_.stageName).distinct.length,
     "Postprocessing stages have duplicated names.")
 
-  def apply(rdd: RDD[ADAMVariantContext],
+  def apply(rdd: RDD[VariantContext],
             stageName: String,
             stageAlgorithm: String,
             stats: AvocadoConfigAndStats,
-            config: HierarchicalConfiguration): RDD[ADAMVariantContext] = {
+            config: HierarchicalConfiguration): RDD[VariantContext] = {
 
     val stage = stages.find(_.stageName == stageAlgorithm)
 

@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.calls.pileup
 
-import org.bdgenomics.adam.models.{ ADAMRod, ADAMVariantContext }
+import org.bdgenomics.adam.models.{ Rod, VariantContext }
 import org.bdgenomics.avocado.calls.VariantCallCompanion
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -48,7 +48,7 @@ class PileupCallUnspecified extends PileupCall {
   /**
    * Empty calling method.
    */
-  override def callRods(pileups: RDD[ADAMRod]): RDD[ADAMVariantContext] = {
+  override def callRods(pileups: RDD[Rod]): RDD[VariantContext] = {
     throw new IllegalArgumentException(companion.callName + " is not callable.")
   }
 

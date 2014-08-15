@@ -24,10 +24,10 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.{ SparkContext, Logging }
 import org.kohsuke.args4j.{ Option => option, Argument }
 import org.bdgenomics.formats.avro.{
-  ADAMVariant,
-  ADAMRecord,
-  ADAMNucleotideContigFragment,
-  ADAMGenotype
+  Variant,
+  AlignmentRecord,
+  NucleotideContigFragment,
+  Genotype
 }
 import org.bdgenomics.adam.cli.{
   ADAMSparkCommand,
@@ -37,7 +37,7 @@ import org.bdgenomics.adam.cli.{
   Args4j,
   Args4jBase
 }
-import org.bdgenomics.adam.models.{ ADAMVariantContext, ReferenceRegion }
+import org.bdgenomics.adam.models.{ VariantContext, ReferenceRegion }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.avocado.calls.{ VariantCall, VariantCaller }
 import org.bdgenomics.avocado.input.Input
@@ -123,15 +123,15 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
    * @param reads An RDD of raw reads.
    * @return A map that maps RDDs of reads to variant calling algorithms.
    */
-  def partitionReads(reads: RDD[ADAMRecord],
-                     stats: AvocadoConfigAndStats): Map[VariantCall, RDD[ADAMRecord]] = {
+  def partitionReads(reads: RDD[AlignmentRecord],
+                     stats: AvocadoConfigAndStats): Map[VariantCall, RDD[AlignmentRecord]] = {
 
     var rdd = reads.keyBy(r => ReferenceRegion(r))
       .filter(kv => kv._1.isDefined)
       .map(kv => (kv._1.get, kv._2))
     //.cache()
 
-    var callsets = List[(VariantCall, RDD[ADAMRecord])]()
+    var callsets = List[(VariantCall, RDD[AlignmentRecord])]()
     val partitioners = partitionsZipped.map(p => Partitioner(reads, config, p._1, p._2, stats))
     val partitionersZippedWithCalls = partitioners.zip(callZipped)
 
@@ -174,7 +174,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
    * @param reads RDD of reads to process.
    * @return RDD containing reads that have been sorted and deduped.
    */
-  def preProcessReads(reads: RDD[ADAMRecord]): RDD[ADAMRecord] = {
+  def preProcessReads(reads: RDD[AlignmentRecord]): RDD[AlignmentRecord] = {
     var processedReads = reads //.cache
 
     if (debug) {
@@ -201,7 +201,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
    * @param callsets Map containing read calling algorithm and RDD record pairs.
    * @return Joined output of variant calling algorithms.
    */
-  def callVariants(callsets: Map[VariantCall, RDD[ADAMRecord]]): RDD[ADAMVariantContext] = {
+  def callVariants(callsets: Map[VariantCall, RDD[AlignmentRecord]]): RDD[VariantContext] = {
     // callset map must not be empty
     assert(!callsets.isEmpty)
 
@@ -227,7 +227,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
    * @param variants RDD of variants to process.
    * @return Post-processed variants.
    */
-  def postProcessVariants(variants: RDD[ADAMVariantContext], stats: AvocadoConfigAndStats): RDD[ADAMVariantContext] = {
+  def postProcessVariants(variants: RDD[VariantContext], stats: AvocadoConfigAndStats): RDD[VariantContext] = {
     var rdd = variants //.cache()
 
     // loop over post processing steps
@@ -252,11 +252,11 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
     log.info("Starting avocado...")
 
     // load in reference from ADAM file
-    val reference: RDD[ADAMNucleotideContigFragment] = sc.adamSequenceLoad(args.referenceInput, args.fragmentLength)
+    val reference: RDD[NucleotideContigFragment] = sc.adamSequenceLoad(args.referenceInput, args.fragmentLength)
 
     log.info("Loading reads in from " + args.readInput)
     // load in reads from ADAM file
-    val reads: RDD[ADAMRecord] = Input(sc, args.readInput, reference, config)
+    val reads: RDD[AlignmentRecord] = Input(sc, args.readInput, reference, config)
 
     // create stats/config item
     val stats = new AvocadoConfigAndStats(sc, args.debug, reads, reference)
@@ -275,7 +275,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
 
     // post process variants
     log.info("Post-processing variants.")
-    val processedGenotypes: RDD[ADAMGenotype] = postProcessVariants(calledVariants, stats).flatMap(variantContext => variantContext.genotypes)
+    val processedGenotypes: RDD[Genotype] = postProcessVariants(calledVariants, stats).flatMap(variantContext => variantContext.genotypes)
 
     // save variants to output file
     log.info("Writing calls to disk.")

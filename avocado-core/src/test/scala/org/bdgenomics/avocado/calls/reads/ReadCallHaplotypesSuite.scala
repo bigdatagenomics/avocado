@@ -17,18 +17,20 @@
  */
 package org.bdgenomics.avocado.calls.reads
 
+import net.sf.samtools.{ Cigar, CigarElement, CigarOperator, TextCigarCodec }
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.bdgenomics.adam.util.SparkFunSuite
-import org.bdgenomics.formats.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
+import org.bdgenomics.formats.avro.{ GenotypeAllele, AlignmentRecord, Contig }
 import org.bdgenomics.avocado.algorithms.hmm._
 import org.bdgenomics.avocado.partitioners.PartitionSet
 import parquet.filter.UnboundRecordFilter
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.immutable.SortedMap
 
 trait ReadCallHaplotypesSuite extends SparkFunSuite {
@@ -36,11 +38,12 @@ trait ReadCallHaplotypesSuite extends SparkFunSuite {
   val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
   val rc_short: ReadCallHaplotypes
   val rc_long: ReadCallHaplotypes
+  val CIGAR_CODEC: TextCigarCodec = TextCigarCodec.getSingleton
 
-  def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
+  def na12878_chr20_snp_reads: RDD[RichAlignmentRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
-    val rdd: RDD[ADAMRecord] = sc.adamLoad(path)
-    rdd.map(r => RichADAMRecord(r))
+    val rdd: RDD[AlignmentRecord] = sc.adamLoad(path)
+    rdd.map(r => RichAlignmentRecord(r))
   }
 
   def make_read(sequence: String,
@@ -49,15 +52,24 @@ trait ReadCallHaplotypesSuite extends SparkFunSuite {
                 mdtag: String,
                 length: Int,
                 qualities: Seq[Int],
-                id: Int = 0): RichADAMRecord = {
+                id: Int = 0): RichAlignmentRecord = {
 
-    val contig = ADAMContig.newBuilder()
+    val c = CIGAR_CODEC.decode(cigar)
+    val end = c.getCigarElements
+      .asScala
+      .filter((p: CigarElement) => p.getOperator.consumesReferenceBases())
+      .foldLeft(start - 1) {
+        (pos, cigarEl) => pos + cigarEl.getLength
+      }
+
+    val contig = Contig.newBuilder()
       .setContigName("chr1")
       .build()
 
-    RichADAMRecord(ADAMRecord.newBuilder()
+    RichAlignmentRecord(AlignmentRecord.newBuilder()
       .setReadName("read" + id.toString)
       .setStart(start)
+      .setEnd(end)
       .setReadMapped(true)
       .setCigar(cigar)
       .setSequence(sequence)
@@ -112,11 +124,11 @@ trait ReadCallHaplotypesSuite extends SparkFunSuite {
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
     assert(variants.head.variant.variant.getReferenceAllele === "A")
-    assert(variants.head.variant.variant.getVariantAllele === "C")
-    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(variants.head.variant.variant.getAlternateAllele === "C")
+    val alleles: List[GenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
-    assert(alleles.head === ADAMGenotypeAllele.Ref)
-    assert(alleles.last === ADAMGenotypeAllele.Alt)
+    assert(alleles.head === GenotypeAllele.Ref)
+    assert(alleles.last === GenotypeAllele.Alt)
   }
 
   test("Call simple hom SNP, ~10x coverage") {
@@ -140,11 +152,11 @@ trait ReadCallHaplotypesSuite extends SparkFunSuite {
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
     assert(variants.head.variant.variant.getReferenceAllele === "A")
-    assert(variants.head.variant.variant.getVariantAllele === "C")
-    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(variants.head.variant.variant.getAlternateAllele === "C")
+    val alleles: List[GenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
-    assert(alleles.head === ADAMGenotypeAllele.Alt)
-    assert(alleles.last === ADAMGenotypeAllele.Alt)
+    assert(alleles.head === GenotypeAllele.Alt)
+    assert(alleles.last === GenotypeAllele.Alt)
   }
 
   test("Call simple het INS, ~10x coverage") {
@@ -168,11 +180,11 @@ trait ReadCallHaplotypesSuite extends SparkFunSuite {
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
     assert(variants.head.variant.variant.getReferenceAllele === "A")
-    assert(variants.head.variant.variant.getVariantAllele === "AA")
-    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(variants.head.variant.variant.getAlternateAllele === "AA")
+    val alleles: List[GenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
-    assert(alleles.head === ADAMGenotypeAllele.Ref)
-    assert(alleles.last === ADAMGenotypeAllele.Alt)
+    assert(alleles.head === GenotypeAllele.Ref)
+    assert(alleles.last === GenotypeAllele.Alt)
   }
 
   test("Call simple het DEL, ~10x coverage") {
@@ -196,11 +208,11 @@ trait ReadCallHaplotypesSuite extends SparkFunSuite {
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
     assert(variants.head.variant.variant.getReferenceAllele === "CA")
-    assert(variants.head.variant.variant.getVariantAllele === "C")
-    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(variants.head.variant.variant.getAlternateAllele === "C")
+    val alleles: List[GenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
-    assert(alleles.head === ADAMGenotypeAllele.Ref)
-    assert(alleles.last === ADAMGenotypeAllele.Alt)
+    assert(alleles.head === GenotypeAllele.Ref)
+    assert(alleles.last === GenotypeAllele.Alt)
   }
 
   sparkTest("call A->G snp on NA12878 chr20 @ 225058") {
@@ -216,10 +228,10 @@ trait ReadCallHaplotypesSuite extends SparkFunSuite {
     assert(variants.length === 1)
     assert(variants.head.position.pos === 225057L)
     assert(variants.head.variant.variant.getReferenceAllele === "A")
-    assert(variants.head.variant.variant.getVariantAllele === "G")
-    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(variants.head.variant.variant.getAlternateAllele === "G")
+    val alleles: List[GenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
-    assert(alleles.head === ADAMGenotypeAllele.Ref)
-    assert(alleles.last === ADAMGenotypeAllele.Alt)
+    assert(alleles.head === GenotypeAllele.Ref)
+    assert(alleles.last === GenotypeAllele.Alt)
   }
 }

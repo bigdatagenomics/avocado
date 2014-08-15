@@ -19,16 +19,16 @@ package org.bdgenomics.avocado.calls.reads
 
 import net.sf.samtools.{ CigarElement, CigarOperator }
 import org.bdgenomics.formats.avro.{
-  ADAMContig,
-  ADAMGenotype,
-  ADAMGenotypeAllele,
-  ADAMRecord,
-  ADAMVariant
+  Contig,
+  Genotype,
+  GenotypeAllele,
+  AlignmentRecord,
+  Variant
 }
-import org.bdgenomics.adam.models.{ ADAMVariantContext, ReferenceRegion }
+import org.bdgenomics.adam.models.{ VariantContext, ReferenceRegion }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rich.RichADAMRecord
-import org.bdgenomics.adam.rich.RichADAMRecord._
+import org.bdgenomics.adam.rich.RichAlignmentRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord._
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.algorithms.debrujin._
 import org.bdgenomics.avocado.algorithms.hmm._
@@ -68,7 +68,7 @@ abstract class ReadCallHaplotypes(
    *
    * @see getReadReference
    */
-  def getReference(region: Seq[RichADAMRecord]): String = {
+  def getReference(region: Seq[RichAlignmentRecord]): String = {
 
     val ts = System.nanoTime
 
@@ -135,11 +135,11 @@ abstract class ReadCallHaplotypes(
    * @param ref Reference sequence over which to test.
    * @return True if region is active.
    */
-  def isRegionActive(region: Seq[RichADAMRecord], ref: String): Boolean = {
+  def isRegionActive(region: Seq[RichAlignmentRecord], ref: String): Boolean = {
     @tailrec def collectStats(hasIndel: Boolean,
                               mismatches: Int,
                               bases: Int,
-                              reg: Iterator[RichADAMRecord]): (Boolean, Int, Int) = {
+                              reg: Iterator[RichAlignmentRecord]): (Boolean, Int, Int) = {
       if (hasIndel || !reg.hasNext) {
         (hasIndel, mismatches, bases)
       } else {
@@ -164,7 +164,7 @@ abstract class ReadCallHaplotypes(
    * @param region Reads to generate haplotypes from.
    * @param reference
    */
-  def generateHaplotypes(region: Seq[RichADAMRecord], reference: String): Seq[String]
+  def generateHaplotypes(region: Seq[RichAlignmentRecord], reference: String): Seq[String]
 
   /**
    * Inserts the aligned sequence of a read into the reference.
@@ -175,13 +175,13 @@ abstract class ReadCallHaplotypes(
    * @param referenceEnd The end position of this reference string.
    * @return Returns a haplotype.
    */
-  def insertReadIntoReference(read: RichADAMRecord,
+  def insertReadIntoReference(read: RichAlignmentRecord,
                               reference: String,
                               referenceStart: Long,
                               referenceEnd: Long): String = {
     // get read start and end
     val readStart = read.getStart
-    val readEnd = read.end.get
+    val readEnd = read.getEnd
 
     // find length of trimming necessary
     val cigar = read.samtoolsCigar
@@ -233,7 +233,7 @@ abstract class ReadCallHaplotypes(
                       phred: Int,
                       refPos: Long,
                       sampleName: String,
-                      refName: String): List[ADAMGenotype] = {
+                      refName: String): List[Genotype] = {
     assert(!(heterozygousRef && heterozygousNonref))
 
     val refAllele = if (varType != VariantType.Insertion && varType != VariantType.Deletion) {
@@ -252,18 +252,19 @@ abstract class ReadCallHaplotypes(
     }
 
     if (heterozygousRef) {
-      val alleles = List(ADAMGenotypeAllele.Ref, ADAMGenotypeAllele.Alt)
+      val alleles = List(GenotypeAllele.Ref, GenotypeAllele.Alt)
 
-      val contig = ADAMContig.newBuilder
+      val contig = Contig.newBuilder
         .setContigName(refName)
         .build
-      val variant = ADAMVariant.newBuilder
+      val variant = Variant.newBuilder
         .setContig(contig)
         .setReferenceAllele(refAllele)
-        .setVariantAllele(altAllele)
-        .setPosition(refPos + refOffset)
+        .setAlternateAllele(altAllele)
+        .setStart(refPos + refOffset)
+        .setEnd(refPos + refOffset + refAllele.length)
         .build
-      val genotype = ADAMGenotype.newBuilder()
+      val genotype = Genotype.newBuilder()
         .setVariant(variant)
         .setSampleId(sampleName)
         .setGenotypeQuality(phred)
@@ -273,18 +274,19 @@ abstract class ReadCallHaplotypes(
 
       List(genotype)
     } else if (heterozygousNonref) {
-      val alleles = List(ADAMGenotypeAllele.OtherAlt, ADAMGenotypeAllele.Alt)
+      val alleles = List(GenotypeAllele.OtherAlt, GenotypeAllele.Alt)
 
-      val contig = ADAMContig.newBuilder
+      val contig = Contig.newBuilder
         .setContigName(refName)
         .build
-      val variant = ADAMVariant.newBuilder
+      val variant = Variant.newBuilder
         .setContig(contig)
         .setReferenceAllele(refAllele)
-        .setVariantAllele(altAllele)
-        .setPosition(refPos + refOffset)
+        .setAlternateAllele(altAllele)
+        .setStart(refPos + refOffset)
+        .setEnd(refPos + refOffset + refAllele.length)
         .build
-      val genotype = ADAMGenotype.newBuilder()
+      val genotype = Genotype.newBuilder()
         .setVariant(variant)
         .setSampleId(sampleName)
         .setGenotypeQuality(phred)
@@ -294,18 +296,19 @@ abstract class ReadCallHaplotypes(
 
       List(genotype)
     } else if (!heterozygousRef && !heterozygousNonref) {
-      val alleles = List(ADAMGenotypeAllele.Alt, ADAMGenotypeAllele.Alt)
+      val alleles = List(GenotypeAllele.Alt, GenotypeAllele.Alt)
 
-      val contig = ADAMContig.newBuilder
+      val contig = Contig.newBuilder
         .setContigName(refName)
         .build
-      val variant = ADAMVariant.newBuilder
+      val variant = Variant.newBuilder
         .setContig(contig)
         .setReferenceAllele(refAllele)
-        .setVariantAllele(altAllele)
-        .setPosition(refPos + refOffset)
+        .setAlternateAllele(altAllele)
+        .setStart(refPos + refOffset)
+        .setEnd(refPos + refOffset + refAllele.length)
         .build
-      val genotype = ADAMGenotype.newBuilder()
+      val genotype = Genotype.newBuilder()
         .setVariant(variant)
         .setSampleId(sampleName)
         .setGenotypeQuality(phred)
@@ -315,7 +318,7 @@ abstract class ReadCallHaplotypes(
 
       List(genotype)
     } else {
-      List[ADAMGenotype]()
+      List[Genotype]()
     }
   }
 
@@ -328,17 +331,17 @@ abstract class ReadCallHaplotypes(
    * @param referenceRegion Describes the coordinates that this region overlaps.
    * @return List of variant contexts found in the region.
    */
-  def scoreHaplotypes(region: Seq[RichADAMRecord],
+  def scoreHaplotypes(region: Seq[RichAlignmentRecord],
                       haplotypes: Seq[String],
                       reference: String,
                       referenceRegion: Option[ReferenceRegion] = None,
-                      maxHaplotypes: Int = 16): List[ADAMVariantContext] = {
+                      maxHaplotypes: Int = 16): List[VariantContext] = {
 
     val ts = System.nanoTime
 
     // info for logging
     val (start, end) = referenceRegion.fold((region.map(_.getStart).min,
-      region.flatMap(_.end).max))(rr => (rr.start, rr.end))
+      region.map(_.getEnd).max))(rr => (rr.start, rr.end))
     val refName = region.head.getContig.getContigName
 
     val aligner = new HMMAligner(haplotypeAlignerConfig)
@@ -409,7 +412,7 @@ abstract class ReadCallHaplotypes(
 
     // TODO(peter, 12/8) Call variants, _without_ incorporating phasing for now.
     val calls = if (calledHaplotypePair.isDefined) {
-      var variants = List[ADAMVariantContext]()
+      var variants = List[VariantContext]()
       val sortedRegion = region.sortBy(_.getStart)
       val firstRead = sortedRegion(0)
       val refPos = firstRead.getStart
@@ -494,13 +497,13 @@ abstract class ReadCallHaplotypes(
    * @param[in] pileupGroups An RDD containing reads.
    * @return An RDD containing called variants.
    */
-  override def call(reads: RDD[ADAMRecord]): RDD[ADAMVariantContext] = {
+  override def call(reads: RDD[AlignmentRecord]): RDD[VariantContext] = {
     // broadcast partition set
     val bcastPset = reads.context.broadcast(partitions)
 
     // group reads
     log.info("Grouping reads into regions.")
-    val richReads = reads.map(RichADAMRecord(_))
+    val richReads = reads.map(RichAlignmentRecord(_))
     val regions = richReads.flatMap(r => {
       val rr = ReferenceRegion(r.record).get
       val partitions = bcastPset.value.getPartition(rr, flankLength)
@@ -510,7 +513,7 @@ abstract class ReadCallHaplotypes(
     log.info("avocado: Have " + regions.count + " regions.")
 
     // generate region maps
-    val regionsAndReference: RDD[(String, Seq[RichADAMRecord], Option[ReferenceRegion])] = regions.map(kv => {
+    val regionsAndReference: RDD[(String, Seq[RichAlignmentRecord], Option[ReferenceRegion])] = regions.map(kv => {
       (getReference(kv._2.toSeq), kv._2.toSeq, bcastPset.value.getRegion(kv._1))
     })
 
@@ -526,7 +529,7 @@ abstract class ReadCallHaplotypes(
         scoreHaplotypes(region, haplotypes, ref, refRegion)
       } else if (ref.length == 0 && region.length > 0) {
         val start = region.map(_.getStart).min
-        val end = region.flatMap(_.end).max
+        val end = region.map(_.getEnd).max
         val name = region.head.getContig.getContigName
         log.warn("Had null reference: " + name + " from " + start + " to " + end)
         List()

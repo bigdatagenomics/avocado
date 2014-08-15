@@ -20,18 +20,18 @@ package org.bdgenomics.avocado.partitioners
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.ADAMRecord
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
 trait ReferencePartitionerCompanion {
 
   val partitionerName: String
 
-  protected def apply(rdd: RDD[ADAMRecord],
+  protected def apply(rdd: RDD[AlignmentRecord],
                       subnodeConfiguration: SubnodeConfiguration,
                       stats: AvocadoConfigAndStats): ReferencePartitioner
 
-  final def apply(rdd: RDD[ADAMRecord],
+  final def apply(rdd: RDD[AlignmentRecord],
                   globalConfig: HierarchicalConfiguration,
                   partitionName: String,
                   stats: AvocadoConfigAndStats): ReferencePartitioner = {
