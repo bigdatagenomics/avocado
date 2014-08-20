@@ -29,9 +29,9 @@ do
   fi
   if [ -n "$PR" ]
   then
-    JSON=`curl -u $username:$password -s https://api.github.com/repos/bigdatagenomics/adam/pulls/$PR | tr "\n" " "`
-    DESC_RAW=$(echo $JSON |  grep -Po '"title":.*?[^\\]",' | cut -d "\"" -f 4- | head -n 1 | sed -e "s/\\\\//g")
+    JSON=`curl -u $username:$password -s https://api.github.com/repos/bigdatagenomics/avocado/pulls/$PR | tr "\n" " "`
+    DESC_RAW=$(echo $JSON |  egrep -o '"title":.*?[^\\]",' | cut -d "\"" -f 4- | head -n 1 | sed -e "s/\\\\//g")
     DESC=$(echo ${DESC_RAW%\",})
-    echo "* ISSUE [$PR](https://github.com/bigdatagenomics/adam/pull/$PR): ${DESC}"
+    echo "* ISSUE [$PR](https://github.com/bigdatagenomics/avocado/pull/$PR): ${DESC}"
   fi
 done
