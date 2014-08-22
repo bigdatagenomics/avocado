@@ -26,7 +26,6 @@
   </properties>
   
   <modules>
-    <module>avocado-sufficient-statistics</module>
     <module>avocado-core</module>
     <module>avocado-cli</module>
   </modules>

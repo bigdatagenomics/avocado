@@ -15,26 +15,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.bdgenomics.avocado.partitioners
+package org.bdgenomics.avocado.discovery
 
-import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
+import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.avocado.models.AlleleObservation
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.formats.avro.AlignmentRecord
 
-object Partitioner {
+object Explore {
 
-  val partitioners = List(DefaultPartitioner)
+  val explorers: Seq[ExplorerCompanion] = Seq(ReadExplorer)
 
-  def apply(rdd: RDD[AlignmentRecord],
-            globalConfig: HierarchicalConfiguration,
-            partitionName: String,
-            partitionerAlgorithm: String,
-            stats: AvocadoConfigAndStats): ReferencePartitioner = {
-    val partitioner = partitioners.find(_.partitionerName == partitionerAlgorithm)
+  def apply(explorerAlgorithm: String,
+            explorerName: String,
+            rdd: RDD[AlignmentRecord],
+            stats: AvocadoConfigAndStats,
+            config: HierarchicalConfiguration): RDD[AlleleObservation] = {
 
-    assert(partitioner.isDefined, "Could not find partitioner: " + partitionerAlgorithm)
-    partitioner.get.apply(rdd, globalConfig, partitionName, stats)
+    explorers.find(_.explorerName == explorerAlgorithm)
+      .fold(throw new IllegalArgumentException("Couldn't find exploration algorithm: " +
+        explorerAlgorithm))(_.apply(stats,
+        config,
+        explorerName))
+      .discover(rdd)
   }
-
 }

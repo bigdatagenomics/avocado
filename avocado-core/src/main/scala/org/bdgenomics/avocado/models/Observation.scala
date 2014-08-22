@@ -15,26 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.bdgenomics.avocado.calls.reads
+package org.bdgenomics.avocado.models
 
-import org.bdgenomics.avocado.calls.VariantCall
-import org.apache.spark.{ SparkContext, Logging }
-import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.AlignmentRecord
-import org.bdgenomics.adam.models.VariantContext
+import org.bdgenomics.adam.models.ReferencePosition
 
-/**
- * Abstract class for calling variants on reads.
- */
-abstract class ReadCall extends VariantCall {
-
-  /**
-   * Method signature for variant calling operation.
-   *
-   * @param[in] pileupGroups An RDD containing reads.
-   * @return An RDD containing called variants.
-   */
-  def call(reads: RDD[AlignmentRecord]): RDD[VariantContext]
-
+class Observation(val pos: ReferencePosition,
+                  val allele: String) extends Serializable {
 }
 
