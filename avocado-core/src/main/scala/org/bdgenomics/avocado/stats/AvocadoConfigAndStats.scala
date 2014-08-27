@@ -19,10 +19,10 @@ package org.bdgenomics.avocado.stats
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 import org.bdgenomics.adam.models.SequenceDictionary
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMRDDFunctions
+import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 
 class AvocadoConfigAndStats(val sc: SparkContext,
                             val debug: Boolean,
@@ -41,4 +41,5 @@ class AvocadoConfigAndStats(val sc: SparkContext,
     .distinct()
     .collect()
 
+  lazy val referenceObservations = SliceReference(reference)
 }

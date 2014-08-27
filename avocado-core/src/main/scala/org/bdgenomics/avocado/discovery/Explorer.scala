@@ -15,38 +15,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.bdgenomics.avocado.partitioners
+package org.bdgenomics.avocado.discovery
 
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
-import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.avocado.models.AlleleObservation
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
+import org.bdgenomics.formats.avro.AlignmentRecord
 
-trait ReferencePartitionerCompanion {
+trait ExplorerCompanion {
 
-  val partitionerName: String
+  val explorerName: String
 
-  protected def apply(rdd: RDD[AlignmentRecord],
-                      subnodeConfiguration: SubnodeConfiguration,
-                      stats: AvocadoConfigAndStats): ReferencePartitioner
+  protected def apply(stats: AvocadoConfigAndStats,
+                      config: SubnodeConfiguration): Explorer
 
-  final def apply(rdd: RDD[AlignmentRecord],
+  final def apply(stats: AvocadoConfigAndStats,
                   globalConfig: HierarchicalConfiguration,
-                  partitionName: String,
-                  stats: AvocadoConfigAndStats): ReferencePartitioner = {
+                  explorerSetName: String): Explorer = {
+    val config: SubnodeConfiguration = globalConfig.configurationAt(explorerSetName)
 
-    val config: SubnodeConfiguration = globalConfig.configurationAt(partitionName)
-
-    apply(rdd, config, stats)
+    apply(stats, config)
   }
-
 }
 
-trait ReferencePartitioner extends Serializable with Logging {
+trait Explorer extends Serializable {
 
-  val companion: ReferencePartitionerCompanion
+  val companion: ExplorerCompanion
 
-  def computePartitions(): PartitionSet
-
+  def discover(reads: RDD[AlignmentRecord]): RDD[AlleleObservation]
 }

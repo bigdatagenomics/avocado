@@ -23,12 +23,34 @@ import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.bdgenomics.adam.util.SparkFunSuite
-import org.bdgenomics.avocado.calls.reads.ReadCallAssemblyPhaser
-import org.bdgenomics.avocado.partitioners.PartitionSet
-import scala.collection.immutable.SortedMap
+import scala.collection.immutable.{ NumericRange, SortedMap }
 import scala.collection.mutable.ArrayBuffer
 
 class KmerGraphSuite extends SparkFunSuite {
+
+  // shamelessly borrowed from the indel realigner while we are refactoring...
+  def getReferenceFromReads(reads: Seq[RichAlignmentRecord]): String = {
+    // get reference and range from a single read
+    val readRefs = reads.map((r: RichAlignmentRecord) => {
+      (r.mdTag.get.getReference(r), r.getStart.toLong to r.getEnd)
+    })
+      .toSeq
+      .sortBy(_._2.head)
+
+    // fold over sequences and append - sequence is sorted at start
+    val ref = readRefs.reverse.foldRight[(String, Long)](("", readRefs.head._2.head))((refReads: (String, NumericRange[Long]), reference: (String, Long)) => {
+      if (refReads._2.end < reference._2) {
+        reference
+      } else if (reference._2 >= refReads._2.head) {
+        (reference._1 + refReads._1.substring((reference._2 - refReads._2.head).toInt), refReads._2.end)
+      } else {
+        // there is a gap in the sequence
+        throw new IllegalArgumentException("Current sequence has a gap at " + reference._2 + "with " + refReads._2.head + "," + refReads._2.end + ".")
+      }
+    })
+
+    ref._1
+  }
 
   def na12878_chr20_snp_reads: RDD[RichAlignmentRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
@@ -208,10 +230,7 @@ class KmerGraphSuite extends SparkFunSuite {
   sparkTest("put reads into graph for real data") {
     val reads = na12878_chr20_snp_reads.collect.toSeq
 
-    // make generic assembler to get reference recovery method
-    val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
-    val rcap = new ReadCallAssemblyPhaser(emptyPartition, 4, 4)
-    val reference = rcap.getReference(reads)
+    val reference = getReferenceFromReads(reads)
 
     val kmerGraph = KmerGraph(20, 101, reference.length, reference, reads, 40)
     assert(kmerGraph.allPaths.size === 30)
@@ -247,10 +266,7 @@ class KmerGraphSuite extends SparkFunSuite {
   sparkTest("put reads into graph for larger real dataset") {
     val reads = more_na12878_chr20_snp_reads.collect.toSeq
 
-    // make generic assembler to get reference recovery method
-    val emptyPartition = new PartitionSet(SortedMap[ReferenceRegion, Int]())
-    val rcap = new ReadCallAssemblyPhaser(emptyPartition, 20, 40)
-    val reference = rcap.getReference(reads)
+    val reference = getReferenceFromReads(reads)
 
     val kmerGraph = KmerGraph(20, 101, reference.length, reference, reads, 40)
 

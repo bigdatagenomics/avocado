@@ -39,9 +39,10 @@ import org.bdgenomics.adam.cli.{
 }
 import org.bdgenomics.adam.models.{ VariantContext, ReferenceRegion }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.avocado.calls.{ VariantCall, VariantCaller }
+import org.bdgenomics.avocado.discovery.Explore
+import org.bdgenomics.avocado.genotyping.CallGenotypes
 import org.bdgenomics.avocado.input.Input
-import org.bdgenomics.avocado.partitioners.Partitioner
+import org.bdgenomics.avocado.models.Observation
 import org.bdgenomics.avocado.preprocessing.Preprocessor
 import org.bdgenomics.avocado.postprocessing.Postprocessor
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -90,17 +91,11 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
     "Must have a 1-to-1 mapping between preprocessor names and algorithms.")
   val preprocessingStagesZippedWithNames = preprocessorNames.zip(preprocessorAlgorithms)
 
-  val callNames = getStringArrayFromConfig("callNames")
-  val callAlgorithms = getStringArrayFromConfig("callAlgorithms")
-  assert(callNames.length == callAlgorithms.length,
-    "Must have a 1-to-1 mapping between variant call names and algorithms.")
-  val callZipped = callNames.zip(callAlgorithms)
+  val explorerName = config.getString("explorerName")
+  val explorerAlgorithm = config.getString("explorerAlgorithm")
 
-  val partitionerNames = getStringArrayFromConfig("partitionerNames")
-  val partitionerAlgorithms = getStringArrayFromConfig("partitionerAlgorithms")
-  assert(partitionerNames.length == partitionerAlgorithms.length,
-    "Must have a 1-to-1 mapping between partitioner names and algorithms.")
-  val partitionsZipped = partitionerNames.zip(partitionerAlgorithms)
+  val genotyperName = config.getString("genotyperName")
+  val genotyperAlgorithm = config.getString("genotyperAlgorithm")
 
   val postprocessorNames = getStringArrayFromConfig("postprocessorNames")
   val postprocessorAlgorithms = getStringArrayFromConfig("postprocessorAlgorithms")
@@ -108,63 +103,10 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
     "Must have a 1-to-1 mapping between postprocessor names and algoritms.")
   val postprocessorsZipped = postprocessorNames.zip(postprocessorAlgorithms)
 
-  assert(callZipped.length == partitionsZipped.length,
-    "Must have a 1-to-1 mapping between partitioners and calls.")
-
   val debug = args.debug
 
   private def getStringArrayFromConfig(name: String): Array[String] = {
     config.getStringArray(name).map(_.toString)
-  }
-
-  /**
-   * Assigns reads to a variant calling algorithm.
-   *
-   * @param reads An RDD of raw reads.
-   * @return A map that maps RDDs of reads to variant calling algorithms.
-   */
-  def partitionReads(reads: RDD[AlignmentRecord],
-                     stats: AvocadoConfigAndStats): Map[VariantCall, RDD[AlignmentRecord]] = {
-
-    var rdd = reads.keyBy(r => ReferenceRegion(r))
-      .filter(kv => kv._1.isDefined)
-      .map(kv => (kv._1.get, kv._2))
-    //.cache()
-
-    var callsets = List[(VariantCall, RDD[AlignmentRecord])]()
-    val partitioners = partitionsZipped.map(p => Partitioner(reads, config, p._1, p._2, stats))
-    val partitionersZippedWithCalls = partitioners.zip(callZipped)
-
-    // loop over specified partitioner algorithms
-    partitionersZippedWithCalls.foreach(kv => {
-      // extract partitioner and call
-      val (p, (callName, callAlg)) = kv
-
-      log.info("Partition by: " + p.companion.partitionerName)
-
-      // generate partition set from current read set
-      val partitions = p.computePartitions()
-
-      // generate variant caller
-      val call = VariantCaller(callName, callAlg, stats, config, partitions)
-
-      // filter reads that are in the partition into a new call set and add the call
-      val filteredReads = rdd.filter(kv => partitions.isInSet(kv._1))
-        .map(kv => kv._2)
-      if (debug) {
-        log.info("avocado: have " + filteredReads.count + " reads in " + p.companion.partitionerName)
-      }
-      callsets = (call, filteredReads) :: callsets
-
-      // filter out reads that are wholly contained in the last partitoner
-      rdd = rdd.filter(kv => partitions.isOutsideOfSet(kv._1))
-      if (debug) {
-        log.info("avocado: have " + rdd.count() + " reads left.")
-      }
-    })
-
-    // filter out variant calls that are not actually callable
-    callsets.toMap.filterKeys(k => k.isCallable)
   }
 
   /**
@@ -201,22 +143,17 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
    * @param callsets Map containing read calling algorithm and RDD record pairs.
    * @return Joined output of variant calling algorithms.
    */
-  def callVariants(callsets: Map[VariantCall, RDD[AlignmentRecord]]): RDD[VariantContext] = {
-    // callset map must not be empty
-    assert(!callsets.isEmpty)
-
-    // apply calls and take the union of variants called
-    callsets.map(pair => {
-      // get call and rdd pair
-      val (call, rdd) = pair
-
-      if (debug) {
-        log.info("avocado: Running " + call.companion.callName + " on " + rdd.count + " reads.")
-      }
-
-      // apply call
-      call.call(rdd)
-    }).reduce(_ ++ _)
+  def callVariants(reads: RDD[AlignmentRecord], stats: AvocadoConfigAndStats): RDD[VariantContext] = {
+    val discoveries: RDD[Observation] = Explore(explorerAlgorithm,
+      explorerName,
+      reads,
+      stats,
+      config).map(_.asInstanceOf[Observation])
+    CallGenotypes(genotyperAlgorithm,
+      genotyperName,
+      discoveries ++ stats.referenceObservations,
+      stats,
+      config)
   }
 
   /**
@@ -265,13 +202,9 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
     log.info("Processing reads.")
     val cleanedReads = preProcessReads(reads)
 
-    // initial assignment of reads to variant calling algorithms
-    log.info("Partitioning reads.")
-    val partitionedReads = partitionReads(cleanedReads, stats)
-
     // call variants on filtered reads and pileups
     log.info("Calling variants.")
-    val calledVariants = callVariants(partitionedReads)
+    val calledVariants = callVariants(cleanedReads, stats)
 
     // post process variants
     log.info("Post-processing variants.")
