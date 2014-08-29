@@ -24,7 +24,7 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferencePosition
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichAlignmentRecord
-import org.bdgenomics.avocado.models.AlleleObservation
+import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.AlignmentRecord
 
@@ -34,15 +34,15 @@ object ReadExplorer extends ExplorerCompanion {
 
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Explorer = {
-    new ReadExplorer()
+    new ReadExplorer(stats.referenceObservations)
   }
 }
 
-class ReadExplorer extends Explorer with Logging {
+class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer with Logging {
 
   val companion: ExplorerCompanion = ReadExplorer
 
-  def readToObservations(read: AlignmentRecord): Seq[AlleleObservation] = {
+  def readToObservations(read: AlignmentRecord): Seq[Observation] = {
     val richRead: RichAlignmentRecord = RichAlignmentRecord(read)
 
     // get read start, contig, strand, sample, mapq, and sequence
@@ -59,7 +59,7 @@ class ReadExplorer extends Explorer with Logging {
     val mdTag = richRead.mdTag
 
     // observations
-    var observations = Seq[AlleleObservation]()
+    var observations = Seq[Observation]()
 
     // position in the current read
     var readPos = 0
@@ -88,7 +88,7 @@ class ReadExplorer extends Explorer with Logging {
           quals.drop(readPos).take(alleleLength).reduce(_ + _) / alleleLength,
           mapq,
           negativeStrand,
-          sample) +: observations
+          sample).asInstanceOf[Observation] +: observations
 
         // increment read pointers
         readPos += alleleLength
@@ -123,7 +123,7 @@ class ReadExplorer extends Explorer with Logging {
               mapq, // TODO: is this the correct choice/a good choice?
               mapq,
               negativeStrand,
-              sample) +: observations
+              sample).asInstanceOf[Observation] +: observations
 
             pos += 1
           })
@@ -143,8 +143,8 @@ class ReadExplorer extends Explorer with Logging {
     observations
   }
 
-  def discover(reads: RDD[AlignmentRecord]): RDD[AlleleObservation] = {
+  def discover(reads: RDD[AlignmentRecord]): RDD[Observation] = {
     reads.filter(_.getReadMapped)
-      .flatMap(readToObservations)
+      .flatMap(readToObservations) ++ referenceObservations
   }
 }

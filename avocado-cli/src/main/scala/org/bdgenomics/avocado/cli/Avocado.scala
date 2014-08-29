@@ -148,10 +148,10 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
       explorerName,
       reads,
       stats,
-      config).map(_.asInstanceOf[Observation])
+      config)
     CallGenotypes(genotyperAlgorithm,
       genotyperName,
-      discoveries ++ stats.referenceObservations,
+      discoveries,
       stats,
       config)
   }
