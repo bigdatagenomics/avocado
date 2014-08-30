@@ -19,29 +19,25 @@ package org.bdgenomics.avocado.discovery
 
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.avocado.models.Observation
+import org.bdgenomics.avocado.models.{ Observation, ReadObservation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.AlignmentRecord
 
-trait ExplorerCompanion {
+object ExternalExplorer extends ExplorerCompanion {
 
-  val explorerName: String
+  val explorerName: String = "ExternalExplorer"
 
   protected def apply(stats: AvocadoConfigAndStats,
-                      config: SubnodeConfiguration): Explorer
-
-  final def apply(stats: AvocadoConfigAndStats,
-                  globalConfig: HierarchicalConfiguration,
-                  explorerSetName: String): Explorer = {
-    val config: SubnodeConfiguration = globalConfig.configurationAt(explorerSetName)
-
-    apply(stats, config)
+                      config: SubnodeConfiguration): Explorer = {
+    new ExternalExplorer()
   }
 }
 
-trait Explorer extends Serializable {
+class ExternalExplorer extends Explorer {
 
-  val companion: ExplorerCompanion
+  val companion: ExplorerCompanion = ExternalExplorer
 
-  def discover(reads: RDD[AlignmentRecord]): RDD[Observation]
+  def discover(reads: RDD[AlignmentRecord]): RDD[Observation] = {
+    reads.map(r => new ReadObservation(r).asInstanceOf[Observation])
+  }
 }

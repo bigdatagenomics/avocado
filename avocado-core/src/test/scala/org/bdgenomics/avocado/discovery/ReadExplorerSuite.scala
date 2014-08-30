@@ -17,15 +17,15 @@
  */
 package org.bdgenomics.avocado.discovery
 
-import org.bdgenomics.avocado.models.AlleleObservation
+import org.bdgenomics.adam.util.SparkFunSuite
+import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.formats.avro.{ AlignmentRecord, Contig }
-import org.scalatest.FunSuite
 
-class ReadExplorerSuite extends FunSuite {
+class ReadExplorerSuite extends SparkFunSuite {
 
-  val re = new ReadExplorer()
+  sparkTest("observe a simple read") {
+    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
 
-  test("observe a simple read") {
     val read = AlignmentRecord.newBuilder()
       .setStart(10L)
       .setEnd(15L)
@@ -40,6 +40,10 @@ class ReadExplorerSuite extends FunSuite {
       .build()
 
     val observations = re.readToObservations(read)
+      .flatMap(o => o match {
+        case ao: AlleleObservation => Some(ao)
+        case _                     => None
+      })
 
     assert(observations.length === 5)
     assert(observations.forall(_.phred == 25))
@@ -59,7 +63,9 @@ class ReadExplorerSuite extends FunSuite {
     assert(observations.filter(_.pos.pos == 14L).head.allele === "A")
   }
 
-  test("observe a read with a deletion") {
+  sparkTest("observe a read with a deletion") {
+    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
+
     val read = AlignmentRecord.newBuilder()
       .setStart(10L)
       .setEnd(17L)
@@ -74,6 +80,10 @@ class ReadExplorerSuite extends FunSuite {
       .build()
 
     val observations = re.readToObservations(read)
+      .flatMap(o => o match {
+        case ao: AlleleObservation => Some(ao)
+        case _                     => None
+      })
 
     assert(observations.length === 7)
     assert(observations.filter(_.allele != "_").forall(_.phred == 25))
@@ -98,7 +108,9 @@ class ReadExplorerSuite extends FunSuite {
     assert(observations.filter(_.pos.pos == 16L).head.allele === "A")
   }
 
-  test("observe a read with an insertion") {
+  sparkTest("observe a read with an insertion") {
+    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
+
     val read = AlignmentRecord.newBuilder()
       .setStart(10L)
       .setEnd(13L)
@@ -113,6 +125,10 @@ class ReadExplorerSuite extends FunSuite {
       .build()
 
     val observations = re.readToObservations(read)
+      .flatMap(o => o match {
+        case ao: AlleleObservation => Some(ao)
+        case _                     => None
+      })
 
     assert(observations.length === 3)
     assert(observations.forall(_.phred == 25))
