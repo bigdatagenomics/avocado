@@ -15,7 +15,7 @@
   <name>avocado: A Variant Caller, Distributed</name>
   
   <properties>
-    <adam.version>0.12.2-SNAPSHOT</adam.version>
+    <adam.version>0.13.1-20140909.100451-128</adam.version>
     <avro.version>1.7.6</avro.version>
     <java.version>1.7</java.version>
     <scala.version>2.10.3</scala.version>
@@ -233,7 +233,7 @@
       <dependency>
         <groupId>org.bdgenomics.adam</groupId>
         <artifactId>adam-core</artifactId>
-        <version>0.13.1-SNAPSHOT</version>
+        <version>${adam.version}</version>
       </dependency>
       <dependency>
         <groupId>org.bdgenomics.adam</groupId>
@@ -245,7 +245,7 @@
       <dependency>
         <groupId>org.bdgenomics.adam</groupId>
         <artifactId>adam-cli</artifactId>
-        <version>0.13.1-SNAPSHOT</version>
+        <version>${adam.version}</version>
       </dependency>
       <dependency>
         <groupId>org.scalatest</groupId>
