@@ -30,6 +30,7 @@ import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 import org.bdgenomics.adam.converters.SAMRecordConverter
 import org.bdgenomics.adam.io.InterleavedFastqInputFormat
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.contig.ADAMNucleotideContigFragmentContext._
 import org.bdgenomics.adam.models.{ RecordGroup, RecordGroupDictionary, SequenceDictionary }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import net.sf.samtools._
