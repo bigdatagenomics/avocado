@@ -19,8 +19,9 @@ package org.bdgenomics.avocado.preprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.read.ADAMAlignmentRecordContext._
+import org.bdgenomics.formats.avro.AlignmentRecord
 
 object MarkDuplicates extends PreprocessingStage {
 
