@@ -33,7 +33,6 @@ import org.bdgenomics.adam.cli.{
   ADAMSparkCommand,
   ADAMCommandCompanion,
   ParquetArgs,
-  SparkArgs,
   Args4j,
   Args4jBase
 }
@@ -58,7 +57,7 @@ object Avocado extends ADAMCommandCompanion {
   }
 }
 
-class AvocadoArgs extends Args4jBase with ParquetArgs with SparkArgs {
+class AvocadoArgs extends Args4jBase with ParquetArgs {
   @Argument(metaVar = "READS", required = true, usage = "ADAM read-oriented data", index = 0)
   var readInput: String = _
 

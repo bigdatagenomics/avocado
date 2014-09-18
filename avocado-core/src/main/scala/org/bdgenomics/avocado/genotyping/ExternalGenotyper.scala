@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.genotyping
 
-import fi.tkk.ics.hadoop.bam.{ SAMRecordWritable, VariantContextWritable }
+import org.seqdoop.hadoop_bam.{ SAMRecordWritable, VariantContextWritable }
 import java.io.{ File, OutputStream }
 import java.lang.Runnable
 import java.nio.file.Files
@@ -34,9 +34,9 @@ import org.bdgenomics.adam.rdd.GenomicRegionPartitioner
 import org.bdgenomics.adam.rdd.read.ADAMAlignmentRecordContext._
 import org.bdgenomics.avocado.models.{ Observation, ReadObservation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
-import org.broadinstitute.variant.variantcontext.{ VariantContext => BroadVariantContext }
-import org.broadinstitute.variant.vcf.VCFFileReader
-import net.sf.samtools.{ SAMFileHeader, SAMRecord, BAMFileWriter, SAMFileWriterImpl }
+import htsjdk.variant.variantcontext.{ VariantContext => BroadVariantContext }
+import htsjdk.variant.vcf.VCFFileReader
+import htsjdk.samtools.{ BAMStreamWriter, SAMFileHeader, SAMRecord }
 import scala.collection.JavaConversions._
 import scala.util.Sorting
 
@@ -65,16 +65,6 @@ class ExternalGenotyper(contigLengths: Map[String, Long],
 
   val companion: GenotyperCompanion = ExternalGenotyper
 
-  // create writer - this is a code stench; 
-  // samtools suggests to pass a null file if using a stream
-  // need to wrap a few private methods
-  class BAMStreamWriter(stream: OutputStream) extends BAMFileWriter(stream, null) {
-
-    def writeAlignment(record: SAMRecordWritable) {
-      writeAlignment(record.get)
-    }
-  }
-
   class ExternalWriter(records: Array[(ReferencePosition, SAMRecordWritable)],
                        header: SAMFileHeader,
                        stream: OutputStream) extends Runnable {
@@ -97,7 +87,7 @@ class ExternalGenotyper(contigLengths: Map[String, Long],
 
         count += 1
 
-        writer.writeAlignment(r._2)
+        writer.writeHadoopAlignment(r._2)
       })
 
       // finish and close

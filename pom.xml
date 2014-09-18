@@ -15,7 +15,7 @@
   <name>avocado: A Variant Caller, Distributed</name>
   
   <properties>
-    <adam.version>0.12.2-SNAPSHOT</adam.version>
+    <adam.version>0.14.1-SNAPSHOT</adam.version>
     <avro.version>1.7.6</avro.version>
     <java.version>1.7</java.version>
     <scala.version>2.10.3</scala.version>
@@ -64,46 +64,81 @@
   <build>
     <outputDirectory>target/scala-${scala.version}/classes</outputDirectory>
     <testOutputDirectory>target/scala-${scala.version}/test-classes</testOutputDirectory>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <version>2.4.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>appassembler-maven-plugin</artifactId>
+          <version>1.8</version>
+        </plugin>
+        <plugin>
+          <groupId>com.mycila.maven-license-plugin</groupId>
+          <artifactId>maven-license-plugin</artifactId>
+          <version>1.10.b1</version>
+          <configuration>
+            <header>LICENSE_header.txt</header>
+            <strictCheck>true</strictCheck>
+            <properties>
+              <owner>Big Data Genomics Developers</owner>
+              <email>adam-developers@googlegroups.com</email>
+            </properties>
+            <includes>
+              <include>**/src/main/scala/**</include>
+              <include>**/src/test/scala/**</include>
+              <include>**/src/main/java/**</include>
+              <include>**/src/test/scala/**</include>
+            </includes>
+          </configuration>
+          <executions>
+            <execution>
+              <goals>
+                <goal>check</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.1</version>
+          <configuration>
+            <source>${java.version}</source>
+            <target>${java.version}</target>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>net.alchim31.maven</groupId>
+          <artifactId>scala-maven-plugin</artifactId>
+          <version>3.1.5</version>
+        </plugin>
+        <!-- disable surefire -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>2.7</version>
+        </plugin>
+        <!-- enable scalatest -->
+        <plugin>
+          <groupId>org.scalatest</groupId>
+          <artifactId>scalatest-maven-plugin</artifactId>
+          <version>1.0-RC2</version>
+        </plugin>
+        <plugin>
+          <groupId>org.scalariform</groupId>
+          <artifactId>scalariform-maven-plugin</artifactId>
+          <version>0.1.4</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
-      <plugin>
-        <groupId>com.mycila.maven-license-plugin</groupId>
-        <artifactId>maven-license-plugin</artifactId>
-        <version>1.10.b1</version>
-        <configuration>
-          <header>LICENSE_header.txt</header>
-          <strictCheck>true</strictCheck>
-          <properties>
-            <owner>Big Data Genomics Developers</owner>
-            <email>adam-developers@googlegroups.com</email>
-          </properties>
-          <includes>
-            <include>**/src/main/scala/**</include>
-            <include>**/src/test/scala/**</include>
-            <include>**/src/main/java/**</include>
-            <include>**/src/test/scala/**</include>
-          </includes>
-        </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>check</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.1</version>
-        <configuration>
-          <source>${java.version}</source>
-          <target>${java.version}</target>
-        </configuration>
-      </plugin>
       <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
-        <version>3.1.5</version>
         <executions>
           <execution>
             <id>scala-compile-first</id>
@@ -111,6 +146,11 @@
             <goals>
               <goal>compile</goal>
             </goals>
+            <configuration>
+              <args>
+                <arg>-g:vars</arg>
+              </args>
+            </configuration>
           </execution>
           <execution>
             <id>scala-test-compile-first</id>
@@ -149,28 +189,13 @@
           </javacArgs>
         </configuration>
       </plugin>
-      <!-- disable surefire -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.7</version>
-        <configuration>
-          <skipTests>true</skipTests>
-        </configuration>
-      </plugin>
-      <!-- enable scalatest -->
-      <plugin>
-        <groupId>org.scalatest</groupId>
-        <artifactId>scalatest-maven-plugin</artifactId>
-        <version>1.0-RC2</version>
-      </plugin>
       <plugin>
         <groupId>org.scalariform</groupId>
         <artifactId>scalariform-maven-plugin</artifactId>
         <version>0.1.4</version>
         <executions>
           <execution>
-            <phase>process-sources</phase>
+            <id>default-cli</id>
             <goals>
               <goal>format</goal>
             </goals>
@@ -233,7 +258,7 @@
       <dependency>
         <groupId>org.bdgenomics.adam</groupId>
         <artifactId>adam-core</artifactId>
-        <version>0.13.1-SNAPSHOT</version>
+        <version>${adam.version}</version>
       </dependency>
       <dependency>
         <groupId>org.bdgenomics.adam</groupId>
@@ -245,7 +270,7 @@
       <dependency>
         <groupId>org.bdgenomics.adam</groupId>
         <artifactId>adam-cli</artifactId>
-        <version>0.13.1-SNAPSHOT</version>
+        <version>${adam.version}</version>
       </dependency>
       <dependency>
         <groupId>org.scalatest</groupId>

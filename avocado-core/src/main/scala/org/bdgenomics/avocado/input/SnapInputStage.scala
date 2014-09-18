@@ -33,7 +33,7 @@ import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.contig.ADAMNucleotideContigFragmentContext._
 import org.bdgenomics.adam.models.{ RecordGroup, RecordGroupDictionary, SequenceDictionary }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
-import net.sf.samtools._
+import htsjdk.samtools._
 import scala.collection.JavaConversions._
 
 private[input] object SnapInputStage extends InputStage with Logging {

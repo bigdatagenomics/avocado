@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.discovery
 
-import net.sf.samtools.{ Cigar, CigarElement, CigarOperator }
+import htsjdk.samtools.{ Cigar, CigarElement, CigarOperator }
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
