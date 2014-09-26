@@ -28,6 +28,11 @@ import scala.collection.mutable.ArrayBuffer
 
 class KmerGraphSuite extends SparkFunSuite {
 
+  override val properties = Map(("spark.serializer", "org.apache.spark.serializer.KryoSerializer"),
+    ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"),
+    ("spark.kryoserializer.buffer.mb", "128"),
+    ("spark.kryo.referenceTracking", "true"))
+
   // shamelessly borrowed from the indel realigner while we are refactoring...
   def getReferenceFromReads(reads: Seq[RichAlignmentRecord]): String = {
     // get reference and range from a single read
