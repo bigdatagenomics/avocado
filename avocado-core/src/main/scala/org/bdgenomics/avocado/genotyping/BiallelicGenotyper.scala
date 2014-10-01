@@ -216,7 +216,7 @@ class BiallelicGenotyper(ploidy: Int = 2,
 
     // find most frequently observed non-ref allele
     val nonRefAlleles = alleleObservations.filter(_.allele != reference)
-    val allele = if (nonRefAlleles.size >= 0) {
+    val allele = if (nonRefAlleles.size > 0) {
       nonRefAlleles.groupBy(_.allele)
         .maxBy(kv => kv._2.size)
         ._1
