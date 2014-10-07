@@ -212,6 +212,10 @@
 
   <repositories>
     <repository>
+      <id>Sonatype Apache</id>
+      <url>http://oss.sonatype.org/content/repositories/apache-snapshots/</url>
+    </repository>
+    <repository>
       <id>Sonatype</id>
       <url>http://oss.sonatype.org/content/repositories/snapshots/</url>
     </repository>
@@ -281,7 +285,7 @@
       <dependency>
         <groupId>commons-configuration</groupId>
         <artifactId>commons-configuration</artifactId>
-        <version>1.10</version>
+        <version>2.0-SNAPSHOT</version>
       </dependency>
       <dependency>
         <groupId>args4j</groupId>
