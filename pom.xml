@@ -212,10 +212,6 @@
 
   <repositories>
     <repository>
-      <id>Sonatype Apache</id>
-      <url>http://oss.sonatype.org/content/repositories/apache-snapshots/</url>
-    </repository>
-    <repository>
       <id>Sonatype</id>
       <url>http://oss.sonatype.org/content/repositories/snapshots/</url>
     </repository>
