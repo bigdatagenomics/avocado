@@ -31,7 +31,7 @@ import org.bdgenomics.adam.converters.VariantContextConverter
 import org.bdgenomics.adam.models.{ SAMFileHeaderWritable, VariantContext => ADAMVariantContext, ReferencePosition }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.GenomicRegionPartitioner
-import org.bdgenomics.adam.rdd.read.ADAMAlignmentRecordContext._
+import org.bdgenomics.adam.rdd.read.AlignmentRecordContext._
 import org.bdgenomics.avocado.models.{ Observation, ReadObservation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import htsjdk.variant.variantcontext.{ VariantContext => BroadVariantContext }

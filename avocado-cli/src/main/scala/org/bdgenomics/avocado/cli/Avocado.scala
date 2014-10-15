@@ -38,7 +38,7 @@ import org.bdgenomics.adam.cli.{
 }
 import org.bdgenomics.adam.models.{ VariantContext, ReferenceRegion }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.contig.ADAMNucleotideContigFragmentContext
+import org.bdgenomics.adam.rdd.contig.NucleotideContigFragmentContext
 import org.bdgenomics.avocado.discovery.Explore
 import org.bdgenomics.avocado.genotyping.CallGenotypes
 import org.bdgenomics.avocado.input.Input
@@ -140,7 +140,8 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
   /**
    * Applies variant calling algorithms to reads and pileups. Reduces down and returns called variants.
    *
-   * @param callsets Map containing read calling algorithm and RDD record pairs.
+   * @param reads
+   * @param stats
    * @return Joined output of variant calling algorithms.
    */
   def callVariants(reads: RDD[AlignmentRecord], stats: AvocadoConfigAndStats): RDD[VariantContext] = {
@@ -189,7 +190,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
     log.info("Starting avocado...")
 
     // load in reference from ADAM file
-    val reference: RDD[NucleotideContigFragment] = new ADAMNucleotideContigFragmentContext(sc)
+    val reference: RDD[NucleotideContigFragment] = new NucleotideContigFragmentContext(sc)
       .adamSequenceLoad(args.referenceInput, args.fragmentLength)
 
     log.info("Loading reads in from " + args.readInput)
