@@ -131,7 +131,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         case CigarOperator.S => {
           readPos += cigar(i).getLength
         }
-        case CigarOperator.H => 
+        case CigarOperator.H =>
         case _ => {
           if (cigar(i).getOperator.consumesReferenceBases) {
             pos += cigar(i).getLength

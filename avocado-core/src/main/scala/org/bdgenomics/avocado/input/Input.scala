@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.input
 
 import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
-import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
+import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
@@ -32,9 +32,10 @@ object Input {
    * that the stage provides. The input stage name to use is collected from the provided
    * configuration.
    *
+   * @param sc A SparkContext
    * @param inputPath Path to input read data.
+   * @param reference
    * @param config Configuration file containing the necessary data.
-   * @param stats Global stat and configuration data.
    * @return Returns an RDD of read data.
    */
   def apply(sc: SparkContext,
