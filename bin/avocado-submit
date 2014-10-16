@@ -49,7 +49,12 @@ fi
 # submit the job to Spark
 "$SPARK_SUBMIT" \
   --class org.bdgenomics.avocado.cli.Avocado \
-  --properties-file "$AVOCADO_REPO"/bin/avocado-spark-defaults.conf \
+  --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.kryo.registrator=org.bdgenomics.adam.serialization.ADAMKryoRegistrator \
+  --conf spark.kryoserializer.buffer.mb=4 \
+  --conf spark.kryo.referenceTracking=true \
+  --conf spark.executor.memory=${AVOCADO_EXECUTOR_MEMORY:-4g} \
+  --driver-memory ${AVOCADO_DRIVER_MEMORY:-4g} \
   --jars "$AVOCADO_JARS" \
   "$AVOCADO_CLI_JAR" \
   "$@"
