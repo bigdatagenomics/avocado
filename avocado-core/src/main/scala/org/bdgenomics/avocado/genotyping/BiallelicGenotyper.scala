@@ -118,7 +118,7 @@ class BiallelicGenotyper(ploidy: Int = 2,
                               idx: Int = 1,
                               maxIdx: Int = 0): Int = {
     // are we at the end of the array? if so, return.
-    if (idx > array.length) {
+    if (idx >= array.length) {
       maxIdx
     } else {
       // do we have a new max? if so, update the current max index.
