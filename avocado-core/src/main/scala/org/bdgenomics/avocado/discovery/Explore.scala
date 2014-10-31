@@ -27,6 +27,7 @@ import org.bdgenomics.formats.avro.AlignmentRecord
 object Explore {
 
   val explorers: Seq[ExplorerCompanion] = Seq(ReadExplorer,
+    ReassemblyExplorer,
     ExternalExplorer)
 
   def apply(explorerAlgorithm: String,

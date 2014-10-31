@@ -17,96 +17,16 @@
  */
 package org.bdgenomics.avocado.algorithms.debrujin
 
+import org.apache.spark.Logging
+import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion }
+import org.bdgenomics.avocado.Timers._
+import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.formats.avro.AlignmentRecord
-import org.bdgenomics.adam.rich.RichAlignmentRecord
 import scala.annotation.tailrec
-import scala.collection.mutable.{ HashSet, HashMap, SortedSet }
+import scala.collection.mutable.HashMap
+import scala.math.abs
 
-object KmerGraph {
-
-  /**
-   * Chops a read into k-mers.
-   *
-   * @param read Read to chop into k-mers.
-   * @param k _k_-mer length
-   * @return Returns a seq of strings with length _k_.
-   */
-  private def getKmerSequences(read: AlignmentRecord, k: Int): Seq[String] = {
-    val readSeq: String = read.getSequence.toString
-    getKmerSequences(readSeq, k)
-  }
-
-  /**
-   * Chops a generic string into k-mers.
-   *
-   * @param read Read to chop into k-mers.
-   * @param k _k_-mer length
-   * @return Returns a seq of strings with length _k_.
-   */
-  private def getKmerSequences(sequence: String, k: Int): Seq[String] = {
-    val seqLen = sequence.size
-    val offsets = (0 until seqLen - k + 1).toSeq
-    offsets.map(idx => sequence.substring(idx, idx + k))
-  }
-
-  @tailrec private[debrujin] final def mergeGraphs(graph1: Map[String, Set[Kmer]],
-                                                   graph2: Map[String, Set[Kmer]]): Map[String, Set[Kmer]] = {
-    def mergeKmer(set: Set[Kmer], kmer: Kmer): Set[Kmer] = {
-      // get all matching kmers
-      val likeKmers = set.filter(_.kmerSeq == kmer.kmerSeq)
-
-      if (likeKmers.size >= 1) {
-        // are any of the kmers in flanking sequence?
-        val inFlank = likeKmers.map(_.inFlank).reduce(_ || _) || kmer.inFlank
-
-        // update multiplicity of kmer
-        set.filter(_.kmerSeq != kmer.kmerSeq) + new Kmer(kmer.kmerSeq,
-          likeKmers.map(_.weight).sum,
-          inFlank)
-      } else {
-        set + kmer
-      }
-    }
-
-    @tailrec def mergeKmerSet(prefix: String,
-                              set1: Set[Kmer],
-                              set2: Set[Kmer]): (String, Set[Kmer]) = {
-      if (set2.isEmpty) {
-        (prefix, set1)
-      } else {
-        val newSet1 = mergeKmer(set1, set2.head)
-        mergeKmerSet(prefix, newSet1, set2.drop(1))
-      }
-    }
-
-    def mergePrefix(graph: Map[String, Set[Kmer]],
-                    node: (String, Set[Kmer])): Map[String, Set[Kmer]] = {
-      val (prefix, set) = node
-
-      // if prefix in graph, merge, else add
-      if (graph.contains(prefix)) {
-        graph.filterKeys(_ != node) + mergeKmerSet(prefix, graph(prefix), set)
-      } else {
-        graph + node
-      }
-    }
-
-    if (graph2.isEmpty) {
-      graph1
-    } else {
-      val merged = mergePrefix(graph1, graph2.head)
-      mergeGraphs(merged, graph2.drop(1))
-    }
-  }
-
-  private[debrujin] def buildPrefixMap(kmerSequences: Seq[String],
-                                       isFlank: Boolean = false): Map[String, Set[Kmer]] = {
-    val kmers = kmerSequences.groupBy(x => x) // group by sequence
-      .map(kv => Kmer(kv._1, kv._2.size, isFlank)) // generate kmer w/ sequence and count
-      .groupBy(kmer => kmer.prefix)
-
-    kmers.map(kv => (kv._1, kv._2.toSet))
-  }
+object KmerGraph extends Logging {
 
   /**
    * Creates a new de Brujin Graph that shows connections between k-mers. k-mers are inserted
@@ -119,200 +39,213 @@ object KmerGraph {
    * @param reads Reads to insert into graph.
    * @param flankLength Length of flanking sequence to take from reference sequence.
    * @param maxEntries Maximum number of times a loop can be entered.
-   * @param removeSpurs If true, removes spurs (low quality paths) from the graph.
    * @param lowCoverageTrimmingThreshold Threshold for trimming nodes that are not covered by many reads.
    * @return Returns a new de Brujin graph.
    */
   def apply(kmerLength: Int,
-            readLength: Int,
-            regionLength: Int,
-            reference: String,
-            reads: Seq[RichAlignmentRecord],
-            flankLength: Int,
-            maxEntries: Int = 5,
-            removeSpurs: Boolean = false,
-            lowCoverageTrimmingThreshold: Option[Double] = None): KmerGraph = {
+            references: Seq[(ReferenceRegion, String)],
+            reads: Seq[AlignmentRecord]): Iterable[KmerGraph] = {
 
-    val graph = new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength, maxEntries)
-    graph.insertReads(reads)
-    if (removeSpurs || lowCoverageTrimmingThreshold.isDefined) {
-      lowCoverageTrimmingThreshold.foreach(t => graph.trimLowCoverageKmers(t))
-      graph.removeSpurs()
+    assert(references.length == 1, "For now, only support a single reference in the graph.")
+
+    log.info("Building indexed de Bruijn graph for region " + references.map(_._1).mkString +
+      " from " + reads.size + " reads.")
+
+    var observationEstimate = 0
+
+    @tailrec def addReferenceKmers(iter: Iterator[String],
+                                   pos: ReferencePosition,
+                                   lastKmer: Kmer,
+                                   kmerMap: HashMap[String, Kmer]) {
+      // do we have k-mers left?
+      if (iter.hasNext) {
+        var newKmer: Kmer = null
+        val ks = iter.next
+
+        // increment our observation pointer
+        observationEstimate += 1
+
+        // if we have a predecessor, populate the predecessor fields
+        if (lastKmer != null) {
+          val kl = List(lastKmer)
+          newKmer = Kmer(ks, Some(pos), predecessors = kl)
+          lastKmer.successors = newKmer :: lastKmer.successors
+        } else {
+          newKmer = Kmer(ks, Some(pos))
+        }
+
+        // is this kmer already in the graph
+        if (kmerMap.contains(ks)) {
+          throw new IllegalStateException("Loop in reference de Bruijn graph at %s.".format(ks))
+        }
+
+        // add the kmer to the graph
+        kmerMap(ks) = newKmer
+
+        // update the position for the next k-mer
+        val newPos = ReferencePosition(pos.referenceName, pos.pos + 1L)
+
+        addReferenceKmers(iter, newPos, newKmer, kmerMap)
+      }
     }
-    graph
-  }
 
-  def apply(kmerLength: Int,
-            readLength: Int,
-            regionLength: Int,
-            reference: String,
-            flankLength: Int,
-            maxEntries: Int): KmerGraph = {
-    new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength, maxEntries)
+    @tailrec def addReadKmers(kmerIter: Iterator[String],
+                              qualIter: Iterator[Char],
+                              mapq: Option[Int],
+                              readId: Long,
+                              isNegativeStrand: Boolean,
+                              lastKmer: Kmer,
+                              kmerMap: HashMap[String, Kmer]) {
+      // do we have k-mers left?
+      if (kmerIter.hasNext) {
+        assert(qualIter.hasNext, "Should still have qualities as long as we've got k-mers.")
+        var newKmer: Kmer = null
+        val ks = kmerIter.next
+        val q = qualIter.next
+
+        // increment our observation pointer
+        observationEstimate += 1
+
+        // is this a valid k-mer?
+        if (CheckValidity.time { !ks.contains('N') }) {
+          // have we already seen this k-mer?
+          if (kmerMap.contains(ks)) {
+            UpdatingExistingKmer.time {
+              newKmer = kmerMap(ks)
+
+              // add phred score and mapq
+              newKmer.phred = q.toInt :: newKmer.phred
+              newKmer.mapq = mapq :: newKmer.mapq
+              newKmer.readId = readId :: newKmer.readId
+              newKmer.isNegativeStrand = isNegativeStrand :: newKmer.isNegativeStrand
+              assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
+
+              // do we have a predecessor? if so, perform book keeping...
+              if (lastKmer != null) {
+                // if we have a predecessor, and it isn't in the k-mer map, then add it
+                if (newKmer.predecessors.filter(_.kmerSeq == lastKmer.kmerSeq).length == 0) {
+                  newKmer.predecessors = lastKmer :: newKmer.predecessors
+                }
+
+                // if this k-mer isn't in the successor list, then add it
+                if (lastKmer.successors.filter(_.kmerSeq == ks).length == 0) {
+                  lastKmer.successors = newKmer :: lastKmer.successors
+                }
+              }
+            }
+          } else {
+            AddingNewKmer.time {
+              val phred = List(q.toInt)
+              val mapQ = List(mapq)
+              val rid = List(readId)
+              val ns = List(isNegativeStrand)
+
+              // if we have a predecessor, populate the predecessor fields
+              if (lastKmer != null) {
+                val kl = List(lastKmer)
+                newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns, predecessors = kl)
+                assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
+                lastKmer.successors = newKmer :: lastKmer.successors
+              } else {
+                newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns)
+              }
+
+              // add the kmer to the graph
+              kmerMap(ks) = newKmer
+            }
+          }
+        }
+
+        addReadKmers(kmerIter, qualIter, mapq, readId, isNegativeStrand, newKmer, kmerMap)
+      }
+    }
+
+    // group reads by sample
+    val readsBySample = reads.groupBy(_.getRecordGroupSample)
+    assert(readsBySample.size >= 1, "Must have at least one sample to create a graph.")
+    var rId = 0L
+
+    // per sample, construct a debrujin graph
+    readsBySample.map(kv => {
+      val (sample, sampleReads) = kv
+
+      // reset observation count
+      observationEstimate = 0
+
+      val kmerMap = HashMap[String, Kmer]()
+
+      BuildingReferenceGraph.time {
+        // per reference we are passed, add a reference k-mer
+        references.foreach(p => {
+          val (region, reference) = p
+
+          addReferenceKmers(reference.sliding(kmerLength),
+            ReferencePosition(region.referenceName, region.start),
+            null,
+            kmerMap)
+        })
+      }
+
+      AddingReadsToGraph.time {
+        // loop over reads and collect statistics
+        sampleReads.foreach(r => {
+          addReadKmers(
+            r.getSequence.sliding(kmerLength),
+            r.getQual.toIterator,
+            Option(r.getMapq),
+            rId,
+            r.getReadNegativeStrand,
+            null,
+            kmerMap)
+        })
+        rId += 1
+      }
+
+      ConstructingGraph.time {
+        // build the graph for this sample
+        new KmerGraph(kmerMap.values.toArray,
+          kmerLength,
+          sample,
+          references,
+          Some(observationEstimate))
+      }
+    })
   }
 }
 
 /**
  * Graph showing connections between kmers.
  *
- * @param kmerLength Kmer length.
- * @param readLength Read length.
- * @param regionLength Length of the active region.
- * @param reference Reference sequence.
- * @param flankLength Length of flanking sequence to take from reference sequence.
+ * @param kmers k-mers which were observed.
  */
-class KmerGraph(val kmerLength: Int,
-                val readLength: Int,
-                val regionLength: Int,
-                val reference: String,
-                flankLength: Int,
-                maxEntries: Int) {
+class KmerGraph(protected val kmers: Array[Kmer],
+                protected val kmerLength: Int,
+                val sample: String,
+                protected val references: Seq[(ReferenceRegion, String)],
+                hintedCoverage: Option[Int] = None) extends Serializable with Logging {
 
-  assert(flankLength >= kmerLength, "Flanking sequence length must be longer than the k-mer length.")
+  // get reference start/end positions
+  private val starts = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.start)).toSet
+  private val ends = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.end - kmerLength)).toSet
 
-  // source/sink kmerLength
-  val sourceKmer = new Kmer(reference.take(kmerLength))
-  val sinkKmer = new Kmer(reference.takeRight(kmerLength))
+  // source/sink kmers
+  private val allSourceKmers = kmers.filter(_.predecessors.length == 0)
+  private val allSinkKmers = kmers.filter(_.successors.length == 0)
+  private val sourceKmers = kmers.filter(_.refPos.fold(false)(starts(_)))
+  private val sinkKmers = kmers.filter(_.refPos.fold(false)(ends(_)))
 
-  // The actual kmer graph consists of unique K-1 prefixes and kmers connected
-  // by vertices.
-  private var kmerGraph = Map[String, Set[Kmer]]()
+  // how many observations will we have in this region?
+  private lazy val coverage = hintedCoverage.getOrElse(kmers.map(k => {
+    k.refPos.fold(0)(v => 1) + k.multiplicity
+  }).sum)
 
-  // add flanking sequences
-  addFlanks(reference, flankLength)
-
-  def prefixSet = kmerGraph.keys.toSet
-
-  def kmers = kmerGraph.flatMap(_._2)
-
-  def kmerSequences = kmers.map(_.kmerSeq)
-
-  // Paths through the kmer graph are in order of decreasing total mult.
-  val maxPathDepth = regionLength + readLength - kmerLength + 1
-  lazy val allPaths = enumerateAllPaths(maxPathDepth, maxEntries)
-
-  def insertReads(reads: Seq[RichAlignmentRecord]) = {
-    val kmerSequences = reads.flatMap(read => KmerGraph.getKmerSequences(read, kmerLength))
-    addSequencesToGraph(kmerSequences)
-  }
-
-  def insertRead(read: AlignmentRecord) = {
-    val kmerSequences = KmerGraph.getKmerSequences(read, kmerLength)
-    addSequencesToGraph(kmerSequences)
-  }
-
-  def addFlanks(reference: String, flankLength: Int) {
-    val startFlank = reference.take(flankLength)
-    val endFlank = reference.takeRight(flankLength)
-    val kmerSequences = KmerGraph.getKmerSequences(startFlank, kmerLength) ++ KmerGraph.getKmerSequences(endFlank, kmerLength)
-    addSequencesToGraph(kmerSequences, true)
-  }
-
-  def addSequencesToGraph(kmerSequences: Seq[String], isFlank: Boolean = false) {
-    kmerGraph = KmerGraph.mergeGraphs(kmerGraph, KmerGraph.buildPrefixMap(kmerSequences, isFlank))
-  }
-
-  /**
-   * Performs depth first search and scores all paths through the final graph.
-   */
-  def enumerateAllPaths(maxDepth: Int, maxEntries: Int): SortedSet[KmerPath] = {
-    val paths = SortedSet[KmerPath]()
-    val hitCount = HashMap[String, Int]()
-
-    def pathToSink(node: Kmer, currentPath: Seq[Kmer], depth: Int): Unit = {
-      val seq = node.kmerSeq
-      // how many times have we gone into this kmer?
-      val hits = hitCount.getOrElse(seq, 0)
-
-      if (node.nextPrefix.equals(sinkKmer.nextPrefix)) {
-        // if we've hit the end, add our path to the list
-        val path = new KmerPath(currentPath :+ node)
-        paths.add(path)
-      } else if (depth <= maxDepth && hits <= maxEntries) {
-        // entering kmer
-        hitCount(seq) = hits + 1
-
-        // walk next kmers
-        val nextNodes = kmerGraph.get(node.nextPrefix)
-
-        if (nextNodes.isDefined && nextNodes.nonEmpty) {
-          nextNodes.get.map(next => pathToSink(next, currentPath :+ node, depth + 1))
-        }
-
-        // exiting kmer
-        hitCount(seq) = hits
-      }
-    }
-
-    pathToSink(sourceKmer, Seq.empty, 0)
-    paths
-  }
-
-  /**
-   * Removes low coverage kmers from the graph. This is used to remove graph bubbles that do
-   * not have significant evidence, which limits the number of haplotypes created. After this
-   * is called, spur removal should be run. Removes kmers that have coverage lower than a given
-   * ratio times the median kmer coverage. Median is chosen instead of mean to avoid biasing
-   * versus repeats.
-   *
-   * @param ratio Ratio used to set coverage threshold.
-   *
-   * @see removeSpurs
-   */
-  def trimLowCoverageKmers(ratio: Double) {
-    // get median coverage of kmers that are covered by more than 1 read
-    val kmerWeights = kmers.map(_.weight).filter(_ > 1).toSeq.sortWith(_ < _)
-    val median = kmerWeights(kmerWeights.length / 2)
-
-    // threshold for trimming
-    val threshold = (median.toDouble * ratio).toInt
-
-    kmerGraph = kmerGraph.mapValues(s => s.filter(k => k.weight >= threshold || k.inFlank))
-      .filter(kv => !kv._2.isEmpty)
-  }
-
-  /**
-   * Removes spurs from graph. Spurs are segments of the graph that do not connect to
-   * the source or sink of the graph. While these spurs do not contribute spurious haplotypes,
-   * they make the haplotype enumeration process more expensive.
-   */
-  @tailrec final def removeSpurs() {
-    def count: Int = kmerGraph.map(kv => kv._2.size).sum
-
-    val lastCount = count
-
-    val searchPrefixes = kmers.map(_.nextPrefix).toSeq
-    val sourceSearchPrefix = sourceKmer.nextPrefix
-    val sourcePrefix = sourceKmer.prefix
-    val sinkPrefix = sinkKmer.prefix
-    val sinkSearchPrefix = sinkKmer.nextPrefix
-    val prefixes = prefixSet
-
-    kmerGraph = kmerGraph.filter(kv => {
-      val (prefix, nodeKmers) = kv
-
-      // filter out kmers who do not have a predecessor
-      searchPrefixes.contains(prefix) || prefix == sourceSearchPrefix ||
-        prefix == sourcePrefix || prefix == sinkPrefix
-    }).mapValues(ks => {
-      ks.filter(k => {
-        val next = k.nextPrefix
-
-        // filter out kmers who do not point at any other kmers
-        prefixes.contains(next) || next == sinkPrefix || next == sinkSearchPrefix
-      })
-    }).filter(kv => !kv._2.isEmpty)
-
-    // if we removed spurs this iteration, loop and remove spurs
-    if (count != lastCount) {
-      removeSpurs()
-    }
-  }
+  // a summary string for this region
+  private lazy val refString = references.map(_._1).mkString(", ")
 
   override def toString(): String = {
-    "Source: " + sourceKmer.kmerSeq + "\n" +
-      "Sink: " + sinkKmer.kmerSeq + "\n" +
-      kmers.map(_.toString).reduce(_ + "\n" + _)
+    "Sources: " + sourceKmers.map(_.kmerSeq).mkString(", ") + "\n" +
+      "Sinks: " + sinkKmers.map(_.kmerSeq).mkString(", ") + "\n" +
+      kmers.map(_.toDetailedString).mkString("\n")
   }
 
   /**
@@ -323,9 +256,368 @@ class KmerGraph(val kmerLength: Int,
    */
   def toDot(): String = {
     "digraph kg { \n" +
-      sourceKmer.prefix + " [ shape=box ] ;\n" +
-      sinkKmer.nextPrefix + " [ shape=box ] ;\n" +
-      kmers.map(_.toDot).reduce(_ + "\n" + _) + "\n}\n"
+      kmers.map(_.toDot).mkString("\n") + "\n}\n"
   }
 
+  /**
+   * Converts this graph of k-mers into a set of observations. The observations
+   * include both the reference threading as well as the actual read derived observations
+   * that can be used for genotyping. This is performed without realignment.
+   *
+   * @return Returns a seq of observations.
+   */
+  def toObservations: Seq[Observation] = {
+    // preallocate an array for observations
+    var observations = new Array[Observation](coverage)
+    var obsIdx = 0
+    var obsArrayLen = coverage
+
+    def updateObservations(os: Iterable[Observation]): Unit = UpdatingObservations.time {
+      if (obsIdx + os.size > obsArrayLen) {
+        log.warn("Graph is overflowing expected array length at " + refString +
+          "\nDebug graph is:\n" + toDot)
+        throw new IllegalStateException("Possible loop in graph.")
+      }
+
+      // loop and add observations
+      os.foreach(o => {
+        observations(obsIdx) = o
+        obsIdx += 1
+      })
+    }
+
+    def buildReadObservations(kmer: Kmer,
+                              pos: ReferencePosition,
+                              length: Int,
+                              allele: String,
+                              activeReads: Set[Long]): Seq[AlleleObservation] = ReadObservations.time {
+      val setSize = if (activeReads == null) {
+        0
+      } else {
+        activeReads.size
+      }
+      var seen = 0
+      (0 until kmer.multiplicity).flatMap(i => {
+        if (activeReads == null || (seen < setSize && activeReads(kmer.readId(i)))) {
+          seen += 1
+          Some(AlleleObservation(pos,
+            length,
+            allele,
+            kmer.phred(i),
+            kmer.mapq(i),
+            kmer.isNegativeStrand(i),
+            sample,
+            kmer.readId(i)))
+        } else {
+          None
+        }
+      })
+    }
+
+    def buildReferenceObservations(kmer: Kmer): Seq[Observation] = ReferenceObservations.time {
+      val site = Seq(new Observation(kmer.refPos.get, kmer.kmerSeq.take(1)))
+      // did we have any reads covering this site?
+      // if not, just emit that we observed the site
+      if (kmer.multiplicity == 0) {
+        site
+      } else {
+        site ++ (buildReadObservations(kmer, kmer.refPos.get, 1, kmer.kmerSeq.take(1), null)
+          .map(_.asInstanceOf[Observation]))
+      }
+    }
+
+    @tailrec def crawl(context: BranchContext,
+                       branches: List[BranchContext],
+                       referenceSites: Set[ReferencePosition]) {
+
+      if (context != null) {
+        val (newContext,
+          newBranches,
+          newSites) = Stepping.time {
+          context match {
+            case a: Allele => CrawlAllele.time {
+              // set the visit flag
+              a.kmer.visit()
+
+              val newAllele = a.allele.append(a.kmer.kmerSeq.take(1))
+              val newPending = a.kmer :: a.pending
+
+              // is this allele a spur? if so, move on, else continue building the allele
+              if (a.kmer.successors.isEmpty) {
+                // reset visitiation status
+                newPending.foreach(_.reset())
+
+                // do we have branches remaining?
+                if (branches.isEmpty) {
+                  (null, branches, referenceSites)
+                } else {
+                  (branches.head, branches.drop(1), referenceSites)
+                }
+              } else {
+                // build next step
+                val numSuccessors = a.kmer.successors.count(!_.isReference)
+                val ctxs = a.kmer.successors.map(nextKmer => {
+                  if (nextKmer.isReference) {
+                    ClosedAllele(nextKmer, newAllele.toString, a.branchPoint, newPending, a.activeReads)
+                  } else {
+                    // if our allele forks, we must duplicate the buffer
+                    val buffer = if (numSuccessors > 1) {
+                      new StringBuffer(newAllele.toString)
+                    } else {
+                      newAllele
+                    }
+                    Allele(nextKmer, buffer, a.branchPoint, newPending, a.activeReads)
+                  }
+                })
+
+                // return next step
+                (ctxs.head,
+                  branches ::: ctxs.drop(1),
+                  referenceSites)
+              }
+            }
+            case ca: ClosedAllele => ClosingAllele.time {
+              // reset visit flags
+              ca.pending.foreach(_.reset())
+
+              // where have we connected back to, and where did we start?
+              val refSink = ca.kmer.refPos.get
+
+              // reverse pending k-mers
+              val reversed = ca.pending.reverse
+
+              // what is the length of the allele?
+              // a snp has length 0, while a n-base indel has length n
+              val refGap = (refSink.pos - ca.branchPoint.pos).toInt
+              val offset = reversed.length - refGap + 1
+              val alleleLength = abs(offset)
+              lazy val gapLength = if (ca.branchPoint.referenceName == refSink.referenceName) {
+                (refSink.pos - ca.branchPoint.pos).toInt - 1
+              } else {
+                Int.MaxValue
+              }
+
+              // do we have an indel/snp or a deletion? deletions must be handeled specially.
+              // s/mnp: allele length = 0
+              // simple insert: # kmers = gap length + allele length
+              // simple deletion: # kmers < kmer length
+              if (offset < 0 && reversed.length < kmerLength) {
+                val delBase = reversed.head.kmerSeq.dropRight(1).takeRight(1)
+
+                // create observations of the alt allele
+                val altObs = reversed.takeRight(1)
+                  .flatMap(buildReadObservations(_,
+                    ReferencePosition(refSink.referenceName,
+                      refSink.pos - 1),
+                    alleleLength + 1,
+                    (delBase),
+                    ca.activeReads))
+                  .map(_.asInstanceOf[Observation])
+
+                // now, count (k - 1) from the start and build reference observations
+                var refPoint = ReferencePosition(ca.branchPoint.referenceName,
+                  ca.branchPoint.pos + 1)
+                val refObs = reversed.dropRight(1)
+                  .flatMap(k => {
+                    // take observations
+                    val obs = buildReadObservations(k,
+                      refPoint,
+                      1,
+                      k.kmerSeq.take(1),
+                      ca.activeReads)
+                      .map(_.asInstanceOf[Observation])
+
+                    // increment position
+                    refPoint = ReferencePosition(refPoint.referenceName,
+                      refPoint.pos + 1)
+
+                    // emit observations
+                    obs
+                  })
+
+                // combine observations into a new observation set and recurse
+                val newObs = altObs ++ refObs
+                updateObservations(newObs)
+                (Reference(ca.kmer),
+                  branches,
+                  referenceSites)
+              } else {
+                // create observations of the alt allele
+                val altObs = if (offset == 0) {
+                  // if we have a s/mnp, we must index into the allele
+                  var idx = 0
+                  val alt = ca.allele.drop(kmerLength - alleleLength - 1)
+                  reversed.drop(kmerLength - 1)
+                    .flatMap(kmer => {
+                      val obs = buildReadObservations(kmer,
+                        ReferencePosition(ca.branchPoint.referenceName,
+                          ca.branchPoint.pos + kmerLength - offset + idx),
+                        1,
+                        alt(idx).toString,
+                        ca.activeReads)
+                        .map(_.asInstanceOf[Observation])
+
+                      // increment index into allele
+                      idx += 1
+
+                      obs
+                    })
+                } else {
+                  // are we in an insert, or a complex allele? if we are in an insert, we have
+                  // allele length of 1, if we're in a complex allele, we emit the short
+                  // haplotype corresponding to the complex allele
+                  val (altLength, altAllele, rp) = if (offset > 0 && gapLength + 1 == kmerLength) {
+                    // a simple insert left aligns to the reference position prior to the insert
+                    (1,
+                      ca.allele.drop(kmerLength - alleleLength - 1),
+                      ReferencePosition(ca.branchPoint.referenceName,
+                        ca.branchPoint.pos + kmerLength - offset))
+                  } else {
+                    // a complex allele covers multiple reference positions
+                    (abs(offset - 1),
+                      ca.allele.drop(kmerLength - 1),
+                      ReferencePosition(ca.branchPoint.referenceName,
+                        ca.branchPoint.pos + kmerLength))
+                  }
+                  reversed.drop(kmerLength - 1)
+                    .flatMap(buildReadObservations(_,
+                      rp,
+                      altLength,
+                      altAllele,
+                      ca.activeReads))
+                    .groupBy(ao => ao.readId)
+                    .map(kv => {
+                      val (_, observations) = kv
+
+                      // seed from the head observation
+                      val headObs = observations.head
+
+                      // we need to average out the phred scores
+                      val numObservations = observations.length
+                      val phred = observations.map(_.phred).sum
+
+                      // create new observation that is the average of the others
+                      AlleleObservation(headObs.pos,
+                        headObs.length,
+                        headObs.allele,
+                        phred / numObservations,
+                        headObs.mapq,
+                        headObs.onNegativeStrand,
+                        headObs.sample,
+                        headObs.readId).asInstanceOf[Observation]
+                    })
+                }
+
+                // now, count (k - 1) from the start and build reference observations
+                var refPoint = ReferencePosition(ca.branchPoint.referenceName,
+                  ca.branchPoint.pos + 1)
+                val refObs = reversed.take(kmerLength - 1)
+                  .flatMap(k => {
+                    // take observations
+                    val obs = buildReadObservations(k,
+                      refPoint,
+                      1,
+                      k.kmerSeq.take(1),
+                      ca.activeReads)
+                      .map(_.asInstanceOf[Observation])
+
+                    // increment position
+                    refPoint = ReferencePosition(refPoint.referenceName,
+                      refPoint.pos + 1)
+
+                    // emit observations
+                    obs
+                  })
+
+                // combine observations into a new observation set and recurse
+                val newObs = altObs ++ refObs
+                updateObservations(newObs)
+                (Reference(ca.kmer),
+                  branches,
+                  referenceSites)
+              }
+            }
+            case r: Reference => CrawlReference.time {
+              val pos = r.kmer.refPos.get
+
+              // have we seen this position before?
+              // if so, don't process it again
+              if (CheckingIfHaveSeen.time { referenceSites(pos) }) {
+                SiteSeenBefore.time {
+                  // do we have remaining sites?
+                  val (next, newBranches) = if (branches.isEmpty) {
+                    (null, branches)
+                  } else {
+                    (branches.head, branches.drop(1))
+                  }
+
+                  (next,
+                    newBranches,
+                    referenceSites)
+                }
+              } else {
+                ProcessingUnseenSite.time {
+                  // build observations
+                  val newObservations = ProcessingObservations.time {
+                    buildReferenceObservations(r.kmer)
+                  }
+
+                  // add new position to set
+                  val newSet: Set[ReferencePosition] = RebuildingSet.time { (referenceSites + pos) }
+
+                  // if we have a successor, we'll take that and continue on
+                  // else, we'll move to the next branch
+                  val (next, newBranches) = PickingBranch.time {
+                    if (r.kmer.successors.filter(_.refPos.isDefined).isEmpty && branches.isEmpty) {
+                      (null, branches)
+                    } else if (r.kmer.successors.filter(_.refPos.isDefined).isEmpty) {
+                      (branches.head, branches.drop(1))
+                    } else {
+                      (Reference(r.kmer.successors.filter(_.refPos.isDefined).head),
+                        r.kmer.successors.filter(_.refPos.isEmpty).map(v => Allele(v, pos)) ::: branches)
+                    }
+                  }
+
+                  // update observations and return
+                  updateObservations(newObservations)
+                  BuildingBranchInfo.time {
+                    (next,
+                      newBranches,
+                      EvaluatingSet.time { newSet })
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // recurse and compute next iteration
+        crawl(newContext,
+          newBranches,
+          newSites)
+      }
+    }
+
+    if (sourceKmers.size > 0) {
+      log.info("Started crawling " + refString)
+      crawl(Reference(sourceKmers.head),
+        sourceKmers.drop(1).map(p => Reference(p)).toList,
+        Set())
+      log.info("Finished crawling " + refString)
+      observations.take(obsIdx).toSeq
+    } else {
+      log.warn("No sources seen on " + refString)
+      Seq()
+    }
+  }
+
+  def size: Int = kmers.length
+
+  def nonRefSize: Int = kmers.filter(_.refPos.isEmpty).length
+
+  def sources: Int = sourceKmers.length
+
+  def sinks: Int = sinkKmers.length
+
+  def spurs: Int = allSourceKmers.length + allSinkKmers.length - sources - sinks
 }
