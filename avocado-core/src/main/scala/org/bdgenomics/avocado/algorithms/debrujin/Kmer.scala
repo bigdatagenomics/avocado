@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.algorithms.debrujin
 
-import scala.math.pow
+import org.bdgenomics.adam.models.ReferencePosition
 
 /**
  * A kmer has a prefix of length k - 1 and a unit length suffix.
@@ -25,11 +25,38 @@ import scala.math.pow
  * @param kmerSeq sequence that will be split into k-1 len prefix and single char suffix
  * @param weight
  */
-case class Kmer(val kmerSeq: String, val weight: Int = 1, val inFlank: Boolean = false) {
+private[debrujin] case class Kmer(kmerSeq: String,
+                                  refPos: Option[ReferencePosition] = None,
+                                  var phred: List[Int] = List(),
+                                  var mapq: List[Option[Int]] = List(),
+                                  var readId: List[Long] = List(),
+                                  var isNegativeStrand: List[Boolean] = List(),
+                                  var predecessors: List[Kmer] = List(),
+                                  var successors: List[Kmer] = List(),
+                                  var visited: Boolean = false) {
+  def visit() {
+    if (visited) {
+      throw new IllegalStateException("In loop at %s.".format(kmerSeq));
+    }
+    visited = true
+  }
 
-  val k = kmerSeq.size
-  val prefix: String = kmerSeq.substring(0, k - 1)
-  val suffix: Char = kmerSeq.charAt(k - 1)
+  def reset() {
+    visited = false
+  }
+
+  def multiplicity = {
+    val mult = phred.length
+
+    assert(mapq.length == mult, toDetailedString)
+    assert(readId.length == mult, toDetailedString)
+    assert(isNegativeStrand.length == mult, toDetailedString)
+
+    mult
+  }
+  val prefix: String = kmerSeq.dropRight(1)
+  val suffix: Char = kmerSeq.last
+  val isReference = refPos.isDefined
 
   def nextPrefix: String = {
     prefix.drop(1) + suffix
@@ -37,6 +64,15 @@ case class Kmer(val kmerSeq: String, val weight: Int = 1, val inFlank: Boolean =
 
   override def toString: String = {
     prefix + "[" + suffix + "]"
+  }
+
+  def toDetailedString: String = {
+    kmerSeq + " * " + multiplicity + ", " + refPos.fold("unmapped")("@ " + _) + "\n" +
+      "qual: " + phred.mkString(", ") + "\n"
+    "mapq: " + mapq.mkString(", ") + "\n" +
+      "readId: " + readId.mkString(", ") + "\n" +
+      "pre: " + predecessors.mkString(", ") + "\n" +
+      "post: " + successors.mkString(", ")
   }
 
   /**
@@ -47,45 +83,12 @@ case class Kmer(val kmerSeq: String, val weight: Int = 1, val inFlank: Boolean =
    * the next _k_-mer it points at.
    */
   def toDot: String = {
-    prefix + " -> " + nextPrefix + " ;"
-  }
-}
-
-/**
- * class representing a path made of kmers.
- *
- * @param edges Edges of kmer graph.
- */
-class KmerPath(val edges: Seq[Kmer]) extends Ordered[KmerPath] {
-
-  val weight: Int = edges.map(_.weight).reduce(_ + _)
-  val len = edges.size
-  val meanWeight: Double = weight.toDouble / len.toDouble
-  /**
-   * Builds haplotype string from a kmer path using overlap between kmers.
-   *
-   * @return String representing haplotype from kmers.
-   */
-  lazy val haplotypeString: String = {
-    val builder = new StringBuilder
-    if (len > 0) {
-      builder.append(edges(0).prefix)
-      edges.foreach(edge => builder.append(edge.suffix))
-    }
-    builder.toString
+    refPos.fold("")(p => prefix + "[shape=record\nlabel=\"{" + prefix + " | " + p + "}\"];") +
+      prefix + " -> " + nextPrefix + " ;"
   }
 
-  def equals(kp: KmerPath): Boolean = {
-    this.haplotypeString == kp.haplotypeString
-  }
-
-  override def compare(otherPath: KmerPath): Int = {
-    if (equals(otherPath)) {
-      weight.compare(otherPath.weight)
-    } else if (weight > otherPath.weight) {
-      1
-    } else {
-      -1
-    }
+  def removeLinks(kmer: Kmer) {
+    predecessors = predecessors.filter(_.kmerSeq != kmer.kmerSeq)
+    successors = successors.filter(_.kmerSeq != kmer.kmerSeq)
   }
 }

@@ -29,21 +29,15 @@ import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.AlignmentRecord
 
-object ReadExplorer extends ExplorerCompanion {
-
+object ReadExplorer extends ExplorerCompanion with Serializable with Logging {
   val explorerName: String = "ReadExplorer"
 
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Explorer = {
     new ReadExplorer(stats.referenceObservations)
   }
-}
 
-class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer with Logging {
-
-  val companion: ExplorerCompanion = ReadExplorer
-
-  def readToObservations(r: (AlignmentRecord, Long)): Seq[Observation] = ExploringRead.time {
+  private[discovery] def readToObservations(r: (AlignmentRecord, Long)): Seq[Observation] = ExploringRead.time {
     val (read, readId) = r
     val richRead: RichAlignmentRecord = RichAlignmentRecord(read)
 
@@ -169,12 +163,17 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
 
     observations
   }
+}
+
+class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer with Logging {
+
+  val companion: ExplorerCompanion = ReadExplorer
 
   def discover(reads: RDD[AlignmentRecord]): RDD[Observation] = {
     ExploringReads.time {
       reads.filter(_.getReadMapped)
         .zipWithUniqueId()
-        .flatMap(readToObservations)
+        .flatMap(ReadExplorer.readToObservations)
     } ++ referenceObservations
   }
 }

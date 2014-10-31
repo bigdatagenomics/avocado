@@ -46,7 +46,7 @@ private[input] object AlignedReadsInputStage extends InputStage {
 
     sc.loadAlignments(inputPath,
       projection = Some(Filter(AlignmentRecordField.attributes,
-                               AlignmentRecordField.origQual)))
+        AlignmentRecordField.origQual)))
   }
 
 }
