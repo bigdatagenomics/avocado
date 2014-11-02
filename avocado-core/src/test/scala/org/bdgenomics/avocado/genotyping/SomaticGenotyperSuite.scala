@@ -17,14 +17,22 @@
  */
 package org.bdgenomics.avocado.genotyping
 
-import org.bdgenomics.adam.models.{ ReferencePosition, VariantContext }
+import org.bdgenomics.adam.models.{
+  ReferencePosition,
+  SequenceDictionary,
+  SequenceRecord,
+  VariantContext
+}
 import org.bdgenomics.avocado.models.{ Observation, AlleleObservation }
+import org.bdgenomics.formats.avro.Contig
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
 import scala.math.{ abs, sqrt }
 
 class SomaticGenotyperSuite extends FunSuite {
-  val sg = new SomaticGenotyper("normalSample", "somaticSample")
+  val sg = new SomaticGenotyper(SequenceDictionary(SequenceRecord("ctg", 1000L)),
+    "normalSample",
+    "somaticSample")
 
   test("don't call a variant with a hom-ref normal and hom-ref somatic") {
     val observed = Iterable(

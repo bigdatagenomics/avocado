@@ -17,14 +17,20 @@
  */
 package org.bdgenomics.avocado.genotyping
 
-import org.bdgenomics.adam.models.{ ReferencePosition, VariantContext }
+import org.bdgenomics.adam.models.{
+  ReferencePosition,
+  SequenceDictionary,
+  SequenceRecord,
+  VariantContext
+}
 import org.bdgenomics.avocado.models.{ Observation, AlleleObservation }
+import org.bdgenomics.formats.avro.Contig
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
 import scala.math.{ abs, sqrt }
 
 class BiallelicGenotyperSuite extends FunSuite {
-  val ba = new BiallelicGenotyper()
+  val ba = new BiallelicGenotyper(SequenceDictionary(SequenceRecord("ctg", 1000L)))
   val floatingPointingThreshold = 1e-6
 
   def assertAlmostEqual(a: Double, b: Double, epsilon: Double = floatingPointingThreshold) {

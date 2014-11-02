@@ -20,7 +20,12 @@ package org.bdgenomics.avocado.genotyping
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.{ ReferencePosition, VariantContext }
+import org.bdgenomics.adam.models.{
+  ReferencePosition,
+  SequenceDictionary,
+  SequenceRecord,
+  VariantContext
+}
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
@@ -36,12 +41,14 @@ object BiallelicGenotyper extends GenotyperCompanion {
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Genotyper = {
 
-    new BiallelicGenotyper(config.getInt("ploidy", 2),
+    new BiallelicGenotyper(stats.sequenceDict,
+      config.getInt("ploidy", 2),
       config.getBoolean("useEM", false))
   }
 }
 
-class BiallelicGenotyper(ploidy: Int = 2,
+class BiallelicGenotyper(sd: SequenceDictionary,
+                         ploidy: Int = 2,
                          useEM: Boolean = false) extends Genotyper with Logging {
 
   val companion: GenotyperCompanion = BiallelicGenotyper
@@ -57,7 +64,7 @@ class BiallelicGenotyper(ploidy: Int = 2,
    */
   def scoreGenotypeLikelihoods(reference: String,
                                allele: String,
-                               observations: Iterable[AlleleObservation]): (Iterable[AlleleObservation], Array[Double], Double) = {
+                               observations: Iterable[AlleleObservation]): (Iterable[AlleleObservation], Array[Double], Array[Double]) = {
 
     // count bases observed
     val k = observations.size
@@ -92,24 +99,28 @@ class BiallelicGenotyper(ploidy: Int = 2,
     val refBasesEpsilon = epsilon(refBases)
     val alleleBasesEpsilon = epsilon(alleleBases)
     val mismatchBasesEpsilon = epsilon(mismatchBases)
+    val nonRefBasesEpsilon = alleleBasesEpsilon ++ mismatchBasesEpsilon
+
+    def calculateLikelihoods(refEpsilon: Iterable[Double],
+                             alleleEpsilon: Iterable[Double]): Array[Double] = {
+      states.map(g => {
+        // contribution of bases that match the reference
+        val productMatch = refEpsilon.map(epsilon => (ploidy - g) * epsilon + g * (1 - epsilon))
+          .fold(1.0)(_ * _)
+
+        // contribution of bases that do not match the base
+        val productMismatch = alleleEpsilon.map(epsilon => (ploidy - g) * (1 - epsilon) + g * epsilon)
+          .fold(1.0)(_ * _)
+
+        productMatch * productMismatch / pow(ploidy.toDouble, k.toDouble)
+      })
+    }
 
     // calculate genotype likelihoods
-    val likelihoods = states.map(g => {
-      // contribution of bases that match the reference
-      val productMatch = refBasesEpsilon.map(epsilon => (ploidy - g) * epsilon + g * (1 - epsilon))
-        .fold(1.0)(_ * _)
+    val likelihoods = calculateLikelihoods(refBasesEpsilon, alleleBasesEpsilon)
+    val anyAltLikelihoods = calculateLikelihoods(refBasesEpsilon, nonRefBasesEpsilon)
 
-      // contribution of bases that do not match the base
-      val productMismatch = alleleBasesEpsilon.map(epsilon => (ploidy - g) * (1 - epsilon) + g * epsilon)
-        .fold(1.0)(_ * _)
-
-      productMatch * productMismatch / pow(ploidy.toDouble, k.toDouble)
-    })
-
-    // calculate the likelihood of an other alternate allele
-    val likelihoodOtherAlt = 1.0 - mismatchBasesEpsilon.fold(1.0)(_ * _)
-
-    (observations, likelihoods, likelihoodOtherAlt)
+    (observations, likelihoods, anyAltLikelihoods)
   }
 
   @tailrec final def idxOfMax(array: Array[Double],
@@ -135,21 +146,33 @@ class BiallelicGenotyper(ploidy: Int = 2,
                sampleId: String,
                observations: Iterable[AlleleObservation],
                likelihoods: Array[Double],
-               likelihoodOtherAlt: Double): Genotype = {
+               anyAltLikelihoods: Array[Double],
+               priors: Array[Double]): Genotype = {
 
     // were we able to make any observations at this site?
     if (observations.size > 0) {
-      // find the genotype state with the maximum likelihood
-      val maxLikelihoodState = idxOfMax(likelihoods)
+      // compute and marginalize posterior
+      val posteriors = new Array[Double](likelihoods.length)
+      (0 until posteriors.length).foreach(i => {
+        posteriors(i) = likelihoods(i) * priors(i)
+      })
+      val norm = posteriors.sum
+      (0 until posteriors.length).foreach(i => {
+        posteriors(i) /= norm
+      })
+
+      // find the genotype state with the maximum posterior probability
+      val maxPosteriorState = idxOfMax(posteriors)
+      val genotypeProbability = posteriors(maxPosteriorState)
 
       // generate called state
       val calls = new Array[GenotypeAllele](ploidy)
 
-      (0 until maxLikelihoodState).foreach(i => {
+      (0 until maxPosteriorState).foreach(i => {
         calls(i) = GenotypeAllele.Ref
       })
 
-      (maxLikelihoodState until ploidy).foreach(i => {
+      (maxPosteriorState until ploidy).foreach(i => {
         calls(i) = GenotypeAllele.Alt
       })
 
@@ -164,6 +187,8 @@ class BiallelicGenotyper(ploidy: Int = 2,
         .setReadDepth(observations.size)
         .setAlleles(calls.toList)
         .setGenotypeLikelihoods(likelihoods.map(PhredUtils.successProbabilityToPhred).toList)
+        .setNonReferenceLikelihoods(anyAltLikelihoods.map(PhredUtils.successProbabilityToPhred).toList)
+        .setGenotypeQuality(PhredUtils.successProbabilityToPhred(genotypeProbability))
         .setReferenceReadDepth(observations.filter(_.allele == ref).size)
         .setAlternateReadDepth(observations.filter(_.allele == alt).size)
         .build()
@@ -221,38 +246,34 @@ class BiallelicGenotyper(ploidy: Int = 2,
     })
 
     // compensate likelihoods on the basis of population statistics
-    val compensatedLikelihoodsPerSample = if (useEM) {
+    val priors: Array[Double] = if (useEM) {
       // TODO: connect up EM algorithm
       ???
     } else {
-      likelihoodsPerSample
+      (0 to ploidy).map(i => 1.0).toArray
     }
 
     // construct variant
     val variant = Variant.newBuilder()
       .setReferenceAllele(reference)
       .setAlternateAllele(allele)
-      .setContig(Contig.newBuilder()
-        .setContigName(pos.referenceName)
-        .build())
+      .setContig(SequenceRecord.toADAMContig(sd(pos.referenceName).get))
       .setStart(pos.pos)
       .setEnd(pos.pos + reference.length)
       .build()
 
-    // do we only have a single sample?
-    val singleSample = likelihoodsPerSample.size == 1
-
     // emit calls
-    val genotypes = compensatedLikelihoodsPerSample.map(t => {
+    val genotypes = likelihoodsPerSample.map(t => {
       // extract info
-      val (observations, likelihoods, likelihoodOtherAlt) = t
+      val (observations, likelihoods, anyAltLikelihoods) = t
 
       // emit the genotypes
       emitCall(variant,
         observations.head.sample,
         observations,
         likelihoods,
-        likelihoodOtherAlt)
+        anyAltLikelihoods,
+        priors)
     })
 
     // emit the variant context

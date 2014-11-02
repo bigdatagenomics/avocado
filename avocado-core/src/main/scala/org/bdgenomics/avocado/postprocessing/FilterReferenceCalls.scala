@@ -58,7 +58,7 @@ private[postprocessing] class ReferenceCallFilter() extends GenotypeFilter {
     val hasNonRefCall = genotypes.map(g => g.getAlleles
       .toArray
       .count(a => a == GenotypeAllele.Alt || a == GenotypeAllele.OtherAlt) > 0)
-      .reduce(_ || _)
+      .fold(false)(_ || _)
 
     if (hasNonRefCall) {
       genotypes
