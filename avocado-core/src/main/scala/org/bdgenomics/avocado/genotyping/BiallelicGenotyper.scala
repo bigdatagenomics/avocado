@@ -37,14 +37,12 @@ object BiallelicGenotyper extends GenotyperCompanion {
                       config: SubnodeConfiguration): Genotyper = {
 
     new BiallelicGenotyper(config.getInt("ploidy", 2),
-      config.getBoolean("useEM", false),
-      config.getBoolean("emitGVCF", true))
+      config.getBoolean("useEM", false))
   }
 }
 
 class BiallelicGenotyper(ploidy: Int = 2,
-                         useEM: Boolean = false,
-                         emitGVCF: Boolean = true) extends Genotyper with Logging {
+                         useEM: Boolean = false) extends Genotyper with Logging {
 
   val companion: GenotyperCompanion = BiallelicGenotyper
 
@@ -137,45 +135,38 @@ class BiallelicGenotyper(ploidy: Int = 2,
                sampleId: String,
                observations: Iterable[AlleleObservation],
                likelihoods: Array[Double],
-               likelihoodOtherAlt: Double,
-               singleSample: Boolean): Option[Genotype] = {
+               likelihoodOtherAlt: Double): Genotype = {
 
     // were we able to make any observations at this site?
     if (observations.size > 0) {
       // find the genotype state with the maximum likelihood
       val maxLikelihoodState = idxOfMax(likelihoods)
 
-      // if we are calling reference and don't want to emit gvcf, and
-      // only have a single sample, now is the time to return
-      if (!emitGVCF && maxLikelihoodState == 0 && singleSample) {
-        None
-      } else {
-        // generate called state
-        val calls = new Array[GenotypeAllele](ploidy)
+      // generate called state
+      val calls = new Array[GenotypeAllele](ploidy)
 
-        (0 until maxLikelihoodState).foreach(i => {
-          calls(i) = GenotypeAllele.Ref
-        })
+      (0 until maxLikelihoodState).foreach(i => {
+        calls(i) = GenotypeAllele.Ref
+      })
 
-        (maxLikelihoodState until ploidy).foreach(i => {
-          calls(i) = GenotypeAllele.Alt
-        })
+      (maxLikelihoodState until ploidy).foreach(i => {
+        calls(i) = GenotypeAllele.Alt
+      })
 
-        // get alt and ref alleles
-        val alt = variant.getAlternateAllele.toString
-        val ref = variant.getReferenceAllele.toString
+      // get alt and ref alleles
+      val alt = variant.getAlternateAllele.toString
+      val ref = variant.getReferenceAllele.toString
 
-        // build and return genotype record - just simple statistics for now
-        Some(Genotype.newBuilder()
-          .setVariant(variant)
-          .setSampleId(sampleId)
-          .setReadDepth(observations.size)
-          .setAlleles(calls.toList)
-          .setGenotypeLikelihoods(likelihoods.map(PhredUtils.successProbabilityToPhred).toList)
-          .setReferenceReadDepth(observations.filter(_.allele == ref).size)
-          .setAlternateReadDepth(observations.filter(_.allele == alt).size)
-          .build())
-      }
+      // build and return genotype record - just simple statistics for now
+      Genotype.newBuilder()
+        .setVariant(variant)
+        .setSampleId(sampleId)
+        .setReadDepth(observations.size)
+        .setAlleles(calls.toList)
+        .setGenotypeLikelihoods(likelihoods.map(PhredUtils.successProbabilityToPhred).toList)
+        .setReferenceReadDepth(observations.filter(_.allele == ref).size)
+        .setAlternateReadDepth(observations.filter(_.allele == alt).size)
+        .build()
     } else {
       // emit no call
       val calls = new Array[GenotypeAllele](ploidy)
@@ -184,12 +175,12 @@ class BiallelicGenotyper(ploidy: Int = 2,
         calls(i) = GenotypeAllele.NoCall
       })
 
-      Some(Genotype.newBuilder()
+      Genotype.newBuilder()
         .setVariant(variant)
         .setSampleId(sampleId)
         .setReadDepth(0)
         .setAlleles(calls.toList)
-        .build())
+        .build()
     }
   }
 
@@ -252,7 +243,7 @@ class BiallelicGenotyper(ploidy: Int = 2,
     val singleSample = likelihoodsPerSample.size == 1
 
     // emit calls
-    val genotypes = compensatedLikelihoodsPerSample.flatMap(t => {
+    val genotypes = compensatedLikelihoodsPerSample.map(t => {
       // extract info
       val (observations, likelihoods, likelihoodOtherAlt) = t
 
@@ -261,8 +252,7 @@ class BiallelicGenotyper(ploidy: Int = 2,
         observations.head.sample,
         observations,
         likelihoods,
-        likelihoodOtherAlt,
-        singleSample)
+        likelihoodOtherAlt)
     })
 
     // emit the variant context
