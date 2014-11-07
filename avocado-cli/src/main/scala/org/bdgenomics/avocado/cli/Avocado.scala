@@ -214,10 +214,10 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
 
     // save variants to output file
     log.info("Writing calls to disk.")
-    processedGenotypes.adamSave(args.variantOutput,
+    processedGenotypes.adamParquetSave(args.variantOutput,
       args.blockSize,
       args.pageSize,
       args.compressionCodec,
-      args.disableDictionary)
+      args.disableDictionaryEncoding)
   }
 }
