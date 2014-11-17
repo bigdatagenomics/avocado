@@ -46,7 +46,7 @@ private[input] object AlignedReadsInputStage extends InputStage {
 
     println("Loading reads in from " + inputPath)
 
-    new ADAMContext(sc).adamLoad(inputPath, Some(classOf[UniqueMappedReadPredicate]))
+    new ADAMContext(sc).loadAlignments(inputPath, Some(classOf[UniqueMappedReadPredicate]))
   }
 
 }

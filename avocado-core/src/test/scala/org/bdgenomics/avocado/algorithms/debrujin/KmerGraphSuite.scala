@@ -59,13 +59,13 @@ class KmerGraphSuite extends SparkFunSuite {
 
   def na12878_chr20_snp_reads: RDD[RichAlignmentRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
-    val reads: RDD[AlignmentRecord] = sc.adamLoad(path)
+    val reads: RDD[AlignmentRecord] = sc.loadAlignments(path)
     reads.map(r => RichAlignmentRecord(r))
   }
 
   def more_na12878_chr20_snp_reads: RDD[RichAlignmentRecord] = {
     val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058_longer.sam").getFile
-    val reads: RDD[AlignmentRecord] = sc.adamLoad(path)
+    val reads: RDD[AlignmentRecord] = sc.loadAlignments(path)
     reads.map(r => RichAlignmentRecord(r))
   }
 
