@@ -17,6 +17,8 @@
  */
 package org.bdgenomics.avocado.algorithms.debrujin
 
+import org.bdgenomics.adam.models.ReferencePosition
+
 /**
  * A kmer has a prefix of length k - 1 and a unit length suffix.
  *

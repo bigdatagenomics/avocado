@@ -18,23 +18,13 @@
 package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion }
 import org.bdgenomics.adam.rich.RichAlignmentRecord
+import org.bdgenomics.adam.util.PhredUtils
 import scala.annotation.tailrec
-import scala.collection.mutable.{ HashSet, HashMap, SortedSet }
+import scala.collection.mutable.{ HashMap }
 
 object KmerGraph {
-
-  /**
-   * Chops a read into k-mers.
-   *
-   * @param read Read to chop into k-mers.
-   * @param k _k_-mer length
-   * @return Returns a seq of strings with length _k_.
-   */
-  private def getKmerSequences(read: AlignmentRecord, k: Int): Seq[String] = {
-    val readSeq: String = read.getSequence.toString
-    getKmerSequences(readSeq, k)
-  }
 
   /**
    * Creates a new de Brujin Graph that shows connections between k-mers. k-mers are inserted
@@ -52,21 +42,115 @@ object KmerGraph {
    * @return Returns a new de Brujin graph.
    */
   def apply(kmerLength: Int,
-            readLength: Int,
-            regionLength: Int,
-            reference: String,
+            references: Seq[(ReferenceRegion, String)],
             reads: Seq[RichAlignmentRecord],
-            flankLength: Int,
-            maxEntries: Int = 5,
-            removeSpurs: Boolean = false,
-            lowCoverageTrimmingThreshold: Option[Double] = None): KmerGraph = {
+            removeSpurs: Boolean = false): KmerGraph = {
 
-    val graph = new KmerGraph(kmerLength, readLength, regionLength, reference, flankLength, maxEntries)
-    graph.insertReads(reads)
-    if (removeSpurs || lowCoverageTrimmingThreshold.isDefined) {
-      lowCoverageTrimmingThreshold.foreach(t => graph.trimLowCoverageKmers(t))
+    assert(references.length == 1, "For now, only support a single reference in the graph.")
+
+    val kmerMap = HashMap[String, Kmer]()
+
+    @tailrec def addReferenceKmers(iter: Iterator[String],
+                                   pos: ReferencePosition,
+                                   lastKmer: Kmer) {
+      // do we have k-mers left?
+      if (iter.hasNext) {
+        var newKmer: Kmer = null
+        val ks = iter.next
+
+        // if we have a predecessor, populate the predecessor fields
+        if (lastKmer != null) {
+          val kl = List(lastKmer)
+          newKmer = Kmer(ks, Some(pos), predecessors = kl)
+          lastKmer.successors = newKmer :: lastKmer.successors
+        } else {
+          newKmer = Kmer(ks, Some(pos))
+        }
+
+        // add the kmer to the graph
+        kmerMap(ks) = newKmer
+
+        // update the position for the next k-mer
+        val newPos = ReferencePosition(pos.referenceName, pos.pos + 1L)
+
+        addReferenceKmers(iter, newPos, newKmer)
+      }
+    }
+
+    references.foreach(p => {
+      val (region, reference) = p
+      addReferenceKmers(reference.sliding(kmerLength),
+        ReferencePosition(region.referenceName, region.start),
+        null)
+    })
+
+    @tailrec def addReadKmers(kmerIter: Iterator[String],
+                              qualIter: Iterator[Char],
+                              mapq: Int,
+                              lastKmer: Kmer) {
+      // do we have k-mers left?
+      if (kmerIter.hasNext) {
+        assert(qualIter.hasNext, "Should still have qualities as long as we've got k-mers.")
+        var newKmer: Kmer = null
+        val ks = kmerIter.next
+        val q = qualIter.next
+
+        // have we already seen this k-mer?
+        if (kmerMap.contains(ks)) {
+          newKmer = kmerMap(ks)
+
+          // add phred score and mapq
+          newKmer.phred = PhredUtils.phredToSuccessProbability(q) :: newKmer.phred
+          newKmer.mapq = PhredUtils.phredToSuccessProbability(mapq) :: newKmer.mapq
+
+          // do we have a predecessor? if so, perform book keeping...
+          if (lastKmer != null) {
+            // if we have a predecessor, and it isn't in the k-mer map, then add it
+            if (newKmer.predecessors.filter(_.kmerSeq == lastKmer.kmerSeq).length == 0) {
+              newKmer.predecessors = lastKmer :: newKmer.predecessors
+            }
+
+            // if this k-mer isn't in the successor list, then add it
+            if (lastKmer.successors.filter(_.kmerSeq == ks).length == 0) {
+              lastKmer.successors = newKmer :: lastKmer.successors
+            }
+          }
+        } else {
+          var newKmer: Kmer = null
+          val phred = List(PhredUtils.phredToSuccessProbability(q))
+          val mapQ = List(PhredUtils.phredToSuccessProbability(mapq))
+
+          // if we have a predecessor, populate the predecessor fields
+          if (lastKmer != null) {
+            val kl = List(lastKmer)
+            newKmer = Kmer(ks, phred = phred, mapq = mapQ, predecessors = kl)
+            lastKmer.successors = newKmer :: lastKmer.successors
+          } else {
+            newKmer = Kmer(ks, phred = phred, mapq = mapQ)
+          }
+
+          // add the kmer to the graph
+          kmerMap(ks) = newKmer
+        }
+
+        addReadKmers(kmerIter, qualIter, mapq, newKmer)
+      }
+    }
+
+    // loop over reads and collect statistics
+    reads.foreach(r => {
+      addReadKmers(r.getSequence.toString.sliding(kmerLength),
+        r.getQual.toString.toIterator,
+        r.getMapq,
+        null)
+    })
+
+    val graph = new KmerGraph(kmerMap.values.toArray)
+
+    if (removeSpurs) {
       graph.removeSpurs()
     }
+
     graph
   }
 }
@@ -79,70 +163,21 @@ object KmerGraph {
 case class KmerGraph(protected val kmers: Array[Kmer]) {
 
   // source/sink kmers
-  private def sourceKmers = kmers.filter(k => k.predecessors.length == 0)
-  private def sinkKmers = kmers.filter(k => k.successors.length == 0)
-
-  /**
-   * Removes low frequency k-mers from the graph.
-   */
-  def removeLowFrequencyKmers(ratio: Double): KmerGraph = {
-    val multiplicities = kmers.map(_.multiplicity).sorted()
-    val threshold = (ratio *  multiplicities(multiplicities.length / 2).toDouble).toInt
-    
-    // the kmers to be filtered out
-    val filterKmers = kmers.filter(_.multiplicity <= threshold)
-
-    // map over kmers, and remove links to the kmers we are filtering
-    filterKmers.foreach(kmer => {
-      kmer.predecessors.foreach(_.removeLinks(kmer))
-      kmer.successors.foreach(_.removeLinks(kmer))
-    })
-
-    // build new graph
-    KmerGraph(kmers.filter(_.multiplicity > threshold))
-  }
+  private def sourceKmers = kmers.filter(k => k.predecessors.length == 0 && k.refPos.isDefined)
+  private def sinkKmers = kmers.filter(k => k.successors.length == 0 && k.refPos.isDefined)
 
   /**
    * Removes spurs from graph. Spurs are segments of the graph that do not connect to
    * the source or sink of the graph. While these spurs do not contribute spurious haplotypes,
    * they make the haplotype enumeration process more expensive.
    */
-  @tailrec final def removeSpurs() {
-    def count: Int = kmerGraph.map(kv => kv._2.size).sum
-
-    val lastCount = count
-
-    val searchPrefixes = kmers.map(_.nextPrefix).toSeq
-    val sourceSearchPrefix = sourceKmer.nextPrefix
-    val sourcePrefix = sourceKmer.prefix
-    val sinkPrefix = sinkKmer.prefix
-    val sinkSearchPrefix = sinkKmer.nextPrefix
-    val prefixes = prefixSet
-
-    kmerGraph = kmerGraph.filter(kv => {
-      val (prefix, nodeKmers) = kv
-
-      // filter out kmers who do not have a predecessor
-      searchPrefixes.contains(prefix) || prefix == sourceSearchPrefix ||
-        prefix == sourcePrefix || prefix == sinkPrefix
-    }).mapValues(ks => {
-      ks.filter(k => {
-        val next = k.nextPrefix
-
-        // filter out kmers who do not point at any other kmers
-        prefixes.contains(next) || next == sinkPrefix || next == sinkSearchPrefix
-      })
-    }).filter(kv => !kv._2.isEmpty)
-
-    // if we removed spurs this iteration, loop and remove spurs
-    if (count != lastCount) {
-      removeSpurs()
-    }
+  def removeSpurs() {
+    ???
   }
 
   override def toString(): String = {
-    "Source: " + sourceKmer.kmerSeq + "\n" +
-      "Sink: " + sinkKmer.kmerSeq + "\n" +
+    "Sources: " + sourceKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
+      "Sinks: " + sinkKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
       kmers.map(_.toString).reduce(_ + "\n" + _)
   }
 
@@ -154,9 +189,14 @@ case class KmerGraph(protected val kmers: Array[Kmer]) {
    */
   def toDot(): String = {
     "digraph kg { \n" +
-      sourceKmer.prefix + " [ shape=box ] ;\n" +
-      sinkKmer.nextPrefix + " [ shape=box ] ;\n" +
       kmers.map(_.toDot).reduce(_ + "\n" + _) + "\n}\n"
   }
 
+  def size: Int = kmers.length
+
+  def nonRefSize: Int = kmers.filter(_.refPos.isEmpty).length
+
+  def sources: Int = sourceKmers.length
+
+  def sinks: Int = sinkKmers.length
 }

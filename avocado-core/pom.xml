@@ -132,6 +132,23 @@
     <dependency>
       <groupId>org.scalanlp</groupId>
       <artifactId>breeze_2.10</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.seqdoop</groupId>
+      <artifactId>hadoop-bam</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.seqdoop</groupId>
+      <artifactId>cofoja</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.seqdoop</groupId>
+      <artifactId>htsjdk</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bdgenomics.bdg-formats</groupId>
+      <artifactId>bdg-formats</artifactId>
     </dependency>
   </dependencies>
 </project>
