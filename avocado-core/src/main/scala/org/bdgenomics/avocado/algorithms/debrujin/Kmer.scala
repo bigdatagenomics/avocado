@@ -27,14 +27,14 @@ import org.bdgenomics.adam.models.ReferencePosition
  */
 case class Kmer(kmerSeq: String,
                 refPos: Option[ReferencePosition] = None,
-                var phred: List[Double] = List(),
-                var mapq: List[Double] = List(),
+                var phred: List[Int] = List(),
+                var mapq: List[Int] = List(),
                 var predecessors: List[Kmer] = List(),
                 var successors: List[Kmer] = List()) {
 
   assert(phred.length == mapq.length)
 
-  val multiplicity = phred.length
+  def multiplicity = phred.length
   val prefix: String = kmerSeq.dropRight(1)
   val suffix: Char = kmerSeq.last
   val isReference = refPos.isDefined
@@ -45,6 +45,14 @@ case class Kmer(kmerSeq: String,
 
   override def toString: String = {
     prefix + "[" + suffix + "]"
+  }
+
+  def toDetailedString: String = {
+    kmerSeq + ", " + refPos.fold("unmapped")("@ " + _) + "\n" +
+      "qual: " + phred.map(_.toString).fold("")(_ + ", " + _) + "\n" +
+      "mapq: " + mapq.map(_.toString).fold("")(_ + ", " + _) + "\n" +
+      "pre: " + predecessors.map(_.toString).fold("")(_ + ", " + _) + "\n" +
+      "post: " + successors.map(_.toString).fold("")(_ + ", " + _)
   }
 
   /**
