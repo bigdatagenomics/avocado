@@ -36,14 +36,12 @@ object KmerGraph {
    * @param reads Reads to insert into graph.
    * @param flankLength Length of flanking sequence to take from reference sequence.
    * @param maxEntries Maximum number of times a loop can be entered.
-   * @param removeSpurs If true, removes spurs (low quality paths) from the graph.
    * @param lowCoverageTrimmingThreshold Threshold for trimming nodes that are not covered by many reads.
    * @return Returns a new de Brujin graph.
    */
   def apply(kmerLength: Int,
             references: Seq[(ReferenceRegion, String)],
-            reads: Seq[AlignmentRecord],
-            removeSpurs: Boolean = false): Iterable[KmerGraph] = {
+            reads: Seq[AlignmentRecord]): Iterable[KmerGraph] = {
 
     assert(references.length == 1, "For now, only support a single reference in the graph.")
 
@@ -157,14 +155,7 @@ object KmerGraph {
       })
 
       // build the graph for this sample
-      val graph = new KmerGraph(kmerMap.values.toArray, kmerLength, sample)
-
-      // remove spurs if requested
-      if (removeSpurs) {
-        graph.removeSpurs()
-      }
-
-      graph
+      new KmerGraph(kmerMap.values.toArray, kmerLength, sample)
     })
   }
 }
@@ -183,15 +174,6 @@ class KmerGraph(protected val kmers: Array[Kmer],
   private val sourceKmers = allSourceKmers.filter(_.refPos.isDefined)
   private val allSinkKmers = kmers.filter(_.successors.length == 0)
   private val sinkKmers = allSinkKmers.filter(_.refPos.isDefined)
-
-  /**
-   * Removes spurs from graph. Spurs are segments of the graph that do not connect to
-   * the source or sink of the graph. While these spurs do not contribute spurious haplotypes,
-   * they make the haplotype enumeration process more expensive.
-   */
-  def removeSpurs() {
-    ???
-  }
 
   override def toString(): String = {
     "Sources: " + sourceKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
