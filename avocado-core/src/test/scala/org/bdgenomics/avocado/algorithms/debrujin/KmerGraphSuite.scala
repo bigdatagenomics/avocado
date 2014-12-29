@@ -35,12 +35,30 @@ class KmerGraphSuite extends AvocadoFunSuite {
     ("spark.kryoserializer.buffer.mb", "128"),
     ("spark.kryo.referenceTracking", "true"))
 
+  test("cannot build a graph without reads attached to at least one sample") {
+    val ref = "ACACTGAGACATGC"
+    val region = ReferenceRegion("chr1", 100L, 115L)
+
+    intercept[AssertionError] {
+      val graph = KmerGraph(5, Seq((region, ref)), Seq())
+    }
+  }
+
   test("put reference into graph") {
     val ref = "ACACTGAGACATGC"
     val region = ReferenceRegion("chr1", 100L, 115L)
 
-    val graph = KmerGraph(5, Seq((region, ref)), Seq())
+    val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+      .setSequence("")
+      .setQual("")
+      .setRecordGroupSample("sample1")
+      .setMapq(0)
+      .build()))
 
+    assert(graphs.size === 1)
+    val graph = graphs.head
+
+    assert(graph.sample === "sample1")
     assert(graph.size === 10)
     assert(graph.nonRefSize === 0)
     assert(graph.sources === 1)
@@ -60,17 +78,23 @@ class KmerGraphSuite extends AvocadoFunSuite {
     val ref = "ACACTGAGACATGC"
     val region = ReferenceRegion("chr1", 100L, 114L)
 
-    val graph = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+    val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
       .setSequence("ACACTGAGA")
       .setQual("*********")
+      .setRecordGroupSample("sample1")
       .setMapq(50)
       .build(),
       AlignmentRecord.newBuilder()
         .setSequence("GAGACATGC")
         .setQual("*********")
+        .setRecordGroupSample("sample1")
         .setMapq(50)
         .build()))
 
+    assert(graphs.size === 1)
+    val graph = graphs.head
+
+    assert(graph.sample === "sample1")
     assert(graph.size === 10)
     assert(graph.nonRefSize === 0)
     assert(graph.sources === 1)
@@ -101,17 +125,23 @@ class KmerGraphSuite extends AvocadoFunSuite {
     val ref = "ACACTGAGACATGC"
     val region = ReferenceRegion("chr1", 100L, 114L)
 
-    val graph = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+    val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
       .setSequence("ACACTGAGACATGC")
       .setQual("88888888888888")
+      .setRecordGroupSample("sample1")
       .setMapq(50)
       .build(),
       AlignmentRecord.newBuilder()
         .setSequence("ACACTGACACATGC")
         .setQual("88888888888888")
+        .setRecordGroupSample("sample1")
         .setMapq(50)
         .build()))
 
+    assert(graphs.size === 1)
+    val graph = graphs.head
+
+    assert(graph.sample === "sample1")
     assert(graph.size === 15)
     assert(graph.nonRefSize === 5)
     assert(graph.sources === 1)

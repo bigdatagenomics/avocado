@@ -18,7 +18,6 @@
 package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion }
-import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.formats.avro.AlignmentRecord
 import scala.annotation.tailrec
@@ -43,16 +42,15 @@ object KmerGraph {
    */
   def apply(kmerLength: Int,
             references: Seq[(ReferenceRegion, String)],
-            reads: Seq[RichAlignmentRecord],
-            removeSpurs: Boolean = false): KmerGraph = {
+            reads: Seq[AlignmentRecord],
+            removeSpurs: Boolean = false): Iterable[KmerGraph] = {
 
     assert(references.length == 1, "For now, only support a single reference in the graph.")
 
-    val kmerMap = HashMap[String, Kmer]()
-
     @tailrec def addReferenceKmers(iter: Iterator[String],
                                    pos: ReferencePosition,
-                                   lastKmer: Kmer) {
+                                   lastKmer: Kmer,
+                                   kmerMap: HashMap[String, Kmer]) {
       // do we have k-mers left?
       if (iter.hasNext) {
         var newKmer: Kmer = null
@@ -73,21 +71,15 @@ object KmerGraph {
         // update the position for the next k-mer
         val newPos = ReferencePosition(pos.referenceName, pos.pos + 1L)
 
-        addReferenceKmers(iter, newPos, newKmer)
+        addReferenceKmers(iter, newPos, newKmer, kmerMap)
       }
     }
-
-    references.foreach(p => {
-      val (region, reference) = p
-      addReferenceKmers(reference.sliding(kmerLength),
-        ReferencePosition(region.referenceName, region.start),
-        null)
-    })
 
     @tailrec def addReadKmers(kmerIter: Iterator[String],
                               qualIter: Iterator[Char],
                               mapq: Int,
-                              lastKmer: Kmer) {
+                              lastKmer: Kmer,
+                              kmerMap: HashMap[String, Kmer]) {
       // do we have k-mers left?
       if (kmerIter.hasNext) {
         assert(qualIter.hasNext, "Should still have qualities as long as we've got k-mers.")
@@ -132,25 +124,48 @@ object KmerGraph {
           kmerMap(ks) = newKmer
         }
 
-        addReadKmers(kmerIter, qualIter, mapq, newKmer)
+        addReadKmers(kmerIter, qualIter, mapq, newKmer, kmerMap)
       }
     }
 
-    // loop over reads and collect statistics
-    reads.foreach(r => {
-      addReadKmers(r.getSequence.toString.sliding(kmerLength),
-        r.getQual.toString.toIterator,
-        r.getMapq,
-        null)
+    // group reads by sample
+    val readsBySample = reads.groupBy(_.getRecordGroupSample)
+    assert(readsBySample.size >= 1, "Must have at least one sample to create a graph.")
+
+    // per sample, construct a debrujin graph
+    readsBySample.map(kv => {
+      val (sample, sampleReads) = kv
+
+      val kmerMap = HashMap[String, Kmer]()
+
+      // per reference we are passed, add a reference k-mer
+      references.foreach(p => {
+        val (region, reference) = p
+        addReferenceKmers(reference.sliding(kmerLength),
+          ReferencePosition(region.referenceName, region.start),
+          null,
+          kmerMap)
+      })
+
+      // loop over reads and collect statistics
+      sampleReads.foreach(r => {
+        addReadKmers(r.getSequence.toString.sliding(kmerLength),
+          r.getQual.toString.toIterator,
+          r.getMapq,
+          null,
+          kmerMap)
+      })
+
+      // build the graph for this sample
+      val graph = new KmerGraph(kmerMap.values.toArray, kmerLength, sample)
+
+      // remove spurs if requested
+      if (removeSpurs) {
+        graph.removeSpurs()
+      }
+
+      graph
     })
-
-    val graph = new KmerGraph(kmerMap.values.toArray, kmerLength)
-
-    if (removeSpurs) {
-      graph.removeSpurs()
-    }
-
-    graph
   }
 }
 
@@ -159,8 +174,9 @@ object KmerGraph {
  *
  * @param kmers k-mers which were observed.
  */
-case class KmerGraph(protected val kmers: Array[Kmer],
-                     protected val kmerLength: Int) {
+class KmerGraph(protected val kmers: Array[Kmer],
+                protected val kmerLength: Int,
+                val sample: String) extends Serializable {
 
   // source/sink kmers
   private val allSourceKmers = kmers.filter(_.predecessors.length == 0)
@@ -213,7 +229,7 @@ case class KmerGraph(protected val kmers: Array[Kmer],
           kmer.phred(i),
           kmer.mapq(i),
           false,
-          "")
+          sample)
       })
     }
 
