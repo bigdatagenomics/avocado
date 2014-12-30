@@ -29,6 +29,7 @@ private[debrujin] case class Kmer(kmerSeq: String,
                                   refPos: Option[ReferencePosition] = None,
                                   var phred: List[Int] = List(),
                                   var mapq: List[Int] = List(),
+                                  var readId: List[Long] = List(),
                                   var predecessors: List[Kmer] = List(),
                                   var successors: List[Kmer] = List()) {
 

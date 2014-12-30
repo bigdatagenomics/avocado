@@ -21,7 +21,6 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichAlignmentRecord
-import org.bdgenomics.adam.util.SparkFunSuite
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.models.AlleleObservation
 import org.bdgenomics.formats.avro.{ Contig, AlignmentRecord }
@@ -200,7 +199,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
 
     val observations = graph.toObservations
 
-    assert(observations.size === 36)
+    assert(observations.size === 30)
     observations.foreach(o => {
       val r = o.pos
       assert(r.referenceName === "chr1")
@@ -209,7 +208,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
     assert(observations.flatMap(o => o match {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
-    }).size === 24)
+    }).size === 20)
     observations.flatMap(o => o match {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
@@ -226,6 +225,59 @@ class KmerGraphSuite extends AvocadoFunSuite {
       .map(kv => kv._2
         .map(ao => ao.allele)
         .toSet).foreach(v => assert(v.size === 2))
+  }
+
+  test("put reads into graph, introduce a bubble with two alleles") {
+    val ref = "ACACTGAGACATGC"
+    val region = ReferenceRegion("chr1", 100L, 114L)
+
+    val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+      .setSequence("ACACTGACACATGC")
+      .setQual("88888888888888")
+      .setRecordGroupSample("sample1")
+      .setMapq(50)
+      .build(),
+      AlignmentRecord.newBuilder()
+        .setSequence("ACACTGAAACATGC")
+        .setQual("88888888888888")
+        .setRecordGroupSample("sample1")
+        .setMapq(50)
+        .build()))
+
+    assert(graphs.size === 1)
+    val graph = graphs.head
+
+    assert(graph.sample === "sample1")
+    assert(graph.size === 20)
+    assert(graph.nonRefSize === 10)
+    assert(graph.sources === 1)
+    assert(graph.sinks === 1)
+
+    val observations = graph.toObservations
+
+    assert(observations.size === 30)
+    observations.foreach(o => {
+      val r = o.pos
+      assert(r.referenceName === "chr1")
+      assert(r.pos >= 100L && r.pos < 115L)
+    })
+    assert(observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).size === 20)
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .filter(kv => kv._1.pos != 107L)
+      .map(kv => kv._2
+        .map(ao => ao.allele)
+        .toSet).foreach(v => assert(v.size === 1))
+    observations.groupBy(_.pos)
+      .filter(kv => kv._1.pos == 107L)
+      .map(kv => kv._2
+        .map(ao => ao.allele)
+        .toSet).foreach(v => assert(v.size === 3))
   }
 
   /**

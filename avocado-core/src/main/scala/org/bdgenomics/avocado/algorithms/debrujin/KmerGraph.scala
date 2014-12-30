@@ -76,6 +76,7 @@ object KmerGraph {
     @tailrec def addReadKmers(kmerIter: Iterator[String],
                               qualIter: Iterator[Char],
                               mapq: Int,
+                              readId: Long,
                               lastKmer: Kmer,
                               kmerMap: HashMap[String, Kmer]) {
       // do we have k-mers left?
@@ -92,6 +93,7 @@ object KmerGraph {
           // add phred score and mapq
           newKmer.phred = q.toInt :: newKmer.phred
           newKmer.mapq = mapq :: newKmer.mapq
+          newKmer.readId = readId :: newKmer.readId
 
           // do we have a predecessor? if so, perform book keeping...
           if (lastKmer != null) {
@@ -108,27 +110,29 @@ object KmerGraph {
         } else {
           val phred = List(q.toInt)
           val mapQ = List(mapq)
+          val rId = List(readId)
 
           // if we have a predecessor, populate the predecessor fields
           if (lastKmer != null) {
             val kl = List(lastKmer)
-            newKmer = Kmer(ks, phred = phred, mapq = mapQ, predecessors = kl)
+            newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rId, predecessors = kl)
             lastKmer.successors = newKmer :: lastKmer.successors
           } else {
-            newKmer = Kmer(ks, phred = phred, mapq = mapQ)
+            newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rId)
           }
 
           // add the kmer to the graph
           kmerMap(ks) = newKmer
         }
 
-        addReadKmers(kmerIter, qualIter, mapq, newKmer, kmerMap)
+        addReadKmers(kmerIter, qualIter, mapq, readId, newKmer, kmerMap)
       }
     }
 
     // group reads by sample
     val readsBySample = reads.groupBy(_.getRecordGroupSample)
     assert(readsBySample.size >= 1, "Must have at least one sample to create a graph.")
+    var rId = 0L
 
     // per sample, construct a debrujin graph
     readsBySample.map(kv => {
@@ -150,9 +154,11 @@ object KmerGraph {
         addReadKmers(r.getSequence.toString.sliding(kmerLength),
           r.getQual.toString.toIterator,
           r.getMapq,
+          rId,
           null,
           kmerMap)
       })
+      rId += 1
 
       // build the graph for this sample
       new KmerGraph(kmerMap.values.toArray, kmerLength, sample)
@@ -211,7 +217,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
           kmer.phred(i),
           kmer.mapq(i),
           false,
-          sample)
+          sample,
+          kmer.readId(i))
       })
     }
 
@@ -228,14 +235,16 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
     @tailrec def crawl(context: BranchContext,
                        observations: Seq[Observation],
-                       branches: List[BranchContext]): Seq[Observation] = {
+                       branches: List[BranchContext],
+                       referenceSites: Set[ReferencePosition]): Seq[Observation] = {
 
       if (context == null) {
         observations
       } else {
         val (newContext,
           newObservations,
-          newBranches) = context match {
+          newBranches,
+          newSites) = context match {
           case a: Allele => {
             val newAllele = a.allele + a.kmer.kmerSeq.take(1)
             val newPending = a.kmer :: a.pending
@@ -244,9 +253,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
             if (a.kmer.successors.isEmpty) {
               // do we have branches remaining?
               if (branches.isEmpty) {
-                (null, observations, branches)
+                (null, observations, branches, referenceSites)
               } else {
-                (branches.head, observations, branches.drop(1))
+                (branches.head, observations, branches.drop(1), referenceSites)
               }
             } else {
               // for now, we require alts to not diverge
@@ -254,17 +263,19 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 "Unexpected divergence at: " + a.kmer.toDetailedString)
 
               // build next step
-              val nextKmer = a.kmer.successors.head
-              val ctx = if (nextKmer.isReference) {
-                ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending)
-              } else {
-                Allele(nextKmer, newAllele, a.branchPoint, newPending)
-              }
+              val ctxs = a.kmer.successors.map(nextKmer => {
+                if (nextKmer.isReference) {
+                  ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending)
+                } else {
+                  Allele(nextKmer, newAllele, a.branchPoint, newPending)
+                }
+              })
 
               // return next step
-              (ctx,
+              (ctxs.head,
                 observations,
-                branches)
+                branches ::: ctxs.drop(1),
+                referenceSites)
             }
           }
           case ca: ClosedAllele => {
@@ -306,41 +317,64 @@ class KmerGraph(protected val kmers: Array[Kmer],
             val newObs = observations ++ altObs ++ refObs
             (Reference(ca.kmer),
               newObs,
-              branches)
+              branches,
+              referenceSites)
           }
           case r: Reference => {
             val pos = r.kmer.refPos.get
 
-            // build observations
-            val newObservations = buildReferenceObservations(r.kmer)
+            // have we seen this position before?
+            // if so, don't process it again
+            if (referenceSites(pos)) {
+              // do we have remaining sites?
+              val (next, newBranches) = if (branches.isEmpty) {
+                (null, branches)
+              } else {
+                (branches.head, branches.drop(1))
+              }
 
-            // if we have a successor, we'll take that and continue on
-            // else, we'll move to the next branch
-            val (next, newBranches) = if (r.kmer.successors.isEmpty && branches.isEmpty) {
-              (null, branches)
-            } else if (r.kmer.successors.isEmpty) {
-              (branches.head, branches.drop(1))
+              (next,
+                observations,
+                newBranches,
+                referenceSites)
             } else {
-              (Reference(r.kmer.successors.filter(_.refPos.isDefined).head),
-                r.kmer.successors.filter(_.refPos.isEmpty).map(v => Allele(v, pos)) ::: branches)
-            }
+              // build observations
+              val newObservations = buildReferenceObservations(r.kmer)
 
-            (next,
-              observations ++ newObservations,
-              newBranches)
+              // add new position to set
+              val newSet: Set[ReferencePosition] = (referenceSites + pos)
+
+              // if we have a successor, we'll take that and continue on
+              // else, we'll move to the next branch
+              val (next, newBranches) = if (r.kmer.successors.isEmpty && branches.isEmpty) {
+                (null, branches)
+              } else if (r.kmer.successors.isEmpty) {
+                (branches.head, branches.drop(1))
+              } else {
+                (Reference(r.kmer.successors.filter(_.refPos.isDefined).head),
+                  r.kmer.successors.filter(_.refPos.isEmpty).map(v => Allele(v, pos)) ::: branches)
+              }
+
+              (next,
+                observations ++ newObservations,
+                newBranches,
+                newSet)
+            }
           }
         }
 
         // recurse and compute next iteration
         crawl(newContext,
           newObservations,
-          newBranches)
+          newBranches,
+          newSites)
       }
     }
 
     crawl(Reference(sourceKmers.head),
       Seq(),
-      sourceKmers.drop(1).map(p => Reference(p)).toList)
+      sourceKmers.drop(1).map(p => Reference(p)).toList,
+      Set())
   }
 
   def size: Int = kmers.length
