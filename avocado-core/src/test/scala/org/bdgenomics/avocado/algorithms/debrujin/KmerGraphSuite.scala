@@ -63,6 +63,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
     assert(graph.nonRefSize === 0)
     assert(graph.sources === 1)
     assert(graph.sinks === 1)
+    assert(graph.spurs === 0)
 
     val observations = graph.toObservations
 
@@ -99,6 +100,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
     assert(graph.nonRefSize === 0)
     assert(graph.sources === 1)
     assert(graph.sinks === 1)
+    assert(graph.spurs === 0)
 
     val observations = graph.toObservations
 
@@ -112,6 +114,54 @@ class KmerGraphSuite extends AvocadoFunSuite {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
     }).size === 10)
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .map(kv => kv._2
+        .map(ao => ao.allele)
+        .toSet).foreach(v => assert(v.size === 1))
+  }
+
+  test("put reads into graph, contains a spur") {
+    val ref = "ACACTGAGACATGC"
+    val region = ReferenceRegion("chr1", 100L, 114L)
+
+    val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+      .setSequence("ACACTGAGT")
+      .setQual("*********")
+      .setRecordGroupSample("sample1")
+      .setMapq(50)
+      .build(),
+      AlignmentRecord.newBuilder()
+        .setSequence("GAGACATGC")
+        .setQual("*********")
+        .setRecordGroupSample("sample1")
+        .setMapq(50)
+        .build()))
+
+    assert(graphs.size === 1)
+    val graph = graphs.head
+
+    assert(graph.sample === "sample1")
+    assert(graph.size === 11)
+    assert(graph.nonRefSize === 1)
+    assert(graph.sources === 1)
+    assert(graph.sinks === 1)
+    assert(graph.spurs === 1)
+
+    val observations = graph.toObservations
+
+    assert(observations.size === 19)
+    observations.foreach(o => {
+      val r = o.pos
+      assert(r.referenceName === "chr1")
+      assert(r.pos >= 100L && r.pos < 115L)
+    })
+    assert(observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).size === 9)
     observations.flatMap(o => o match {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
@@ -146,6 +196,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
     assert(graph.nonRefSize === 5)
     assert(graph.sources === 1)
     assert(graph.sinks === 1)
+    assert(graph.spurs === 0)
 
     val observations = graph.toObservations
 

@@ -240,22 +240,32 @@ class KmerGraph(protected val kmers: Array[Kmer],
             val newAllele = a.allele + a.kmer.kmerSeq.take(1)
             val newPending = a.kmer :: a.pending
 
-            // for now, we require alts to not diverge
-            assert(a.kmer.successors.length == 1,
-              "Unexpected divergence at: " + a.kmer.toDetailedString)
-
-            // build next step
-            val nextKmer = a.kmer.successors.head
-            val ctx = if (nextKmer.isReference) {
-              ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending)
+            // is this allele a spur? if so, move on, else continue building the allele
+            if (a.kmer.successors.isEmpty) {
+              // do we have branches remaining?
+              if (branches.isEmpty) {
+                (null, observations, branches)
+              } else {
+                (branches.head, observations, branches.drop(1))
+              }
             } else {
-              Allele(nextKmer, newAllele, a.branchPoint, newPending)
-            }
+              // for now, we require alts to not diverge
+              assert(a.kmer.successors.length == 1,
+                "Unexpected divergence at: " + a.kmer.toDetailedString)
 
-            // return next step
-            (ctx,
-              observations,
-              branches)
+              // build next step
+              val nextKmer = a.kmer.successors.head
+              val ctx = if (nextKmer.isReference) {
+                ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending)
+              } else {
+                Allele(nextKmer, newAllele, a.branchPoint, newPending)
+              }
+
+              // return next step
+              (ctx,
+                observations,
+                branches)
+            }
           }
           case ca: ClosedAllele => {
             // where have we connected back to, and where did we start?
@@ -340,4 +350,6 @@ class KmerGraph(protected val kmers: Array[Kmer],
   def sources: Int = sourceKmers.length
 
   def sinks: Int = sinkKmers.length
+
+  def spurs: Int = allSourceKmers.length + allSinkKmers.length - sources - sinks
 }
