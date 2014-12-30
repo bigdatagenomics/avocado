@@ -21,7 +21,8 @@ import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion }
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.formats.avro.AlignmentRecord
 import scala.annotation.tailrec
-import scala.collection.mutable.{ HashMap }
+import scala.collection.mutable.HashMap
+import scala.math.abs
 
 object KmerGraph {
 
@@ -285,13 +286,18 @@ class KmerGraph(protected val kmers: Array[Kmer],
             // reverse pending k-mers
             val reversed = ca.pending.reverse
 
+            // what is the length of the allele?
+            // a snp has length 1, while an insert of length 1 has length 2
+            val offset = (refSink.pos - ca.branchPoint.pos).toInt - kmerLength - 1
+            val alleleLength = abs(offset) + 1
+
             // create observations of the alt allele
             val altObs = reversed.drop(kmerLength - 1)
               .map(buildReadObservations(_,
                 ReferencePosition(ca.branchPoint.referenceName,
-                  ca.branchPoint.pos + kmerLength),
-                (refSink.pos - ca.branchPoint.pos).toInt - kmerLength + 1,
-                ca.allele.drop(kmerLength - 1)))
+                  ca.branchPoint.pos + kmerLength + offset),
+                alleleLength,
+                ca.allele.drop(kmerLength - alleleLength)))
               .reduce(_ ++ _)
 
             // now, count (k - 1) from the start and build reference observations
