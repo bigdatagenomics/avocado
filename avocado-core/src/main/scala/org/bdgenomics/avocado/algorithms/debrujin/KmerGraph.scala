@@ -226,61 +226,56 @@ class KmerGraph(protected val kmers: Array[Kmer],
       }
     }
 
-    @tailrec def crawl(nextKmer: Kmer,
+    @tailrec def crawl(context: BranchContext,
                        observations: Seq[Observation],
-                       pending: List[Kmer],
-                       allele: String,
-                       branchPoint: ReferencePosition,
-                       branches: List[(ReferencePosition, Kmer)]): Seq[Observation] = {
+                       branches: List[BranchContext]): Seq[Observation] = {
 
-      if (nextKmer == null) {
+      if (context == null) {
         observations
       } else {
-        val (newNextKmer,
+        val (newContext,
           newObservations,
-          nowPending,
-          newAllele,
-          newBranch,
-          newBranches): (Kmer, Seq[Observation], List[Kmer], String, ReferencePosition, List[(ReferencePosition, Kmer)]) = if (branchPoint != null && (nextKmer.refPos.isEmpty || !pending.isEmpty)) {
-          // if the current k-mer is unmapped, then we're building an alt
-          // else, we're cleaning up an alt
-          if (nextKmer.refPos.isEmpty) {
-            // extend allele and pending list
-            val newAllele = if (allele != null) {
-              allele + nextKmer.kmerSeq.take(1)
-            } else {
-              nextKmer.kmerSeq.take(1)
-            }
-            val newPending = nextKmer :: pending
+          newBranches) = context match {
+          case a: Allele => {
+            val newAllele = a.allele + a.kmer.kmerSeq.take(1)
+            val newPending = a.kmer :: a.pending
 
             // for now, we require alts to not diverge
-            assert(nextKmer.successors.length == 1,
-              "Unexpected divergence at: " + nextKmer.toDetailedString)
-            (nextKmer.successors.head,
+            assert(a.kmer.successors.length == 1,
+              "Unexpected divergence at: " + a.kmer.toDetailedString)
+
+            // build next step
+            val nextKmer = a.kmer.successors.head
+            val ctx = if (nextKmer.isReference) {
+              ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending)
+            } else {
+              Allele(nextKmer, newAllele, a.branchPoint, newPending)
+            }
+
+            // return next step
+            (ctx,
               observations,
-              newPending,
-              newAllele,
-              branchPoint,
               branches)
-          } else {
-            // where have we connected back to?
-            val refSink = nextKmer.refPos.get
+          }
+          case ca: ClosedAllele => {
+            // where have we connected back to, and where did we start?
+            val refSink = ca.kmer.refPos.get
 
             // reverse pending k-mers
-            val reversed = pending.reverse
+            val reversed = ca.pending.reverse
 
             // create observations of the alt allele
             val altObs = reversed.drop(kmerLength - 1)
               .map(buildReadObservations(_,
-                ReferencePosition(branchPoint.referenceName,
-                  branchPoint.pos + kmerLength),
-                (refSink.pos - branchPoint.pos).toInt - kmerLength + 1,
-                allele.drop(kmerLength - 1)))
+                ReferencePosition(ca.branchPoint.referenceName,
+                  ca.branchPoint.pos + kmerLength),
+                (refSink.pos - ca.branchPoint.pos).toInt - kmerLength + 1,
+                ca.allele.drop(kmerLength - 1)))
               .reduce(_ ++ _)
 
             // now, count (k - 1) from the start and build reference observations
-            var refPoint = ReferencePosition(branchPoint.referenceName,
-              branchPoint.pos + 1)
+            var refPoint = ReferencePosition(ca.branchPoint.referenceName,
+              ca.branchPoint.pos + 1)
             val refObs = reversed.take(kmerLength - 1)
               .map(k => {
                 // take observations
@@ -299,60 +294,43 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
             // combine observations into a new observation set and recurse
             val newObs = observations ++ altObs ++ refObs
-            (nextKmer,
+            (Reference(ca.kmer),
               newObs,
-              List(),
-              null,
-              null,
               branches)
           }
-        } else {
-          assert(nextKmer.refPos.isDefined,
-            "k-mer must be mapped.")
-          val pos = nextKmer.refPos.get
-          assert(branchPoint == null ||
-            pos.referenceName == branchPoint.referenceName &&
-            pos.pos == branchPoint.pos + 1,
-            "Two reference k-mers must be adjacent in reference space.")
+          case r: Reference => {
+            val pos = r.kmer.refPos.get
 
-          // build observations
-          val newObservations = buildReferenceObservations(nextKmer)
+            // build observations
+            val newObservations = buildReferenceObservations(r.kmer)
 
-          // if we have a successor, we'll take that and continue on
-          // else, we'll move to the next branch
-          val (next, newBranches) = if (nextKmer.successors.isEmpty && branches.isEmpty) {
-            ((null, null), branches)
-          } else if (nextKmer.successors.isEmpty) {
-            (branches.head, branches.drop(1))
-          } else {
-            ((null, nextKmer.successors.filter(_.refPos.isDefined).head),
-              nextKmer.successors.filter(_.refPos.isEmpty).map(v => (pos, v)) ::: branches)
+            // if we have a successor, we'll take that and continue on
+            // else, we'll move to the next branch
+            val (next, newBranches) = if (r.kmer.successors.isEmpty && branches.isEmpty) {
+              (null, branches)
+            } else if (r.kmer.successors.isEmpty) {
+              (branches.head, branches.drop(1))
+            } else {
+              (Reference(r.kmer.successors.filter(_.refPos.isDefined).head),
+                r.kmer.successors.filter(_.refPos.isEmpty).map(v => Allele(v, pos)) ::: branches)
+            }
+
+            (next,
+              observations ++ newObservations,
+              newBranches)
           }
-
-          (next._2,
-            observations ++ newObservations,
-            pending,
-            null,
-            next._1,
-            newBranches)
         }
 
         // recurse and compute next iteration
-        crawl(newNextKmer,
+        crawl(newContext,
           newObservations,
-          nowPending,
-          newAllele,
-          newBranch,
           newBranches)
       }
     }
 
-    crawl(sourceKmers.head,
+    crawl(Reference(sourceKmers.head),
       Seq(),
-      List(),
-      null,
-      null,
-      sourceKmers.drop(1).map(p => (null.asInstanceOf[ReferencePosition], p)).toList)
+      sourceKmers.drop(1).map(p => Reference(p)).toList)
   }
 
   def size: Int = kmers.length

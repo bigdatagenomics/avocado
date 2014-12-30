@@ -25,12 +25,12 @@ import org.bdgenomics.adam.models.ReferencePosition
  * @param kmerSeq sequence that will be split into k-1 len prefix and single char suffix
  * @param weight
  */
-case class Kmer(kmerSeq: String,
-                refPos: Option[ReferencePosition] = None,
-                var phred: List[Int] = List(),
-                var mapq: List[Int] = List(),
-                var predecessors: List[Kmer] = List(),
-                var successors: List[Kmer] = List()) {
+private[debrujin] case class Kmer(kmerSeq: String,
+                                  refPos: Option[ReferencePosition] = None,
+                                  var phred: List[Int] = List(),
+                                  var mapq: List[Int] = List(),
+                                  var predecessors: List[Kmer] = List(),
+                                  var successors: List[Kmer] = List()) {
 
   assert(phred.length == mapq.length)
 
