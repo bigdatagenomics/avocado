@@ -287,44 +287,82 @@ class KmerGraph(protected val kmers: Array[Kmer],
             val reversed = ca.pending.reverse
 
             // what is the length of the allele?
-            // a snp has length 1, while an insert of length 1 has length 2
-            val offset = (refSink.pos - ca.branchPoint.pos).toInt - kmerLength - 1
-            val alleleLength = abs(offset) + 1
+            // a snp has length 0, while a n-base indel has length n
+            val offset = reversed.length - (refSink.pos - ca.branchPoint.pos).toInt + 1
+            val alleleLength = abs(offset)
 
-            // create observations of the alt allele
-            val altObs = reversed.drop(kmerLength - 1)
-              .map(buildReadObservations(_,
-                ReferencePosition(ca.branchPoint.referenceName,
-                  ca.branchPoint.pos + kmerLength + offset),
-                alleleLength,
-                ca.allele.drop(kmerLength - alleleLength)))
-              .reduce(_ ++ _)
+            // do we have an indel/snp or a deletion? deletions must be handeled specially.
+            if (offset < 0) {
+              // create observations of the alt allele
+              val altObs = reversed.takeRight(1)
+                .map(buildReadObservations(_,
+                  ReferencePosition(refSink.referenceName,
+                    refSink.pos - 1),
+                  alleleLength,
+                  ("_" * alleleLength)))
+                .reduce(_ ++ _)
 
-            // now, count (k - 1) from the start and build reference observations
-            var refPoint = ReferencePosition(ca.branchPoint.referenceName,
-              ca.branchPoint.pos + 1)
-            val refObs = reversed.take(kmerLength - 1)
-              .map(k => {
-                // take observations
-                val obs = buildReadObservations(k,
-                  refPoint,
-                  1,
-                  k.kmerSeq.take(1))
+              // now, count (k - 1) from the start and build reference observations
+              var refPoint = ReferencePosition(ca.branchPoint.referenceName,
+                ca.branchPoint.pos + 1)
+              val refObs = reversed.dropRight(1)
+                .map(k => {
+                  // take observations
+                  val obs = buildReadObservations(k,
+                    refPoint,
+                    1,
+                    k.kmerSeq.take(1))
 
-                // increment position
-                refPoint = ReferencePosition(refPoint.referenceName,
-                  refPoint.pos + 1)
+                  // increment position
+                  refPoint = ReferencePosition(refPoint.referenceName,
+                    refPoint.pos + 1)
 
-                // emit observations
-                obs
-              }).reduce(_ ++ _)
+                  // emit observations
+                  obs
+                }).reduce(_ ++ _)
 
-            // combine observations into a new observation set and recurse
-            val newObs = observations ++ altObs ++ refObs
-            (Reference(ca.kmer),
-              newObs,
-              branches,
-              referenceSites)
+              // combine observations into a new observation set and recurse
+              val newObs = observations ++ altObs ++ refObs
+              (Reference(ca.kmer),
+                newObs,
+                branches,
+                referenceSites)
+            } else {
+              // create observations of the alt allele
+              val altObs = reversed.drop(kmerLength - 1)
+                .map(buildReadObservations(_,
+                  ReferencePosition(ca.branchPoint.referenceName,
+                    ca.branchPoint.pos + kmerLength - offset),
+                  alleleLength,
+                  ca.allele.drop(kmerLength - alleleLength - 1)))
+                .reduce(_ ++ _)
+
+              // now, count (k - 1) from the start and build reference observations
+              var refPoint = ReferencePosition(ca.branchPoint.referenceName,
+                ca.branchPoint.pos + 1)
+              val refObs = reversed.take(kmerLength - 1)
+                .map(k => {
+                  // take observations
+                  val obs = buildReadObservations(k,
+                    refPoint,
+                    1,
+                    k.kmerSeq.take(1))
+
+                  // increment position
+                  refPoint = ReferencePosition(refPoint.referenceName,
+                    refPoint.pos + 1)
+
+                  // emit observations
+                  obs
+                }).reduce(_ ++ _)
+
+              // combine observations into a new observation set and recurse
+              val newObs = observations ++ altObs ++ refObs
+              (Reference(ca.kmer),
+                newObs,
+                branches,
+                referenceSites)
+            }
           }
           case r: Reference => {
             val pos = r.kmer.refPos.get

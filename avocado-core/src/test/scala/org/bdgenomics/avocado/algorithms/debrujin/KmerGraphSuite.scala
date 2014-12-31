@@ -284,6 +284,63 @@ class KmerGraphSuite extends AvocadoFunSuite {
         .toSet).foreach(v => assert(v.size === 2))
   }
 
+  test("put reads into graph, introduce a deletion") {
+    val ref = "ACACTGAGACATGC"
+    val region = ReferenceRegion("chr1", 100L, 114L)
+
+    val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+      .setSequence("ACACTGAGACATGC")
+      .setQual("88888888888888")
+      .setRecordGroupSample("sample1")
+      .setMapq(50)
+      .build(),
+      AlignmentRecord.newBuilder()
+        .setSequence("ACACTGAACATGC")
+        .setQual("8888888888888")
+        .setRecordGroupSample("sample1")
+        .setMapq(50)
+        .build()))
+
+    assert(graphs.size === 1)
+    val graph = graphs.head
+
+    assert(graph.sample === "sample1")
+    assert(graph.size === 14)
+    assert(graph.nonRefSize === 4)
+    assert(graph.sources === 1)
+    assert(graph.sinks === 1)
+    assert(graph.spurs === 0)
+
+    val observations = graph.toObservations
+
+    assert(observations.size === 29)
+    observations.foreach(o => {
+      val r = o.pos
+      assert(r.referenceName === "chr1")
+      assert(r.pos >= 100L && r.pos < 115L)
+    })
+    assert(observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).size === 19)
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .filter(kv => kv._1.pos != 107L)
+      .map(kv => kv._2
+        .map(ao => ao.allele)
+        .toSet).foreach(v => assert(v.size === 1))
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .filter(kv => kv._1.pos == 107L)
+      .map(kv => kv._2
+        .map(ao => ao.allele)
+        .toSet).foreach(v => assert(v.size === 2))
+  }
+
   test("put reads into graph, introduce a bubble with two alleles") {
     val ref = "ACACTGAGACATGC"
     val region = ReferenceRegion("chr1", 100L, 114L)
