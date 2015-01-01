@@ -290,9 +290,17 @@ class KmerGraph(protected val kmers: Array[Kmer],
             // a snp has length 0, while a n-base indel has length n
             val offset = reversed.length - (refSink.pos - ca.branchPoint.pos).toInt + 1
             val alleleLength = abs(offset)
+            lazy val gapLength = if (ca.branchPoint.referenceName == refSink.referenceName) {
+              refSink.pos - ca.branchPoint.pos - 1
+            } else {
+              Int.MaxValue
+            }
 
             // do we have an indel/snp or a deletion? deletions must be handeled specially.
-            if (offset < 0) {
+            // s/mnp: allele length = 0
+            // simple insert: # kmers = gap length + allele length
+            // simple deletion: # kmers < kmer length
+            if (offset < 0 && reversed.length < kmerLength) {
               // create observations of the alt allele
               val altObs = reversed.takeRight(1)
                 .map(buildReadObservations(_,
@@ -327,15 +335,35 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 newObs,
                 branches,
                 referenceSites)
-            } else {
+            } else if (offset == 0 ||
+              (offset > 0 && reversed.length == gapLength + alleleLength)) {
               // create observations of the alt allele
-              val altObs = reversed.drop(kmerLength - 1)
-                .map(buildReadObservations(_,
-                  ReferencePosition(ca.branchPoint.referenceName,
-                    ca.branchPoint.pos + kmerLength - offset),
-                  alleleLength,
-                  ca.allele.drop(kmerLength - alleleLength - 1)))
-                .reduce(_ ++ _)
+              val altObs = if (offset == 0) {
+                // if we have a s/mnp, we must index into the allele
+                var idx = 0
+                val alt = ca.allele.drop(kmerLength - alleleLength - 1)
+                reversed.drop(kmerLength - 1)
+                  .map(kmer => {
+                    val obs = buildReadObservations(kmer,
+                      ReferencePosition(ca.branchPoint.referenceName,
+                        ca.branchPoint.pos + kmerLength - offset + idx),
+                      alleleLength,
+                      alt(idx).toString)
+
+                    // increment index into allele
+                    idx += 1
+
+                    obs
+                  }).reduce(_ ++ _)
+              } else {
+                reversed.drop(kmerLength - 1)
+                  .map(buildReadObservations(_,
+                    ReferencePosition(ca.branchPoint.referenceName,
+                      ca.branchPoint.pos + kmerLength - offset),
+                    alleleLength,
+                    ca.allele.drop(kmerLength - alleleLength - 1)))
+                  .reduce(_ ++ _)
+              }
 
               // now, count (k - 1) from the start and build reference observations
               var refPoint = ReferencePosition(ca.branchPoint.referenceName,
@@ -362,6 +390,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 newObs,
                 branches,
                 referenceSites)
+            } else {
+              ???
             }
           }
           case r: Reference => {
