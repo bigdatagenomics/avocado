@@ -18,6 +18,10 @@
 package org.bdgenomics.avocado.algorithms.debrujin
 
 import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion }
+import org.bdgenomics.avocado.algorithms.hmm.{
+  HMMAligner,
+  TransitionMatrixConfiguration
+}
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.formats.avro.AlignmentRecord
 import scala.annotation.tailrec
@@ -162,7 +166,7 @@ object KmerGraph {
       rId += 1
 
       // build the graph for this sample
-      new KmerGraph(kmerMap.values.toArray, kmerLength, sample)
+      new KmerGraph(kmerMap.values.toArray, kmerLength, sample, references)
     })
   }
 }
@@ -174,13 +178,18 @@ object KmerGraph {
  */
 class KmerGraph(protected val kmers: Array[Kmer],
                 protected val kmerLength: Int,
-                val sample: String) extends Serializable {
+                val sample: String,
+                protected val references: Seq[(ReferenceRegion, String)]) extends Serializable {
 
   // source/sink kmers
   private val allSourceKmers = kmers.filter(_.predecessors.length == 0)
   private val sourceKmers = allSourceKmers.filter(_.refPos.isDefined)
   private val allSinkKmers = kmers.filter(_.successors.length == 0)
   private val sinkKmers = allSinkKmers.filter(_.refPos.isDefined)
+
+  // hmm based aligner for complex variants
+  // use default alignment parameters, except infinite padding penalty
+  private val hmm = new HMMAligner(new TransitionMatrixConfiguration(LOG_PADDING_PENALTY = Double.NegativeInfinity))
 
   override def toString(): String = {
     "Sources: " + sourceKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
@@ -291,7 +300,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
             val offset = reversed.length - (refSink.pos - ca.branchPoint.pos).toInt + 1
             val alleleLength = abs(offset)
             lazy val gapLength = if (ca.branchPoint.referenceName == refSink.referenceName) {
-              refSink.pos - ca.branchPoint.pos - 1
+              (refSink.pos - ca.branchPoint.pos).toInt - 1
             } else {
               Int.MaxValue
             }
@@ -336,7 +345,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 branches,
                 referenceSites)
             } else if (offset == 0 ||
-              (offset > 0 && reversed.length == gapLength + alleleLength)) {
+              (offset > 0 && gapLength + 1 == kmerLength)) {
               // create observations of the alt allele
               val altObs = if (offset == 0) {
                 // if we have a s/mnp, we must index into the allele
@@ -391,7 +400,115 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 branches,
                 referenceSites)
             } else {
-              ???
+              // complex alleles represent up in this else statement!
+              // processing complex alleles is a 3 step process. we must:
+              // 1. recover the reference
+              assert(references.length == 1)
+              val (refRegion, ref) = references.head
+              val refSeq = ref.drop((ca.branchPoint.pos - refRegion.start).toInt + 1).take(gapLength)
+
+              // 2. realign the _allele_ to the reference at that site
+              val alignment = hmm.alignSequences(refSeq, ca.allele, null)
+
+              // 3. step through and process the local alignment information
+
+              def kmersToObservations(kmers: Iterator[Kmer],
+                                      length: Int,
+                                      pos: ReferencePosition): (Seq[Observation], Kmer) = {
+                assert(length > 0 && kmers.hasNext)
+
+                // duplicate iterator
+                val (k1, k2) = kmers.duplicate
+                var kmer: Kmer = null // we must return the last kmer, in case we are followed by a deletion
+
+                // generate allele
+                val allele = k1.take(length).map(k => {
+                  kmer = k
+                  k.kmerSeq.take(1)
+                }).reduce(_ + _)
+
+                // generate observations
+                (k2.take(length).flatMap(k => buildReadObservations(k, pos, 1, allele)).toSeq, kmer)
+              }
+
+              @tailrec def processComplexAllele(lastKmer: Kmer,
+                                                alignment: Iterator[Char],
+                                                kmerIter: Iterator[Kmer],
+                                                pos: ReferencePosition,
+                                                alleleLength: Int = 0,
+                                                obs: Seq[Observation] = Seq()): Seq[Observation] = {
+                // append the current observations
+                // and return the current head kmer, in case we have a deletion
+                def addObservations(): (Seq[Observation], Kmer) = {
+                  if (alleleLength > 0) {
+                    val (newObs, k) = kmersToObservations(kmerIter, alleleLength, pos)
+                    (obs ++ newObs, k)
+                  } else {
+                    (obs, lastKmer)
+                  }
+                }
+
+                // do we have any more state in the alignment? if not, process the last allele.
+                if (!alignment.hasNext) {
+                  // when we run out of alignment states, we should either have:
+                  // - 1 n-length (n > 0) allele left, and thus n k-mers left
+                  // - or, have just processed a 0 length allele (a deletion)
+                  assert(kmerIter.hasNext || alleleLength == 0)
+                  val finalObs = addObservations()
+
+                  // now, we must be out of k-mers, or something has gone wrong
+                  assert(!kmerIter.hasNext)
+                  finalObs._1
+                } else {
+                  // get the next alignment state
+                  val alignmentState = alignment.next
+
+                  // if we are here, we must have k-mers left, unless we're in a long deletion
+                  assert(kmerIter.hasNext || (alleleLength == 0 && alignmentState == 'D'))
+
+                  // handle the different alignment states:
+                  // 1. if we have an alignment match (=/X), we advance the position by 1
+                  // 2. if we have a deletion, we emit a length 0 allele and advance the position by 1
+                  // 3. if we have an insert, we increment the allele length and don't move
+                  val (newLength, newPos, newObs, newKmer) = alignmentState match {
+                    case '=' | 'X' => {
+                      val (ob, km) = addObservations()
+                      (1, ReferencePosition(pos.referenceName, pos.pos + 1), ob, km)
+                    }
+                    case 'D' => {
+                      val currPos = ReferencePosition(pos.referenceName, pos.pos + 1)
+                      val (ob, km) = addObservations()
+                      val delObs = buildReadObservations(km, currPos, 1, "_")
+                      (0, currPos, ob ++ delObs, km)
+                    }
+                    case 'I' => {
+                      (alleleLength + 1, pos, obs, lastKmer)
+                    }
+                    case _ => {
+                      throw new IllegalArgumentException("Received illegal alignment state.")
+                    }
+                  }
+
+                  // recurse until we are done processing
+                  processComplexAllele(newKmer,
+                    alignment,
+                    kmerIter,
+                    newPos,
+                    newLength,
+                    newObs)
+                }
+              }
+
+              val newObs = processComplexAllele(reversed.head,
+                alignment.alignmentStateSequence.toIterator,
+                reversed.toIterator,
+                ReferencePosition(ca.branchPoint.referenceName,
+                  ca.branchPoint.pos)) ++ observations
+
+              (Reference(ca.kmer),
+                newObs,
+                branches,
+                referenceSites)
             }
           }
           case r: Reference => {
