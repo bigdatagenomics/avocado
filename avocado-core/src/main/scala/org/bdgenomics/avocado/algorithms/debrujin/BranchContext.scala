@@ -29,21 +29,24 @@ object Allele {
     Allele(kmer,
       "",
       branchPoint,
-      List())
+      List(),
+      kmer.readId.toSet)
   }
 }
 
 private[debrujin] case class Allele(kmer: Kmer,
                                     allele: String,
                                     branchPoint: ReferencePosition,
-                                    pending: List[Kmer]) extends BranchContext {
+                                    pending: List[Kmer],
+                                    activeReads: Set[Long]) extends BranchContext {
   assert(!kmer.isReference, "Cannot create allele for mapped k-mer. Must be closed allele.")
 }
 
 private[debrujin] case class ClosedAllele(kmer: Kmer,
                                           allele: String,
                                           branchPoint: ReferencePosition,
-                                          pending: List[Kmer]) extends BranchContext {
+                                          pending: List[Kmer],
+                                          activeReads: Set[Long]) extends BranchContext {
   assert(kmer.isReference, "K-mer must be mapped to close allele.")
 }
 

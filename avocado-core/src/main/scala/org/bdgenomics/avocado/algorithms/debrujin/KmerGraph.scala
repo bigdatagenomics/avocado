@@ -82,6 +82,7 @@ object KmerGraph {
                               qualIter: Iterator[Char],
                               mapq: Int,
                               readId: Long,
+                              isNegativeStrand: Boolean,
                               lastKmer: Kmer,
                               kmerMap: HashMap[String, Kmer]) {
       // do we have k-mers left?
@@ -91,46 +92,51 @@ object KmerGraph {
         val ks = kmerIter.next
         val q = qualIter.next
 
-        // have we already seen this k-mer?
-        if (kmerMap.contains(ks)) {
-          newKmer = kmerMap(ks)
+        // is this a valid k-mer?
+        if (!ks.contains('N')) {
+          // have we already seen this k-mer?
+          if (kmerMap.contains(ks)) {
+            newKmer = kmerMap(ks)
 
-          // add phred score and mapq
-          newKmer.phred = q.toInt :: newKmer.phred
-          newKmer.mapq = mapq :: newKmer.mapq
-          newKmer.readId = readId :: newKmer.readId
+            // add phred score and mapq
+            newKmer.phred = q.toInt :: newKmer.phred
+            newKmer.mapq = mapq :: newKmer.mapq
+            newKmer.readId = readId :: newKmer.readId
+            newKmer.isNegativeStrand = isNegativeStrand :: newKmer.isNegativeStrand
 
-          // do we have a predecessor? if so, perform book keeping...
-          if (lastKmer != null) {
-            // if we have a predecessor, and it isn't in the k-mer map, then add it
-            if (newKmer.predecessors.filter(_.kmerSeq == lastKmer.kmerSeq).length == 0) {
-              newKmer.predecessors = lastKmer :: newKmer.predecessors
+            // do we have a predecessor? if so, perform book keeping...
+            if (lastKmer != null) {
+              // if we have a predecessor, and it isn't in the k-mer map, then add it
+              if (newKmer.predecessors.filter(_.kmerSeq == lastKmer.kmerSeq).length == 0) {
+                newKmer.predecessors = lastKmer :: newKmer.predecessors
+              }
+
+              // if this k-mer isn't in the successor list, then add it
+              if (lastKmer.successors.filter(_.kmerSeq == ks).length == 0) {
+                lastKmer.successors = newKmer :: lastKmer.successors
+              }
             }
-
-            // if this k-mer isn't in the successor list, then add it
-            if (lastKmer.successors.filter(_.kmerSeq == ks).length == 0) {
-              lastKmer.successors = newKmer :: lastKmer.successors
-            }
-          }
-        } else {
-          val phred = List(q.toInt)
-          val mapQ = List(mapq)
-          val rId = List(readId)
-
-          // if we have a predecessor, populate the predecessor fields
-          if (lastKmer != null) {
-            val kl = List(lastKmer)
-            newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rId, predecessors = kl)
-            lastKmer.successors = newKmer :: lastKmer.successors
           } else {
-            newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rId)
-          }
+            val phred = List(q.toInt)
+            val mapQ = List(mapq)
+            val rid = List(readId)
+            val ns = List(isNegativeStrand)
 
-          // add the kmer to the graph
-          kmerMap(ks) = newKmer
+            // if we have a predecessor, populate the predecessor fields
+            if (lastKmer != null) {
+              val kl = List(lastKmer)
+              newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns, predecessors = kl)
+              lastKmer.successors = newKmer :: lastKmer.successors
+            } else {
+              newKmer = Kmer(ks, phred = phred, mapq = mapQ)
+            }
+
+            // add the kmer to the graph
+            kmerMap(ks) = newKmer
+          }
         }
 
-        addReadKmers(kmerIter, qualIter, mapq, readId, newKmer, kmerMap)
+        addReadKmers(kmerIter, qualIter, mapq, readId, isNegativeStrand, newKmer, kmerMap)
       }
     }
 
@@ -160,6 +166,7 @@ object KmerGraph {
           r.getQual.toString.toIterator,
           r.getMapq,
           rId,
+          r.getReadNegativeStrand,
           null,
           kmerMap)
       })
@@ -194,7 +201,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
   override def toString(): String = {
     "Sources: " + sourceKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
       "Sinks: " + sinkKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
-      kmers.map(_.toString).reduce(_ + "\n" + _)
+      kmers.map(_.toDetailedString).reduce(_ + "\n" + _)
   }
 
   /**
@@ -219,16 +226,26 @@ class KmerGraph(protected val kmers: Array[Kmer],
     def buildReadObservations(kmer: Kmer,
                               pos: ReferencePosition,
                               length: Int,
-                              allele: String): Seq[Observation] = {
-      (0 until kmer.multiplicity).map(i => {
-        AlleleObservation(pos,
-          length,
-          allele,
-          kmer.phred(i),
-          kmer.mapq(i),
-          false,
-          sample,
-          kmer.readId(i))
+                              allele: String,
+                              activeReads: Set[Long]): Seq[Observation] = {
+      val setSize = if (activeReads == null) {
+        0
+      } else {
+        activeReads.size
+      }
+      (0 until kmer.multiplicity).flatMap(i => {
+        if (activeReads == null || (i < setSize && activeReads(kmer.readId(i)))) {
+          Some(AlleleObservation(pos,
+            length,
+            allele,
+            kmer.phred(i),
+            kmer.mapq(i),
+            kmer.readId(i),
+            kmer.isNegativeStrand(i),
+            sample))
+        } else {
+          None
+        }
       })
     }
 
@@ -239,7 +256,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
       if (kmer.multiplicity == 0) {
         site
       } else {
-        site ++ buildReadObservations(kmer, kmer.refPos.get, 1, kmer.kmerSeq.take(1))
+        site ++ buildReadObservations(kmer, kmer.refPos.get, 1, kmer.kmerSeq.take(1), null)
       }
     }
 
@@ -268,16 +285,12 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 (branches.head, observations, branches.drop(1), referenceSites)
               }
             } else {
-              // for now, we require alts to not diverge
-              assert(a.kmer.successors.length == 1,
-                "Unexpected divergence at: " + a.kmer.toDetailedString)
-
               // build next step
               val ctxs = a.kmer.successors.map(nextKmer => {
                 if (nextKmer.isReference) {
-                  ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending)
+                  ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending, a.activeReads)
                 } else {
-                  Allele(nextKmer, newAllele, a.branchPoint, newPending)
+                  Allele(nextKmer, newAllele, a.branchPoint, newPending, a.activeReads)
                 }
               })
 
@@ -316,7 +329,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   ReferencePosition(refSink.referenceName,
                     refSink.pos - 1),
                   alleleLength,
-                  ("_" * alleleLength)))
+                  ("_" * alleleLength),
+                  ca.activeReads))
                 .reduce(_ ++ _)
 
               // now, count (k - 1) from the start and build reference observations
@@ -328,7 +342,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   val obs = buildReadObservations(k,
                     refPoint,
                     1,
-                    k.kmerSeq.take(1))
+                    k.kmerSeq.take(1),
+                    ca.activeReads)
 
                   // increment position
                   refPoint = ReferencePosition(refPoint.referenceName,
@@ -357,7 +372,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
                       ReferencePosition(ca.branchPoint.referenceName,
                         ca.branchPoint.pos + kmerLength - offset + idx),
                       alleleLength,
-                      alt(idx).toString)
+                      alt(idx).toString,
+                      ca.activeReads)
 
                     // increment index into allele
                     idx += 1
@@ -370,7 +386,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
                     ReferencePosition(ca.branchPoint.referenceName,
                       ca.branchPoint.pos + kmerLength - offset),
                     alleleLength,
-                    ca.allele.drop(kmerLength - alleleLength - 1)))
+                    ca.allele.drop(kmerLength - alleleLength - 1),
+                    ca.activeReads))
                   .reduce(_ ++ _)
               }
 
@@ -383,7 +400,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   val obs = buildReadObservations(k,
                     refPoint,
                     1,
-                    k.kmerSeq.take(1))
+                    k.kmerSeq.take(1),
+                    ca.activeReads)
 
                   // increment position
                   refPoint = ReferencePosition(refPoint.referenceName,
@@ -428,11 +446,15 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 }).reduce(_ + _)
 
                 // generate observations
-                (k2.take(length).flatMap(k => buildReadObservations(k, pos, 1, allele)).toSeq, kmer)
+                (k2.take(length).flatMap(k => buildReadObservations(k,
+                  pos,
+                  1,
+                  allele,
+                  ca.activeReads)).toSeq, kmer)
               }
 
               @tailrec def processComplexAllele(lastKmer: Kmer,
-                                                alignment: Iterator[Char],
+                                                alignmentIter: Iterator[Char],
                                                 kmerIter: Iterator[Kmer],
                                                 pos: ReferencePosition,
                                                 alleleLength: Int = 0,
@@ -449,7 +471,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 }
 
                 // do we have any more state in the alignment? if not, process the last allele.
-                if (!alignment.hasNext) {
+                if (!alignmentIter.hasNext) {
                   // when we run out of alignment states, we should either have:
                   // - 1 n-length (n > 0) allele left, and thus n k-mers left
                   // - or, have just processed a 0 length allele (a deletion)
@@ -461,7 +483,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   finalObs._1
                 } else {
                   // get the next alignment state
-                  val alignmentState = alignment.next
+                  val alignmentState = alignmentIter.next
 
                   // if we are here, we must have k-mers left, unless we're in a long deletion
                   assert(kmerIter.hasNext || (alleleLength == 0 && alignmentState == 'D'))
@@ -475,23 +497,23 @@ class KmerGraph(protected val kmers: Array[Kmer],
                       val (ob, km) = addObservations()
                       (1, ReferencePosition(pos.referenceName, pos.pos + 1), ob, km)
                     }
-                    case 'D' => {
+                    case 'P' | 'D' => {
                       val currPos = ReferencePosition(pos.referenceName, pos.pos + 1)
                       val (ob, km) = addObservations()
-                      val delObs = buildReadObservations(km, currPos, 1, "_")
+                      val delObs = buildReadObservations(km, currPos, 1, "_", ca.activeReads)
                       (0, currPos, ob ++ delObs, km)
                     }
                     case 'I' => {
                       (alleleLength + 1, pos, obs, lastKmer)
                     }
                     case _ => {
-                      throw new IllegalArgumentException("Received illegal alignment state.")
+                      throw new IllegalArgumentException("Received illegal alignment state in " + alignment)
                     }
                   }
 
                   // recurse until we are done processing
                   processComplexAllele(newKmer,
-                    alignment,
+                    alignmentIter,
                     kmerIter,
                     newPos,
                     newLength,
