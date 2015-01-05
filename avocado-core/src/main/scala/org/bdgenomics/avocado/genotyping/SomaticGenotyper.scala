@@ -20,7 +20,12 @@ package org.bdgenomics.avocado.genotyping
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.{ ReferencePosition, VariantContext }
+import org.bdgenomics.adam.models.{
+  ReferencePosition,
+  SequenceDictionary,
+  SequenceRecord,
+  VariantContext
+}
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
@@ -36,19 +41,21 @@ object SomaticGenotyper extends GenotyperCompanion {
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Genotyper = {
 
-    new SomaticGenotyper(config.getString("normalSample"),
+    new SomaticGenotyper(stats.sequenceDict,
+      config.getString("normalSample"),
       config.getString("somaticSample"),
       config.getInt("normalPloidy", 2))
   }
 }
 
-class SomaticGenotyper(normalSample: String,
+class SomaticGenotyper(sd: SequenceDictionary,
+                       normalSample: String,
                        somaticSample: String,
                        normalPloidy: Int = 2) extends Genotyper with Logging {
 
   val companion: GenotyperCompanion = SomaticGenotyper
 
-  protected val bg = new BiallelicGenotyper(normalPloidy)
+  protected val bg = new BiallelicGenotyper(sd, normalPloidy)
 
   def genotypeSite(site: (ReferencePosition, Iterable[Observation])): Iterable[VariantContext] = {
     val (pos, observations) = site
@@ -105,9 +112,7 @@ class SomaticGenotyper(normalSample: String,
       val variant = Variant.newBuilder()
         .setReferenceAllele(reference)
         .setAlternateAllele(allele)
-        .setContig(Contig.newBuilder()
-          .setContigName(pos.referenceName)
-          .build())
+        .setContig(SequenceRecord.toADAMContig(sd(pos.referenceName).get))
         .setStart(pos.pos)
         .setEnd(pos.pos + reference.length)
         .build()
