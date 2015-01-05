@@ -32,6 +32,8 @@ import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.GenomicPositionPartitioner
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.Timers._
+import org.bdgenomics.avocado.algorithms.em.EMForAlleles
+import org.bdgenomics.avocado.algorithms.math._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, GenotypeAllele, Variant }
@@ -45,17 +47,62 @@ object BiallelicGenotyper extends GenotyperCompanion {
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Genotyper = {
 
+    // get finishing conditions for EM algorithms
+    val useEM = config.getBoolean("useEM", true)
+    val maxIterations = if (config.containsKey("maxEMIterations")) {
+      val iterLimit = config.getInt("maxEMIterations")
+      if (iterLimit <= 0) {
+        throw new IllegalArgumentException("EM iteration limit must be greater than 0.")
+      }
+      Some(iterLimit)
+    } else {
+      None
+    }
+    val tolerance = if (config.containsKey("emTolerance")) {
+      val emTol = config.getDouble("emTolerance")
+      if (emTol < 0.0 || emTol > 1.0) {
+        throw new IllegalArgumentException("EM tolerance must be between 0 and 1, non-inclusive.")
+      }
+      Some(emTol)
+    } else {
+      None
+    }
+
+    if (maxIterations.isEmpty && tolerance.isEmpty && useEM) {
+      throw new IllegalArgumentException("At least one constraint must be defined for the EM algorithm.")
+    }
+
+    // what level do we saturate the reference frequency to if we encounter underflow?
+    val referenceFrequency = config.getDouble("referenceFrequency", 0.999)
+    if (referenceFrequency < 0.0 || referenceFrequency > 1.0) {
+      throw new IllegalArgumentException("Reference frequency must be between 0 and 1, non-inclusive.")
+    }
+    val saturationThreshold = config.getDouble("emSaturationThreshold", 0.001)
+    if (saturationThreshold < 0.0 || saturationThreshold > 1.0) {
+      throw new IllegalArgumentException("Saturation threshold must be between 0 and 1, non-inclusive.")
+    }
+
     new BiallelicGenotyper(stats.sequenceDict,
       stats.contigLengths,
       config.getInt("ploidy", 2),
-      config.getBoolean("useEM", false))
+      useEM,
+      config.getBoolean("emitGVCF", true),
+      referenceFrequency,
+      maxIterations,
+      tolerance,
+      saturationThreshold)
   }
 }
 
 class BiallelicGenotyper(sd: SequenceDictionary,
                          contigLengths: Map[String, Long],
                          ploidy: Int = 2,
-                         useEM: Boolean = false) extends Genotyper with Logging {
+                         useEM: Boolean = false,
+                         emitGVCF: Boolean = true,
+                         estimatedReferenceFrequency: Double = 0.999,
+                         maxIterations: Option[Int] = Some(10),
+                         tolerance: Option[Double] = Some(1e-3),
+                         saturationThreshold: Double = 0.001) extends Genotyper with Logging {
 
   val companion: GenotyperCompanion = BiallelicGenotyper
 
@@ -177,32 +224,6 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     }
   }
 
-  def sumLogProbabilities(pArray: Array[Double], debug: Boolean = false): Double = {
-    assert(pArray.length > 0)
-
-    // first, sort the array
-    val sortP = pArray.toSeq.sortWith(_ > _)
-
-    var iter = 0
-
-    // this is a nifty little trick; not sure exactly where it's originally from,
-    // but apparently durbin et al '98 features it. evidently:
-    // log(p + q) = log(p(1 + q/p)
-    //            = log(p) + log(1 + exp(log(q/p)))
-    //            = log(p) + log(1 + exp(log(q) - log(p)))
-    def sumFunction(logP: Double,
-                    logIter: Iterator[Double]): Double = {
-      if (!logIter.hasNext) {
-        logP
-      } else {
-        val logQ = logIter.next
-        sumFunction(logP + log1p(exp(logQ - logP)), logIter)
-      }
-    }
-
-    sumFunction(sortP.head, sortP.toIterator.drop(1))
-  }
-
   def emitCall(variant: Variant,
                sampleId: String,
                observations: Iterable[AlleleObservation],
@@ -217,10 +238,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
       (0 until posteriors.length).foreach(i => {
         posteriors(i) = likelihoods(i) + priors(i)
       })
-      val norm = sumLogProbabilities(posteriors)
-      if (norm.isInfinite || norm.isNaN) {
-        sumLogProbabilities(posteriors, true)
-      }
+      val norm = LogUtils.sumLogProbabilities(posteriors)
       (0 until posteriors.length).foreach(i => {
         posteriors(i) = posteriors(i) - norm
       })
@@ -300,12 +318,23 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     })
 
     // compensate likelihoods on the basis of population statistics
-    val priors: Array[Double] = if (useEM) {
-      // TODO: connect up EM algorithm
-      ???
+    val logMajorAlleleFrequency = if (useEM) {
+      min(mathLog(1.0 - saturationThreshold),
+        max(EMForAlleles.emForMAF(likelihoodsPerSample.flatMap(s => {
+          // did we have any observations from this sample?
+          if (s._1.size > 0) {
+            Some(s._2)
+          } else {
+            None
+          }
+        }).toArray,
+          estimatedReferenceFrequency,
+          maxIterations,
+          tolerance), mathLog(saturationThreshold)))
     } else {
-      (0 to ploidy).map(i => mathLog(1.0)).toArray
+      mathLog(estimatedReferenceFrequency)
     }
+    val statePriors = LogBinomial.calculateLogProbabilities(logMajorAlleleFrequency, ploidy)
 
     // construct variant
     val variant = Variant.newBuilder()
@@ -327,7 +356,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
         observations,
         likelihoods,
         anyAltLikelihoods,
-        priors)
+        statePriors)
     })
 
     // emit the variant context

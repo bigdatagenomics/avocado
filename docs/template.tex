@@ -2,7 +2,7 @@
 \usepackage[cm]{fullpage}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
-\usepackage{amssymb,amsmath}
+\usepackage{amssymb,amsmath,amsopn}
 
 \usepackage{ifxetex,ifluatex}
 \usepackage{fixltx2e} % provides \textsubscript
@@ -143,6 +143,11 @@ $if(title)$
 $endif$
 \author{$for(author)$$author$$sep$ \and $endfor$}
 \date{$date$}
+
+%\DeclareMathOperator*{argmax}{arg \, max}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+
 
 \begin{document}
 $if(title)$

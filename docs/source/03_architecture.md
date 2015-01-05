@@ -119,17 +119,15 @@ The biallelic genotyping model is based on the model used in the
 we assume independence between sites and apply a Bayesian model to the observed alleles
 at each genomic locus. This model makes use of the mapping and base qualities to compute
 the likelihood of each genotype state (where `g` equals the number of reference alleles
-at each position). This model emits variant calls at all sites, including locations where
-a homozygous reference genotype is called. If you do not want to emit homozygous reference
-calls, use the [Filter Reference Calls] post-processing stage.
+at each position). If the `emitGVCF` parameter is set to true, this model will emits variant
+calls at all sites, including locations where a homozygous reference genotype is called.
 
-In an [open pull request](https://github.com/bigdatagenomics/avocado/pull/128), we
-incorporate a [binomial distribution](en.wikipedia.org/wiki/Binomial_distribution)
+We incorporate a [binomial distribution](en.wikipedia.org/wiki/Binomial_distribution)
 as the prior distribution at each site, where the sample ploidy and major allele frequencies are
 passed as parameters. We provide an EM algorithm to estimate the major allele frequency (MAF)
 at each site from a group of samples; this EM algorithm is based on equations 13-17 from
 @li11. Alternatively, if the user would like to simply use a population specific estimate
-of the MAF, the EM algorithm can be disabled.
+of the MAF, the EM algorithm can be disabled by setting `useEM` to `false`.
 
 This variant calling model does not support multi-allelic sites. We plan to address this
 with a more comprehensive, haplotype based variant calling method.
@@ -139,6 +137,26 @@ options:
 
 * `ploidy`: The ploidy assumed at each site. Default value is 2.
 * `useEM`: Whether or not to use an EM algorithm to find the MAF. Default is false.
+* `emitGVCF`: Whether or not to emit confident reference genotype calls.
+* `referenceFrequency`: The global expected frequency of reference alleles. If the EM algorithm
+is used, this value is used to seed the EM loop. If the EM algorithm is disabled, this value is
+used as the MAF in the prior distribution at each site.
+
+There are three additional options specific to the EM algorithm. If the EM algorithm is being
+used, the user must pick _at least_ one condition for terminating the EM loop. These include:
+
+* `maxEMIterations`: The EM loop will stop running after _n_ iterations.
+* `emSaturationThreshold`: The EM loop will stop running after a single step leads to a delta
+smaller than this threshold value.
+
+If both parameters are set, the EM algorithm will terminate once _either_ condition is achieved.
+
+We have not designed the EM algorithm to ensure that the MAF will not saturate to either 0.0 or
+1.0. Instead, we provide a final parameter to address the underflow problem:
+
+* `emSaturationThreshold`: If the MAF estimate under/overflows, the site-specific MAF will clip
+to either `emSaturationThreshold` or $1.0 - $`emSaturationThreshold`. By default, this parameter
+is set to 0.001.
 
 For additional detail about the math underlying the biallelic genotyper, refer to the [Biallelic
 Genotyper] section.
