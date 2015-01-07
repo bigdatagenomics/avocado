@@ -1,3 +1,3 @@
 #!/bin/sh
 
-mvn -Dresume=false release:clean release:prepare release:perform
+mvn -Dresume=false -P distribution release:clean release:prepare release:perform
