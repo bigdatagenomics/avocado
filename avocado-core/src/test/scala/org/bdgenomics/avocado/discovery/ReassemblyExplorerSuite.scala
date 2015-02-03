@@ -21,6 +21,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext._
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.read.AlignmentRecordRDDFunctions
 import org.bdgenomics.adam.rich.RichGenotype._
 import org.bdgenomics.adam.rich.{ RichAlignmentRecord, RichGenotype }
 import org.bdgenomics.adam.util.SparkFunSuite
@@ -85,14 +86,17 @@ class ReassemblyExplorerSuite extends SparkFunSuite {
     sc.loadAlignments(path)
   }
 
+  lazy val sd = new AlignmentRecordRDDFunctions(na12878_chr20_snp_reads).adamGetSequenceDictionary()
+  lazy val cl = sd.records.map(r => (r.name, r.length)).toMap
+
   sparkTest("reassemble and call variants on real data") {
     val reads = na12878_chr20_snp_reads
 
     val reference = getReferenceFromReads(reads.collect.toSeq)
 
-    val re = new ReassemblyExplorer(20, sc.parallelize(Seq(reference)))
+    val re = new ReassemblyExplorer(20, sc.parallelize(Seq(reference)), sd, cl)
     val obs = re.discover(reads)
-    val bg = new BiallelicGenotyper()
+    val bg = new BiallelicGenotyper(sd, 2, false)
     val vc = bg.genotype(obs)
       .flatMap(_.genotypes)
       .filter(g => g.getType != GenotypeType.HOM_REF)
@@ -110,9 +114,9 @@ class ReassemblyExplorerSuite extends SparkFunSuite {
 
     val reference = getReferenceFromReads(reads.collect.toSeq)
 
-    val re = new ReassemblyExplorer(20, sc.parallelize(Seq(reference)))
+    val re = new ReassemblyExplorer(20, sc.parallelize(Seq(reference)), sd, cl)
     val obs = re.discover(reads)
-    val bg = new BiallelicGenotyper()
+    val bg = new BiallelicGenotyper(sd, 2, false)
     val vc = bg.genotype(obs)
       .flatMap(_.genotypes)
       .filter(g => g.getType != GenotypeType.HOM_REF)

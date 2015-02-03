@@ -21,8 +21,8 @@ import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConf
 import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.{ ReferenceMapping, ReferenceRegion }
-import org.bdgenomics.adam.rdd.RegionJoin
+import org.bdgenomics.adam.models.{ ReferenceMapping, ReferenceRegion, SequenceDictionary }
+import org.bdgenomics.adam.rdd.ShuffleRegionJoin
 import org.bdgenomics.adam.rich.ReferenceMappingContext._
 import org.bdgenomics.avocado.algorithms.debrujin.KmerGraph
 import org.bdgenomics.avocado.models.{ Observation }
@@ -36,7 +36,7 @@ object ReassemblyExplorer extends ExplorerCompanion {
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Explorer = {
     val kmerLength = config.getInt("kmerLength", 20)
-    new ReassemblyExplorer(kmerLength, stats.reference)
+    new ReassemblyExplorer(kmerLength, stats.reference, stats.sequenceDict, stats.contigLengths)
   }
 
   implicit object ContigReferenceMapping extends ReferenceMapping[(Long, NucleotideContigFragment)] with Serializable {
@@ -48,7 +48,11 @@ object ReassemblyExplorer extends ExplorerCompanion {
 import ReassemblyExplorer._
 
 class ReassemblyExplorer(kmerLength: Int,
-                         reference: RDD[NucleotideContigFragment]) extends Explorer with Logging {
+                         reference: RDD[NucleotideContigFragment],
+                         sd: SequenceDictionary,
+                         contigLengths: Map[String, Long]) extends Explorer with Logging {
+
+  val totalAssembledReferenceLength = contigLengths.values.sum
 
   val companion: ExplorerCompanion = ReassemblyExplorer
 
@@ -76,9 +80,11 @@ class ReassemblyExplorer(kmerLength: Int,
     // filter mapped reads, join with reference contigs, then extract contig ids
     // ultimately, this should use the merge-sort join, not the broadcast join
     // will upgrade when ADAM-534 merges.
-    val joinWithId = RegionJoin.partitionAndJoin(reference.context,
+    val joinWithId = ShuffleRegionJoin.partitionAndJoin(reference.context,
       refIds,
-      reads.filter(_.getReadMapped))
+      reads.filter(_.getReadMapped),
+      sd,
+      totalAssembledReferenceLength / reads.partitions.size)
       .map(kv => {
         (kv._1._1, kv._2)
       })

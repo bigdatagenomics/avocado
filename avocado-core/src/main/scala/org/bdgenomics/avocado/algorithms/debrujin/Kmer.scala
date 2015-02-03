@@ -51,11 +51,11 @@ private[debrujin] case class Kmer(kmerSeq: String,
 
   def toDetailedString: String = {
     kmerSeq + " * " + multiplicity + ", " + refPos.fold("unmapped")("@ " + _) + "\n" +
-      "qual: " + phred.map(_.toString).fold("")(_ + ", " + _) + "\n" +
-      "mapq: " + mapq.map(_.toString).fold("")(_ + ", " + _) + "\n" +
-      "readId: " + readId.map(_.toString).fold("")(_ + ", " + _) + "\n" +
-      "pre: " + predecessors.map(_.toString).fold("")(_ + ", " + _) + "\n" +
-      "post: " + successors.map(_.toString).fold("")(_ + ", " + _)
+      "qual: " + phred.mkString(", ") + "\n"
+    "mapq: " + mapq.mkString(", ") + "\n" +
+      "readId: " + readId.mkString(", ") + "\n" +
+      "pre: " + predecessors.mkString(", ") + "\n" +
+      "post: " + successors.mkString(", ")
   }
 
   /**
