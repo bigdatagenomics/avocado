@@ -64,7 +64,7 @@ class ReassemblyExplorer(kmerLength: Int,
 
     // assemble us up a region
     val graphs = KmerGraph(kmerLength,
-      Seq((coordinates, reference.getFragmentSequence)),
+      Seq((coordinates, reference.getFragmentSequence.toUpperCase)),
       reads.toSeq)
 
     // turn the reassembly graph into observations
@@ -78,15 +78,22 @@ class ReassemblyExplorer(kmerLength: Int,
       .cache()
 
     // filter mapped reads, join with reference contigs, then extract contig ids
-    // ultimately, this should use the merge-sort join, not the broadcast join
-    // will upgrade when ADAM-534 merges.
     val joinWithId = ShuffleRegionJoin.partitionAndJoin(reference.context,
       refIds,
       reads.filter(_.getReadMapped),
       sd,
       totalAssembledReferenceLength / reads.partitions.size)
-      .map(kv => {
-        (kv._1._1, kv._2)
+      .flatMap(kv => {
+        val ((fragmentId, fragment), read) = kv
+
+        val fStart = fragment.getFragmentStartPosition
+        val fEnd = fStart + fragment.getFragmentSequence.length
+
+        if (fStart <= read.getStart && fEnd >= read.getEnd) {
+          Some((kv._1._1, kv._2))
+        } else {
+          None
+        }
       })
 
     // merge together reads that are from the same contig fragment, then

@@ -33,10 +33,15 @@ private[debrujin] case class Kmer(kmerSeq: String,
                                   var isNegativeStrand: List[Boolean] = List(),
                                   var predecessors: List[Kmer] = List(),
                                   var successors: List[Kmer] = List()) {
+  def multiplicity = {
+    val mult = phred.length
 
-  assert(phred.length == mapq.length)
+    assert(mapq.length == mult, toDetailedString)
+    assert(readId.length == mult, toDetailedString)
+    assert(isNegativeStrand.length == mult, toDetailedString)
 
-  def multiplicity = phred.length
+    mult
+  }
   val prefix: String = kmerSeq.dropRight(1)
   val suffix: Char = kmerSeq.last
   val isReference = refPos.isDefined
@@ -66,7 +71,8 @@ private[debrujin] case class Kmer(kmerSeq: String,
    * the next _k_-mer it points at.
    */
   def toDot: String = {
-    prefix + " -> " + nextPrefix + " ;"
+    refPos.fold("")(p => prefix + "[shape=record\nlabel=\"{" + prefix + " | " + p + "}\"];") +
+      prefix + " -> " + nextPrefix + " ;"
   }
 
   def removeLinks(kmer: Kmer) {

@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.algorithms.debrujin
 
+import org.apache.spark.Logging
 import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion }
 import org.bdgenomics.avocado.algorithms.hmm.{
   HMMAligner,
@@ -28,7 +29,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.HashMap
 import scala.math.abs
 
-object KmerGraph {
+object KmerGraph extends Logging {
 
   /**
    * Creates a new de Brujin Graph that shows connections between k-mers. k-mers are inserted
@@ -49,6 +50,9 @@ object KmerGraph {
             reads: Seq[AlignmentRecord]): Iterable[KmerGraph] = {
 
     assert(references.length == 1, "For now, only support a single reference in the graph.")
+
+    log.info("Building indexed de Bruijn graph for region " + references.map(_._1).mkString +
+      " from " + reads.size + " reads.")
 
     @tailrec def addReferenceKmers(iter: Iterator[String],
                                    pos: ReferencePosition,
@@ -103,6 +107,7 @@ object KmerGraph {
             newKmer.mapq = mapq :: newKmer.mapq
             newKmer.readId = readId :: newKmer.readId
             newKmer.isNegativeStrand = isNegativeStrand :: newKmer.isNegativeStrand
+            assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
 
             // do we have a predecessor? if so, perform book keeping...
             if (lastKmer != null) {
@@ -126,9 +131,10 @@ object KmerGraph {
             if (lastKmer != null) {
               val kl = List(lastKmer)
               newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns, predecessors = kl)
+              assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
               lastKmer.successors = newKmer :: lastKmer.successors
             } else {
-              newKmer = Kmer(ks, phred = phred, mapq = mapQ)
+              newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns)
             }
 
             // add the kmer to the graph
@@ -154,6 +160,7 @@ object KmerGraph {
       // per reference we are passed, add a reference k-mer
       references.foreach(p => {
         val (region, reference) = p
+
         addReferenceKmers(reference.sliding(kmerLength),
           ReferencePosition(region.referenceName, region.start),
           null,
@@ -186,13 +193,17 @@ object KmerGraph {
 class KmerGraph(protected val kmers: Array[Kmer],
                 protected val kmerLength: Int,
                 val sample: String,
-                protected val references: Seq[(ReferenceRegion, String)]) extends Serializable {
+                protected val references: Seq[(ReferenceRegion, String)]) extends Serializable with Logging {
+
+  // get reference start/end positions
+  private val starts = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.start)).toSet
+  private val ends = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.end)).toSet
 
   // source/sink kmers
   private val allSourceKmers = kmers.filter(_.predecessors.length == 0)
-  private val sourceKmers = allSourceKmers.filter(_.refPos.isDefined)
   private val allSinkKmers = kmers.filter(_.successors.length == 0)
-  private val sinkKmers = allSinkKmers.filter(_.refPos.isDefined)
+  private val sourceKmers = kmers.filter(_.refPos.fold(false)(starts(_)))
+  private val sinkKmers = kmers.filter(_.refPos.fold(false)(ends(_)))
 
   // hmm based aligner for complex variants
   // use default alignment parameters, except infinite padding penalty
@@ -559,9 +570,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
               // if we have a successor, we'll take that and continue on
               // else, we'll move to the next branch
-              val (next, newBranches) = if (r.kmer.successors.isEmpty && branches.isEmpty) {
+              val (next, newBranches) = if (r.kmer.successors.filter(_.refPos.isDefined).isEmpty && branches.isEmpty) {
                 (null, branches)
-              } else if (r.kmer.successors.isEmpty) {
+              } else if (r.kmer.successors.filter(_.refPos.isDefined).isEmpty) {
                 (branches.head, branches.drop(1))
               } else {
                 (Reference(r.kmer.successors.filter(_.refPos.isDefined).head),
@@ -584,10 +595,18 @@ class KmerGraph(protected val kmers: Array[Kmer],
       }
     }
 
-    crawl(Reference(sourceKmers.head),
-      Seq(),
-      sourceKmers.drop(1).map(p => Reference(p)).toList,
-      Set())
+    if (sourceKmers.size > 0) {
+      log.info("Started crawling " + references.map(_._1).mkString(", "))
+      val obs = crawl(Reference(sourceKmers.head),
+        Seq(),
+        sourceKmers.drop(1).map(p => Reference(p)).toList,
+        Set())
+      log.info("Finished crawling " + references.map(_._1).mkString(", "))
+      obs
+    } else {
+      log.warn("No sources seen on " + references.map(_._1).mkString(", "))
+      Seq()
+    }
   }
 
   def size: Int = kmers.length
