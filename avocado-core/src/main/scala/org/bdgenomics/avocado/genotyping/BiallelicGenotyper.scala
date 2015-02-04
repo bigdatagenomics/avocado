@@ -28,6 +28,7 @@ import org.bdgenomics.adam.models.{
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.util.PhredUtils
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, GenotypeAllele, Variant }
@@ -64,7 +65,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
    */
   def scoreGenotypeLikelihoods(reference: String,
                                allele: String,
-                               observations: Iterable[AlleleObservation]): (Iterable[AlleleObservation], Array[Double], Array[Double]) = {
+                               observations: Iterable[AlleleObservation]): (Iterable[AlleleObservation], Array[Double], Array[Double]) = ScoringLikelihoods.time {
 
     // count bases observed
     val k = observations.size
@@ -147,7 +148,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
                observations: Iterable[AlleleObservation],
                likelihoods: Array[Double],
                anyAltLikelihoods: Array[Double],
-               priors: Array[Double]): Genotype = {
+               priors: Array[Double]): Genotype = EmittingCall.time {
 
     // were we able to make any observations at this site?
     if (observations.size > 0) {
@@ -209,7 +210,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     }
   }
 
-  def genotypeSite(site: (ReferencePosition, Iterable[Observation])): Option[VariantContext] = {
+  def genotypeSite(site: (ReferencePosition, Iterable[Observation])): Option[VariantContext] = GenotypingSite.time {
     val (pos, observations) = site
 
     // get reference allele

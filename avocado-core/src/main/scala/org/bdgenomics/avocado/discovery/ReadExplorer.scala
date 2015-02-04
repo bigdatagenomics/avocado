@@ -24,6 +24,7 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferencePosition
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichAlignmentRecord
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.AlignmentRecord
@@ -42,7 +43,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
 
   val companion: ExplorerCompanion = ReadExplorer
 
-  def readToObservations(read: AlignmentRecord): Seq[Observation] = {
+  def readToObservations(read: AlignmentRecord): Seq[Observation] = ExploringRead.time {
     val richRead: RichAlignmentRecord = RichAlignmentRecord(read)
 
     // get read start, contig, strand, sample, mapq, and sequence
@@ -148,7 +149,9 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
   }
 
   def discover(reads: RDD[AlignmentRecord]): RDD[Observation] = {
-    reads.filter(_.getReadMapped)
-      .flatMap(readToObservations) ++ referenceObservations
+    ExploringReads.time {
+      reads.filter(_.getReadMapped)
+        .flatMap(readToObservations)
+    } ++ referenceObservations
   }
 }

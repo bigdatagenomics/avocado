@@ -20,6 +20,7 @@ package org.bdgenomics.avocado.genotyping
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.VariantContext
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.Observation
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
@@ -33,7 +34,7 @@ object CallGenotypes {
             genotyperName: String,
             rdd: RDD[Observation],
             stats: AvocadoConfigAndStats,
-            config: HierarchicalConfiguration): RDD[VariantContext] = {
+            config: HierarchicalConfiguration): RDD[VariantContext] = GenotypeObservations.time {
 
     genotypers.find(_.genotyperName == genotyperAlgorithm)
       .fold(throw new IllegalArgumentException("Couldn't find genotyping algorithm: " +

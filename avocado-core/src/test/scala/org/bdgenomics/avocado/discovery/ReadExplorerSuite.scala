@@ -17,11 +17,11 @@
  */
 package org.bdgenomics.avocado.discovery
 
-import org.bdgenomics.adam.util.SparkFunSuite
+import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.formats.avro.{ AlignmentRecord, Contig }
 
-class ReadExplorerSuite extends SparkFunSuite {
+class ReadExplorerSuite extends AvocadoFunSuite {
 
   sparkTest("observe a simple read") {
     val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))

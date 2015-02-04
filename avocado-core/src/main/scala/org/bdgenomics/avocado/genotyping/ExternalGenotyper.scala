@@ -30,7 +30,7 @@ import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.converters.VariantContextConverter
 import org.bdgenomics.adam.models.{ SAMFileHeaderWritable, VariantContext => ADAMVariantContext, ReferencePosition }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.GenomicRegionPartitioner
+import org.bdgenomics.adam.rdd.GenomicPositionPartitioner
 import org.bdgenomics.adam.rdd.read.AlignmentRecordContext._
 import org.bdgenomics.avocado.models.{ Observation, ReadObservation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -199,7 +199,7 @@ class ExternalGenotyper(contigLengths: Map[String, Long],
 
     // key reads by position and repartition
     val readsByPosition = reads.keyBy(r => ReferencePosition(r.get.getReferenceName.toString, r.get.getAlignmentStart))
-      .partitionBy(new GenomicRegionPartitioner(numPart, contigLengths))
+      .partitionBy(GenomicPositionPartitioner(numPart, contigLengths))
 
     if (debug) {
       log.info("have " + readsByPosition.count + " reads after partitioning")
