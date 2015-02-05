@@ -20,12 +20,13 @@ package org.bdgenomics.avocado.models
 import org.bdgenomics.adam.models.ReferencePosition
 
 case class AlleleObservation(override val pos: ReferencePosition,
-                             length: Int,
+                             override val length: Int,
                              override val allele: String,
                              phred: Int,
                              mapq: Int,
                              onNegativeStrand: Boolean,
-                             sample: String) extends Observation(pos, allele) {
+                             sample: String,
+                             readId: Long) extends Observation(pos, allele) {
 
   override def toString(): String = {
     "Allele: " + allele + " @ " + pos + " with mapq: " + mapq + " and phred: " + phred

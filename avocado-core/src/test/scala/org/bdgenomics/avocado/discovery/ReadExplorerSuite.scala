@@ -39,7 +39,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample1")
       .build()
 
-    val observations = re.readToObservations(read)
+    val observations = re.readToObservations((read, 0L))
       .flatMap(o => o match {
         case ao: AlleleObservation => Some(ao)
         case _                     => None
@@ -79,13 +79,13 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample1")
       .build()
 
-    val observations = re.readToObservations(read)
+    val observations = re.readToObservations((read, 0L))
       .flatMap(o => o match {
         case ao: AlleleObservation => Some(ao)
         case _                     => None
       })
 
-    assert(observations.length === 7)
+    assert(observations.length === 5)
     assert(observations.filter(_.allele != "_").forall(_.phred == 25))
     assert(observations.filter(_.allele == "_").forall(_.phred == 40))
     assert(observations.forall(_.mapq == 40))
@@ -96,10 +96,9 @@ class ReadExplorerSuite extends AvocadoFunSuite {
     assert(observations.filter(_.pos.pos == 10L).head.allele === "A")
     assert(observations.filter(_.pos.pos == 11L).length === 1)
     assert(observations.filter(_.pos.pos == 11L).head.allele === "C")
-    assert(observations.filter(_.pos.pos == 12L).length === 1)
-    assert(observations.filter(_.pos.pos == 12L).head.allele === "_")
-    assert(observations.filter(_.pos.pos == 13L).length === 1)
-    assert(observations.filter(_.pos.pos == 13L).head.allele === "_")
+    assert(observations.filter(_.pos.pos == 11L).head.length === 3)
+    assert(observations.filter(_.pos.pos == 12L).length === 0)
+    assert(observations.filter(_.pos.pos == 13L).length === 0)
     assert(observations.filter(_.pos.pos == 14L).length === 1)
     assert(observations.filter(_.pos.pos == 14L).head.allele === "T")
     assert(observations.filter(_.pos.pos == 15L).length === 1)
@@ -124,7 +123,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample1")
       .build()
 
-    val observations = re.readToObservations(read)
+    val observations = re.readToObservations((read, 0L))
       .flatMap(o => o match {
         case ao: AlleleObservation => Some(ao)
         case _                     => None

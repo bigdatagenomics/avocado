@@ -18,22 +18,25 @@
 package org.bdgenomics.avocado.genotyping
 
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
+import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.{
   ReferencePosition,
+  ReferenceRegion,
   SequenceDictionary,
   SequenceRecord,
   VariantContext
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.GenomicPositionPartitioner
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, GenotypeAllele, Variant }
 import scala.annotation.tailrec
-import scala.math.pow
+import scala.math.{ max, pow }
 
 object BiallelicGenotyper extends GenotyperCompanion {
 
@@ -43,12 +46,14 @@ object BiallelicGenotyper extends GenotyperCompanion {
                       config: SubnodeConfiguration): Genotyper = {
 
     new BiallelicGenotyper(stats.sequenceDict,
+      stats.contigLengths,
       config.getInt("ploidy", 2),
       config.getBoolean("useEM", false))
   }
 }
 
 class BiallelicGenotyper(sd: SequenceDictionary,
+                         contigLengths: Map[String, Long],
                          ploidy: Int = 2,
                          useEM: Boolean = false) extends Genotyper with Logging {
 
@@ -210,23 +215,12 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     }
   }
 
-  def genotypeSite(site: (ReferencePosition, Iterable[Observation])): Option[VariantContext] = GenotypingSite.time {
-    val (pos, observations) = site
+  def genotypeSite(region: ReferenceRegion,
+                   referenceObservation: Observation,
+                   alleleObservations: Iterable[AlleleObservation]): VariantContext = GenotypingSite.time {
 
     // get reference allele
-    val reference = observations.find(obs => obs match {
-      case ao: AlleleObservation => false
-      case _                     => true
-    }).fold({
-      log.info("Had alleles observed, but no reference at " + pos)
-      return None
-    })(_.allele)
-
-    // get allele observations
-    val alleleObservations: Iterable[AlleleObservation] = observations.flatMap(obs => obs match {
-      case ao: AlleleObservation => Some(ao)
-      case _                     => None
-    })
+    val reference = referenceObservation.allele
 
     // get observations per sample
     val observationsBySample = alleleObservations.groupBy(_.sample)
@@ -258,9 +252,9 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     val variant = Variant.newBuilder()
       .setReferenceAllele(reference)
       .setAlternateAllele(allele)
-      .setContig(SequenceRecord.toADAMContig(sd(pos.referenceName).get))
-      .setStart(pos.pos)
-      .setEnd(pos.pos + reference.length)
+      .setContig(SequenceRecord.toADAMContig(sd(region.referenceName).get))
+      .setStart(region.start)
+      .setEnd(region.end)
       .build()
 
     // emit calls
@@ -278,11 +272,122 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     })
 
     // emit the variant context
-    Some(VariantContext(variant, genotypes, None))
+    VariantContext(variant, genotypes, None)
   }
 
   def genotype(observations: RDD[Observation]): RDD[VariantContext] = {
-    observations.groupBy(_.pos)
-      .flatMap(genotypeSite)
+    observations.keyBy(_.pos)
+      .repartitionAndSortWithinPartitions(GenomicPositionPartitioner(observations.partitions.size,
+        contigLengths))
+      .mapPartitions(genotypeIterator)
+  }
+
+  def updateObservations(region: ReferenceRegion,
+                         obs: List[Observation]): (Observation, Iterable[AlleleObservation]) = {
+    // extract references
+    val ref = obs.flatMap(o => o match {
+      case ao: AlleleObservation => None
+      case oo: Observation       => Some(oo)
+    }).sortBy(_.pos)
+      .map(_.allele)
+      .mkString
+    val refLen = ref.length
+    val refPos = ReferencePosition(region.referenceName, region.start)
+
+    // put read observations together
+    val readObservations = obs.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case oo: Observation       => None
+    })
+
+    // if the reference length is greater than 1, we need to expand the values
+    val finalObservations = if (refLen > 1) {
+      readObservations.groupBy(_.readId)
+        .map(ro => {
+          // sort the read observations
+          val sortedRo = ro._2.sortBy(_.pos)
+
+          // get the start and end position
+          val start = sortedRo.head.pos.pos
+          val end = sortedRo.last.pos.pos + sortedRo.last.length
+
+          // reduce down to get the sequence
+          val sequence = (ref.take((start - region.start).toInt) +
+            sortedRo.map(_.allele).mkString +
+            ref.takeRight((region.end - end).toInt))
+          val phred = sortedRo.map(_.phred).sum / sortedRo.length
+
+          // make observation
+          AlleleObservation(refPos,
+            refLen,
+            sequence,
+            phred,
+            sortedRo.head.mapq,
+            sortedRo.head.onNegativeStrand,
+            sortedRo.head.sample,
+            sortedRo.head.readId)
+        })
+    } else {
+      readObservations
+    }
+
+    // emit reference observation
+    (new Observation(refPos, ref), finalObservations)
+  }
+
+  def genotypeIterator(iter: Iterator[(ReferencePosition, Observation)]): Iterator[VariantContext] = {
+    // do we have any elements in this iterator?
+    if (iter.hasNext) {
+      // peek at the head element
+      val (headPos, headObs) = iter.next
+
+      // and initialize state
+      var windowStart = headPos.pos
+      var windowEnd = windowStart + headObs.length
+      var obsList = List(headObs)
+
+      def flush(): VariantContext = {
+        val region = ReferenceRegion(headPos.referenceName, windowStart, windowEnd)
+
+        // update observations
+        val (refObs, obsIterable) = updateObservations(region, obsList)
+
+        // compute genotypes
+        genotypeSite(region,
+          refObs,
+          obsIterable)
+      }
+
+      // start processing observation windows!
+      iter.flatMap(kv => {
+        val (pos, obs) = kv
+
+        // does this observation start past the end of this window? if so, flush our observations
+        // and rebuild the window
+        if (pos.pos >= windowEnd) {
+          // flush the window
+          val vc = flush()
+
+          // reinitialize state
+          windowStart = pos.pos
+          windowEnd = windowStart + obs.length
+          obsList = List(obs)
+
+          // emit variant context
+          Some(vc)
+        } else {
+          // make possible update to window end
+          windowEnd = max(windowEnd, pos.pos + obs.length)
+
+          // append observation to list
+          obsList = obs :: obsList
+
+          // nothing to emit
+          None
+        }
+      }) ++ Iterator(flush())
+    } else {
+      Iterator()
+    }
   }
 }

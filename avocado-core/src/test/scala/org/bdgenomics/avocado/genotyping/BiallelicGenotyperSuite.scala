@@ -23,14 +23,16 @@ import org.bdgenomics.adam.models.{
   SequenceRecord,
   VariantContext
 }
+import org.bdgenomics.avocado.discovery.ReadExplorer
 import org.bdgenomics.avocado.models.{ Observation, AlleleObservation }
-import org.bdgenomics.formats.avro.Contig
+import org.bdgenomics.formats.avro.{ AlignmentRecord, Contig }
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
 import scala.math.{ abs, sqrt }
 
 class BiallelicGenotyperSuite extends FunSuite {
-  val ba = new BiallelicGenotyper(SequenceDictionary(SequenceRecord("ctg", 1000L)))
+  val ba = new BiallelicGenotyper(SequenceDictionary(SequenceRecord("ctg", 1000L)),
+    Map(("ctg", 1000L)))
   val floatingPointingThreshold = 1e-6
 
   def assertAlmostEqual(a: Double, b: Double, epsilon: Double = floatingPointingThreshold) {
@@ -48,21 +50,24 @@ class BiallelicGenotyperSuite extends FunSuite {
         30,
         30,
         true,
-        "mySample"),
+        "mySample",
+        1L),
       AlleleObservation(ReferencePosition("ctg", 0L),
         1,
         "C",
         40,
         40,
         true,
-        "mySample"),
+        "mySample",
+        2L),
       AlleleObservation(ReferencePosition("ctg", 0L),
         1,
         "C",
         30,
         40,
         true,
-        "mySample"))
+        "mySample",
+        3L))
 
     val expected = Array(8.0 * (0.001 *
       0.0001 *
@@ -88,21 +93,24 @@ class BiallelicGenotyperSuite extends FunSuite {
         30,
         30,
         true,
-        "mySample"),
+        "mySample",
+        1L),
       AlleleObservation(ReferencePosition("ctg", 0L),
         1,
         "C",
         40,
         40,
         true,
-        "mySample"),
+        "mySample",
+        2L),
       AlleleObservation(ReferencePosition("ctg", 0L),
         1,
         "A",
         30,
         40,
         true,
-        "mySample"))
+        "mySample",
+        3L))
 
     val expected = List(8.0 * (0.001 *
       0.0001 *
@@ -128,21 +136,24 @@ class BiallelicGenotyperSuite extends FunSuite {
         30,
         30,
         true,
-        "mySample"),
+        "mySample",
+        1L),
       AlleleObservation(ReferencePosition("ctg", 0L),
         1,
         "A",
         40,
         40,
         true,
-        "mySample"),
+        "mySample",
+        2L),
       AlleleObservation(ReferencePosition("ctg", 0L),
         1,
         "A",
         30,
         40,
         true,
-        "mySample"))
+        "mySample",
+        3L))
 
     val expected = List(8.0 * (0.999 *
       0.9999 *
@@ -158,5 +169,45 @@ class BiallelicGenotyperSuite extends FunSuite {
     assertAlmostEqual(expected(1), scored._2(1))
     assertAlmostEqual(expected(2), scored._2(2))
     assert(scored._2.max == scored._2(0))
+  }
+
+  test("emit genotypes on iterator") {
+    val re = new ReadExplorer(null)
+
+    val read = AlignmentRecord.newBuilder()
+      .setStart(10L)
+      .setEnd(15L)
+      .setContig(Contig.newBuilder()
+        .setContigName("ctg")
+        .build())
+      .setMapq(40)
+      .setSequence("ACTGA")
+      .setQual(":::::")
+      .setCigar("1M1I2M1D1M")
+      .setRecordGroupSample("sample1")
+      .build()
+
+    val observations = re.readToObservations((read, 0L)).toSeq ++ Seq(
+      new Observation(ReferencePosition("ctg", 10L), "A", 1),
+      new Observation(ReferencePosition("ctg", 11L), "T", 1),
+      new Observation(ReferencePosition("ctg", 12L), "G", 1),
+      new Observation(ReferencePosition("ctg", 13L), "T", 1),
+      new Observation(ReferencePosition("ctg", 14L), "A", 1))
+
+    val gts = ba.genotypeIterator(observations.sortBy(_.pos).map(v => (v.pos, v)).toIterator).toSeq
+
+    assert(gts.length === 4)
+    gts.filter(_.position.pos != 12L).map(_.variant).foreach(v => {
+      assert(v.getReferenceAllele.length === 1)
+    })
+    gts.filter(_.position.pos == 12L).map(_.variant).foreach(v => {
+      assert(v.getReferenceAllele.length === 2)
+    })
+    gts.filter(_.position.pos != 10L).map(_.variant).foreach(v => {
+      assert(v.getAlternateAllele.length === 1)
+    })
+    gts.filter(_.position.pos == 10L).map(_.variant).foreach(v => {
+      assert(v.getAlternateAllele.length === 2)
+    })
   }
 }
