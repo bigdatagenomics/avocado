@@ -17,11 +17,18 @@
  */
 package org.bdgenomics.avocado.discovery
 
+import htsjdk.samtools.{ Cigar, CigarElement, CigarOperator, TextCigarCodec }
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.{ ReferenceMapping, ReferenceRegion, SequenceDictionary }
+import org.bdgenomics.adam.models.{
+  ReferenceMapping,
+  ReferencePosition,
+  ReferenceRegion,
+  SequenceDictionary
+}
+import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ShuffleRegionJoin
 import org.bdgenomics.adam.rich.ReferenceMappingContext._
 import org.bdgenomics.avocado.Timers._
@@ -30,19 +37,74 @@ import org.bdgenomics.avocado.models.{ Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 
-object ReassemblyExplorer extends ExplorerCompanion {
+object ReassemblyExplorer extends ExplorerCompanion with Serializable {
 
   val explorerName: String = "ReassemblyExplorer"
+  @transient lazy private val CIGAR_CODEC: TextCigarCodec = TextCigarCodec.getSingleton
 
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Explorer = {
-    val kmerLength = config.getInt("kmerLength", 20)
-    new ReassemblyExplorer(kmerLength, stats.reference, stats.sequenceDict, stats.contigLengths)
+    new ReassemblyExplorer(config.getInt("kmerLength", 20),
+      stats.reference,
+      stats.sequenceDict,
+      stats.contigLengths,
+      config.getDouble("highCoverageThreshold", Double.PositiveInfinity),
+      config.getDouble("lowCoverageThreshold", -1.0),
+      config.getDouble("mismatchRateThreshold", 0.025),
+      config.getDouble("clipRateThreshold", 0.05))
   }
 
   implicit object ContigReferenceMapping extends ReferenceMapping[(Long, NucleotideContigFragment)] with Serializable {
     override def getReferenceName(value: (Long, NucleotideContigFragment)): String = value._2.getContig.getContigName.toString
     override def getReferenceRegion(value: (Long, NucleotideContigFragment)): ReferenceRegion = ReferenceRegion(value._2).get
+  }
+
+  private[discovery] def calculateMismatchAndClipRate(reads: Iterable[AlignmentRecord],
+                                                      reference: String,
+                                                      referenceStartPos: Long): (Double, Double, Double) = {
+    val (bases, mismatchedBases, clippedBases) = reads.map(r => {
+      val cigar: List[CigarElement] = CIGAR_CODEC.decode(r.getCigar).getCigarElements
+      val readSequence = r.getSequence
+      var refIdx = (r.getStart - referenceStartPos).toInt
+      var readIdx = 0
+      var mismatches = 0
+      var clips = 0
+
+      // loop over cigar elements
+      cigar.foreach(i => {
+        i.getOperator match {
+          case CigarOperator.M | CigarOperator.X | CigarOperator.EQ => {
+            (0 until (i.getLength - 1)).foreach(j => {
+              // do we have a mismatch
+              if (readSequence(readIdx) != reference(refIdx)) {
+                mismatches += 1
+              }
+              readIdx += 1
+              refIdx += 1
+            })
+          }
+          case CigarOperator.S => {
+            // we've got a clip
+            clips += i.getLength
+            readIdx += i.getLength
+          }
+          case _ => {
+            if (i.getOperator.consumesReferenceBases) {
+              refIdx += i.getLength
+            }
+            if (i.getOperator.consumesReadBases) {
+              readIdx += i.getLength
+            }
+          }
+        }
+      })
+
+      (readIdx + 1, mismatches, clips)
+    }).reduce((t1: (Int, Int, Int), t2: (Int, Int, Int)) => {
+      (t1._1 + t2._1, t1._2 + t2._2, t1._3 + t1._3)
+    })
+
+    (mismatchedBases.toDouble / bases.toDouble, clippedBases.toDouble / bases.toDouble, bases.toDouble / reference.length.toDouble)
   }
 }
 
@@ -51,7 +113,11 @@ import ReassemblyExplorer._
 class ReassemblyExplorer(kmerLength: Int,
                          reference: RDD[NucleotideContigFragment],
                          sd: SequenceDictionary,
-                         contigLengths: Map[String, Long]) extends Explorer with Logging {
+                         contigLengths: Map[String, Long],
+                         activeRegionHighCoverageThreshold: Double,
+                         activeRegionLowCoverageThreshold: Double,
+                         activeRegionMismatchRateThreshold: Double,
+                         activeRegionClipRateThreshold: Double) extends Explorer with Logging {
 
   val totalAssembledReferenceLength = contigLengths.values.sum
 
@@ -60,19 +126,55 @@ class ReassemblyExplorer(kmerLength: Int,
   def discoverRegion(rr: (Iterable[AlignmentRecord], NucleotideContigFragment)): Iterable[Observation] = RegionDiscovery.time {
     val (reads, reference) = rr
 
-    // extract the coordinates from the reference
+    // extract the coordinates and sequence from the reference
     val coordinates = ReferenceRegion(reference).get
+    val refSeq = reference.getFragmentSequence.toUpperCase
 
-    // assemble us up a region
-    val graphs = BuildingGraph.time {
-      KmerGraph(kmerLength,
-        Seq((coordinates, reference.getFragmentSequence.toUpperCase)),
-        reads.toSeq)
+    // compute activity statistics
+    val (mismatchRate, clipRate, coverage) = CheckActivity.time {
+      ReassemblyExplorer.calculateMismatchAndClipRate(reads,
+        refSeq,
+        coordinates.start)
     }
 
-    // turn the reassembly graph into observations
-    ObservingGraph.time {
-      graphs.flatMap(_.toObservations)
+    // is the region that we're currently looking at active?
+    if ((mismatchRate > activeRegionMismatchRateThreshold ||
+      clipRate > activeRegionClipRateThreshold) &&
+      (coverage > activeRegionLowCoverageThreshold &&
+        coverage < activeRegionHighCoverageThreshold)) {
+      ReassemblingRegion.time {
+        log.info("Reassembling active region " + coordinates)
+
+        // reassemble us up a region
+        val graphs = BuildingGraph.time {
+          KmerGraph(kmerLength,
+            Seq((coordinates, refSeq)),
+            reads.toSeq)
+        }
+
+        // turn the reassembly graph into observations
+        ObservingGraph.time {
+          graphs.flatMap(_.toObservations)
+        }
+      }
+    } else {
+      InactiveReads.time {
+        log.info("Observing inactive region " + coordinates)
+        var refPos = coordinates.start
+        var readId = refPos.toLong << 32
+        reads.flatMap(r => {
+          readId += 1L
+          ReadExplorer.readToObservations(r, readId)
+        }) ++ refSeq.map(base => {
+          val observation = new Observation(ReferencePosition(coordinates.referenceName, refPos),
+            base.toString)
+
+          // increment site
+          refPos += 1
+
+          observation
+        })
+      }
     }
   }
 
@@ -116,6 +218,8 @@ class ReassemblyExplorer(kmerLength: Int,
     }
 
     // reassemble our regions into observations
-    joinReadsAndContigs.flatMap(discoverRegion)
+    ProcessingRegions.time {
+      joinReadsAndContigs.flatMap(discoverRegion)
+    }
   }
 }

@@ -24,8 +24,6 @@ import org.bdgenomics.formats.avro.{ AlignmentRecord, Contig }
 class ReadExplorerSuite extends AvocadoFunSuite {
 
   sparkTest("observe a simple read") {
-    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
-
     val read = AlignmentRecord.newBuilder()
       .setStart(10L)
       .setEnd(15L)
@@ -39,7 +37,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample1")
       .build()
 
-    val observations = re.readToObservations((read, 0L))
+    val observations = ReadExplorer.readToObservations((read, 0L))
       .flatMap(o => o match {
         case ao: AlleleObservation => Some(ao)
         case _                     => None
@@ -64,8 +62,6 @@ class ReadExplorerSuite extends AvocadoFunSuite {
   }
 
   sparkTest("observe a read with a deletion") {
-    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
-
     val read = AlignmentRecord.newBuilder()
       .setStart(10L)
       .setEnd(17L)
@@ -79,7 +75,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample1")
       .build()
 
-    val observations = re.readToObservations((read, 0L))
+    val observations = ReadExplorer.readToObservations((read, 0L))
       .flatMap(o => o match {
         case ao: AlleleObservation => Some(ao)
         case _                     => None
@@ -108,8 +104,6 @@ class ReadExplorerSuite extends AvocadoFunSuite {
   }
 
   sparkTest("observe a read with an insertion") {
-    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
-
     val read = AlignmentRecord.newBuilder()
       .setStart(10L)
       .setEnd(13L)
@@ -123,7 +117,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample1")
       .build()
 
-    val observations = re.readToObservations((read, 0L))
+    val observations = ReadExplorer.readToObservations((read, 0L))
       .flatMap(o => o match {
         case ao: AlleleObservation => Some(ao)
         case _                     => None

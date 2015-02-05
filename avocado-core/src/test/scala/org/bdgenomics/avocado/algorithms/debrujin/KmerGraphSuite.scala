@@ -41,7 +41,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
 
   test("put reference into graph") {
     val ref = "ACACTGAGACATGC"
-    val region = ReferenceRegion("chr1", 100L, 115L)
+    val region = ReferenceRegion("chr1", 100L, 114L)
 
     val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
       .setSequence("")

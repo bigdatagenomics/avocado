@@ -197,7 +197,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
   // get reference start/end positions
   private val starts = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.start)).toSet
-  private val ends = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.end)).toSet
+  private val ends = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.end - kmerLength)).toSet
 
   // source/sink kmers
   private val allSourceKmers = kmers.filter(_.predecessors.length == 0)
@@ -251,9 +251,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
             allele,
             kmer.phred(i),
             kmer.mapq(i),
-            kmer.readId(i),
             kmer.isNegativeStrand(i),
-            sample))
+            sample,
+            kmer.readId(i)))
         } else {
           None
         }
