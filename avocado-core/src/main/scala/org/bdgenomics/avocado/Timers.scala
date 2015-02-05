@@ -44,6 +44,12 @@ private[avocado] object Timers extends Metrics {
   val ExploringReads = timer("Extracting Read Observations")
   val ExploringRead = timer("Observing a Read")
 
+  // Reassembly Explorer
+  val JoiningReads = timer("Joining Reads and References Together")
+  val RegionDiscovery = timer("Observing Region")
+  val BuildingGraph = timer("Building Indexed de Bruijn Graph")
+  val ObservingGraph = timer("Crawling Indexed de Bruijn Graph")
+
   // Statistics
   val ComputingCoverage = timer("Computing Coverage")
   val ReferenceLengths = timer("Computing Contig Lengths")

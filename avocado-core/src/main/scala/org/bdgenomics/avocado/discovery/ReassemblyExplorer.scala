@@ -24,6 +24,7 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.{ ReferenceMapping, ReferenceRegion, SequenceDictionary }
 import org.bdgenomics.adam.rdd.ShuffleRegionJoin
 import org.bdgenomics.adam.rich.ReferenceMappingContext._
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.algorithms.debrujin.KmerGraph
 import org.bdgenomics.avocado.models.{ Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -56,55 +57,63 @@ class ReassemblyExplorer(kmerLength: Int,
 
   val companion: ExplorerCompanion = ReassemblyExplorer
 
-  def discoverRegion(rr: (Iterable[AlignmentRecord], NucleotideContigFragment)): Iterable[Observation] = {
+  def discoverRegion(rr: (Iterable[AlignmentRecord], NucleotideContigFragment)): Iterable[Observation] = RegionDiscovery.time {
     val (reads, reference) = rr
 
     // extract the coordinates from the reference
     val coordinates = ReferenceRegion(reference).get
 
     // assemble us up a region
-    val graphs = KmerGraph(kmerLength,
-      Seq((coordinates, reference.getFragmentSequence.toUpperCase)),
-      reads.toSeq)
+    val graphs = BuildingGraph.time {
+      KmerGraph(kmerLength,
+        Seq((coordinates, reference.getFragmentSequence.toUpperCase)),
+        reads.toSeq)
+    }
 
     // turn the reassembly graph into observations
-    graphs.flatMap(_.toObservations)
+    ObservingGraph.time {
+      graphs.flatMap(_.toObservations)
+    }
   }
 
   def discover(reads: RDD[AlignmentRecord]): RDD[Observation] = {
-    // zip reference contig fragments with uuids, cache
-    val refIds = reference.zipWithUniqueId()
-      .map(vk => (vk._2, vk._1))
-      .cache()
+    val joinReadsAndContigs = JoiningReads.time {
+      // zip reference contig fragments with uuids, cache
+      val refIds = reference.zipWithUniqueId()
+        .map(vk => (vk._2, vk._1))
+        .cache()
 
-    // filter mapped reads, join with reference contigs, then extract contig ids
-    val joinWithId = ShuffleRegionJoin.partitionAndJoin(reference.context,
-      refIds,
-      reads.filter(_.getReadMapped),
-      sd,
-      totalAssembledReferenceLength / reads.partitions.size)
-      .flatMap(kv => {
-        val ((fragmentId, fragment), read) = kv
+      // filter mapped reads, join with reference contigs, then extract contig ids
+      val joinWithId = ShuffleRegionJoin.partitionAndJoin(reference.context,
+        refIds,
+        reads.filter(_.getReadMapped),
+        sd,
+        totalAssembledReferenceLength / reads.partitions.size)
+        .flatMap(kv => {
+          val ((fragmentId, fragment), read) = kv
 
-        val fStart = fragment.getFragmentStartPosition
-        val fEnd = fStart + fragment.getFragmentSequence.length
+          val fStart = fragment.getFragmentStartPosition
+          val fEnd = fStart + fragment.getFragmentSequence.length
 
-        if (fStart <= read.getStart && fEnd >= read.getEnd) {
-          Some((kv._1._1, kv._2))
-        } else {
-          None
-        }
-      })
+          if (fStart <= read.getStart && fEnd >= read.getEnd) {
+            Some((kv._1._1, kv._2))
+          } else {
+            None
+          }
+        })
 
-    // merge together reads that are from the same contig fragment, then
-    // join against reference contigs, and throw away id
-    // ideally, we should optimize the partitioning; this is a to-do for later
-    val joinReadsAndContigs = joinWithId.groupByKey()
-      .join(refIds)
-      .map(kv => kv._2)
+      // merge together reads that are from the same contig fragment, then
+      // join against reference contigs, and throw away id
+      // ideally, we should optimize the partitioning; this is a to-do for later
+      val jrdd = joinWithId.groupByKey()
+        .join(refIds)
+        .map(kv => kv._2)
 
-    // we are done with the original reference contig rdd, so we can unpersist
-    refIds.unpersist()
+      // we are done with the original reference contig rdd, so we can unpersist
+      refIds.unpersist()
+
+      jrdd
+    }
 
     // reassemble our regions into observations
     joinReadsAndContigs.flatMap(discoverRegion)

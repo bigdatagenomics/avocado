@@ -24,7 +24,7 @@ import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDDFunctions
 import org.bdgenomics.adam.rich.RichGenotype._
 import org.bdgenomics.adam.rich.{ RichAlignmentRecord, RichGenotype }
-import org.bdgenomics.adam.util.SparkFunSuite
+import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.genotyping.BiallelicGenotyper
 import org.bdgenomics.formats.avro.{
   AlignmentRecord,
@@ -35,12 +35,7 @@ import org.bdgenomics.formats.avro.{
 import scala.collection.immutable.{ NumericRange, SortedMap }
 import scala.collection.mutable.ArrayBuffer
 
-class ReassemblyExplorerSuite extends SparkFunSuite {
-
-  override val properties = Map(("spark.serializer", "org.apache.spark.serializer.KryoSerializer"),
-    ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"),
-    ("spark.kryoserializer.buffer.mb", "128"),
-    ("spark.kryo.referenceTracking", "true"))
+class ReassemblyExplorerSuite extends AvocadoFunSuite {
 
   // shamelessly borrowed from the indel realigner while we are refactoring...
   def getReferenceFromReads(poorReads: Seq[AlignmentRecord]): NucleotideContigFragment = {
