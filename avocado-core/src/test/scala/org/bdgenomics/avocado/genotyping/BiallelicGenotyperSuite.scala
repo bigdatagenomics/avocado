@@ -28,7 +28,7 @@ import org.bdgenomics.avocado.models.{ Observation, AlleleObservation }
 import org.bdgenomics.formats.avro.{ AlignmentRecord, Contig }
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
-import scala.math.{ abs, sqrt }
+import scala.math.{ abs, log, sqrt }
 
 class BiallelicGenotyperSuite extends FunSuite {
   val ba = new BiallelicGenotyper(SequenceDictionary(SequenceRecord("ctg", 1000L)),
@@ -75,7 +75,7 @@ class BiallelicGenotyperSuite extends FunSuite {
       0.125,
       8.0 * (0.999 *
         0.9999 *
-        (1.0 - sqrt(0.001 * 0.0001))) / 8.0)
+        (1.0 - sqrt(0.001 * 0.0001))) / 8.0).map(log(_))
 
     val scored = ba.scoreGenotypeLikelihoods("C", "A", observed)
 
@@ -118,7 +118,7 @@ class BiallelicGenotyperSuite extends FunSuite {
       0.125,
       8.0 * (0.999 *
         0.9999 *
-        sqrt(0.001 * 0.0001)) / 8.0)
+        sqrt(0.001 * 0.0001)) / 8.0).map(log(_))
 
     val scored = ba.scoreGenotypeLikelihoods("C", "A", observed)
 
@@ -161,7 +161,7 @@ class BiallelicGenotyperSuite extends FunSuite {
       0.125,
       8.0 * (0.001 *
         0.0001 *
-        sqrt(0.001 * 0.0001)) / 8.0)
+        sqrt(0.001 * 0.0001)) / 8.0).map(log(_))
 
     val scored = ba.scoreGenotypeLikelihoods("C", "A", observed)
 
@@ -209,5 +209,10 @@ class BiallelicGenotyperSuite extends FunSuite {
     gts.filter(_.position.pos == 10L).map(_.variant).foreach(v => {
       assert(v.getAlternateAllele.length === 2)
     })
+  }
+
+  test("test our nifty log summer") {
+    val sumLogs = ba.sumLogProbabilities(Array(0.5, 0.25, 0.125, 0.1, 0.025).map(log(_)))
+    assertAlmostEqual(sumLogs, 0)
   }
 }

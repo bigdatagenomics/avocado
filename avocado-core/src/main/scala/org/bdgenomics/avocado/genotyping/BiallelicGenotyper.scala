@@ -36,7 +36,7 @@ import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, GenotypeAllele, Variant }
 import scala.annotation.tailrec
-import scala.math.{ max, pow }
+import scala.math.{ exp, expm1, log => mathLog, log1p, max, min, pow }
 
 object BiallelicGenotyper extends GenotyperCompanion {
 
@@ -58,6 +58,33 @@ class BiallelicGenotyper(sd: SequenceDictionary,
                          useEM: Boolean = false) extends Genotyper with Logging {
 
   val companion: GenotyperCompanion = BiallelicGenotyper
+
+  // necessary for conversion to/from phred
+  private val LOG10 = mathLog(10.0)
+
+  // precompute log ploidy
+  private val logPloidy = mathLog(ploidy.toDouble)
+
+  /**
+   * Conversion between log _success_ probabilities and Phred scores.
+   *
+   * Q = -10 log_{10} (1 - p)
+   *
+   * If l = ln p, then:
+   *
+   * l_e = ln 1 + ln (1 - exp(l_e / 1))
+   *     = ln(1 - exp(l_e))
+   * Q = -10 l_e / ln 10
+   *
+   * @note Just remember kids: if you want to live a happy, fulfilling life, don't use Phred!
+   * @note We don't have a conversion the other way around because it doesn't really make sense.
+   *
+   * @param l Log probability.
+   * @return Returns the Phred score corresponding to that log probability.
+   */
+  def log2phred(l: Double): Int = {
+    (-10.0 * mathLog(-expm1(l)) / LOG10).toInt
+  }
 
   /**
    * Scores likelihoods for genotypes using equation from Li 2009.
@@ -98,7 +125,9 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     val mismatchBases = observations.filter(o => o.allele != reference && o.allele != allele)
 
     def epsilon(observed: Iterable[AlleleObservation]): Iterable[Double] = {
-      observed.map(o => PhredUtils.phredToErrorProbability((o.phred + o.mapq) / 2))
+      // we must take the min here; if we don't, phred=0 mapq=0 bases have epsilon of 1.0
+      // which leads to log(1.0 - 1.0) = log(0.0) = -Infinity, which messes everything up
+      observed.map(o => min(0.99999, PhredUtils.phredToErrorProbability((o.phred + o.mapq) / 2)))
     }
 
     // compute error observations
@@ -111,14 +140,14 @@ class BiallelicGenotyper(sd: SequenceDictionary,
                              alleleEpsilon: Iterable[Double]): Array[Double] = {
       states.map(g => {
         // contribution of bases that match the reference
-        val productMatch = refEpsilon.map(epsilon => (ploidy - g) * epsilon + g * (1 - epsilon))
-          .fold(1.0)(_ * _)
+        val productMatch = refEpsilon.map(epsilon => mathLog((ploidy - g) * epsilon + g * (1 - epsilon)))
+          .sum
 
         // contribution of bases that do not match the base
-        val productMismatch = alleleEpsilon.map(epsilon => (ploidy - g) * (1 - epsilon) + g * epsilon)
-          .fold(1.0)(_ * _)
+        val productMismatch = alleleEpsilon.map(epsilon => mathLog((ploidy - g) * (1 - epsilon) + g * epsilon))
+          .sum
 
-        productMatch * productMismatch / pow(ploidy.toDouble, k.toDouble)
+        productMatch + productMismatch - (logPloidy * k.toDouble)
       })
     }
 
@@ -148,6 +177,32 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     }
   }
 
+  def sumLogProbabilities(pArray: Array[Double], debug: Boolean = false): Double = {
+    assert(pArray.length > 0)
+
+    // first, sort the array
+    val sortP = pArray.toSeq.sortWith(_ > _)
+
+    var iter = 0
+
+    // this is a nifty little trick; not sure exactly where it's originally from,
+    // but apparently durbin et al '98 features it. evidently:
+    // log(p + q) = log(p(1 + q/p)
+    //            = log(p) + log(1 + exp(log(q/p)))
+    //            = log(p) + log(1 + exp(log(q) - log(p)))
+    def sumFunction(logP: Double,
+                    logIter: Iterator[Double]): Double = {
+      if (!logIter.hasNext) {
+        logP
+      } else {
+        val logQ = logIter.next
+        sumFunction(logP + log1p(exp(logQ - logP)), logIter)
+      }
+    }
+
+    sumFunction(sortP.head, sortP.toIterator.drop(1))
+  }
+
   def emitCall(variant: Variant,
                sampleId: String,
                observations: Iterable[AlleleObservation],
@@ -160,11 +215,14 @@ class BiallelicGenotyper(sd: SequenceDictionary,
       // compute and marginalize posterior
       val posteriors = new Array[Double](likelihoods.length)
       (0 until posteriors.length).foreach(i => {
-        posteriors(i) = likelihoods(i) * priors(i)
+        posteriors(i) = likelihoods(i) + priors(i)
       })
-      val norm = posteriors.sum
+      val norm = sumLogProbabilities(posteriors)
+      if (norm.isInfinite || norm.isNaN) {
+        sumLogProbabilities(posteriors, true)
+      }
       (0 until posteriors.length).foreach(i => {
-        posteriors(i) /= norm
+        posteriors(i) = posteriors(i) - norm
       })
 
       // find the genotype state with the maximum posterior probability
@@ -192,9 +250,9 @@ class BiallelicGenotyper(sd: SequenceDictionary,
         .setSampleId(sampleId)
         .setReadDepth(observations.size)
         .setAlleles(calls.toList)
-        .setGenotypeLikelihoods(likelihoods.map(PhredUtils.successProbabilityToPhred).toList)
-        .setNonReferenceLikelihoods(anyAltLikelihoods.map(PhredUtils.successProbabilityToPhred).toList)
-        .setGenotypeQuality(PhredUtils.successProbabilityToPhred(genotypeProbability))
+        .setGenotypeLikelihoods(likelihoods.map(v => log2phred(v)).toList)
+        .setNonReferenceLikelihoods(anyAltLikelihoods.map(v => log2phred(v)).toList)
+        .setGenotypeQuality(log2phred(genotypeProbability))
         .setReferenceReadDepth(observations.filter(_.allele == ref).size)
         .setAlternateReadDepth(observations.filter(_.allele == alt).size)
         .build()
@@ -227,6 +285,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
 
     // find most frequently observed non-ref allele
     val nonRefAlleles = alleleObservations.filter(_.allele != reference)
+
     val allele = if (nonRefAlleles.size > 0) {
       nonRefAlleles.groupBy(_.allele)
         .maxBy(kv => kv._2.size)
@@ -245,7 +304,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
       // TODO: connect up EM algorithm
       ???
     } else {
-      (0 to ploidy).map(i => 1.0).toArray
+      (0 to ploidy).map(i => mathLog(1.0)).toArray
     }
 
     // construct variant
