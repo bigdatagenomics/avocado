@@ -89,17 +89,15 @@ class ReassemblyExplorerSuite extends AvocadoFunSuite {
       0.0,
       0.0)
     val obs = re.discover(reads)
-    val vc1 = bg.genotype(obs)
+    val vc = bg.genotype(obs)
       .flatMap(_.genotypes)
-    vc1.foreach(println)
-    val vc = vc1.filter(g => g.getType != GenotypeType.HOM_REF)
+      .filter(g => g.getType != GenotypeType.HOM_REF)
+      .collect()
 
-    assert(vc.count === 1)
-    val gt = vc.first
-    assert(gt.getVariant.getReferenceAllele === "A")
-    assert(gt.getVariant.getAlternateAllele === "G")
-    assert(gt.getVariant.getStart === 225057L)
-    assert(gt.getType == GenotypeType.HET)
+    assert(vc.length === 2)
+    val locations = vc.map(_.getVariant.getStart)
+      .foreach(l => assert(l == 225048 || l == 225057))
+    vc.foreach(gt => assert(gt.getType == GenotypeType.HET))
   }
 
   sparkTest("put reads into graph for larger real dataset") {
@@ -125,9 +123,9 @@ class ReassemblyExplorerSuite extends AvocadoFunSuite {
       .filter(g => g.getType != GenotypeType.HOM_REF)
       .collect()
 
-    assert(vc.length === 4)
+    assert(vc.length === 2)
     val locations = vc.map(_.getVariant.getStart)
-      .foreach(l => assert(l == 224940 || l == 225048 || l == 224970 || l == 225057))
+      .foreach(l => assert(l == 225048 || l == 225057))
     vc.foreach(gt => assert(gt.getType == GenotypeType.HET))
   }
 
