@@ -33,6 +33,7 @@ import org.bdgenomics.adam.rdd.ShuffleRegionJoin
 import org.bdgenomics.adam.rich.ReferenceMappingContext._
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.algorithms.debrujin.KmerGraph
+import org.bdgenomics.avocado.algorithms.reference.ResizeAndFlankReferenceFragments
 import org.bdgenomics.avocado.models.{ Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
@@ -51,7 +52,9 @@ object ReassemblyExplorer extends ExplorerCompanion with Serializable {
       config.getDouble("highCoverageThreshold", Double.PositiveInfinity),
       config.getDouble("lowCoverageThreshold", -1.0),
       config.getDouble("mismatchRateThreshold", 0.025),
-      config.getDouble("clipRateThreshold", 0.05))
+      config.getDouble("clipRateThreshold", 0.05),
+      config.getInt("targetRegionLength", 2000),
+      config.getInt("targetFlankLength", 250))
   }
 
   implicit object ContigReferenceMapping extends ReferenceMapping[(Long, NucleotideContigFragment)] with Serializable {
@@ -117,7 +120,9 @@ class ReassemblyExplorer(kmerLength: Int,
                          activeRegionHighCoverageThreshold: Double,
                          activeRegionLowCoverageThreshold: Double,
                          activeRegionMismatchRateThreshold: Double,
-                         activeRegionClipRateThreshold: Double) extends Explorer with Logging {
+                         activeRegionClipRateThreshold: Double,
+                         targetRegionSize: Int,
+                         targetFlankSize: Int) extends Explorer with Logging {
 
   val totalAssembledReferenceLength = contigLengths.values.sum
 
@@ -129,6 +134,21 @@ class ReassemblyExplorer(kmerLength: Int,
     // extract the coordinates and sequence from the reference
     val coordinates = ReferenceRegion(reference).get
     val refSeq = reference.getFragmentSequence.toUpperCase
+    val unflankedRegion = Option(reference.getDescription) match {
+      case None => coordinates
+      case Some(str) => str.length match {
+        case 1 => ReferenceRegion(coordinates.referenceName,
+          coordinates.start + targetFlankSize,
+          coordinates.end)
+        case 2 => ReferenceRegion(coordinates.referenceName,
+          coordinates.start,
+          coordinates.end - targetFlankSize)
+        case 3 => ReferenceRegion(coordinates.referenceName,
+          coordinates.start + targetFlankSize,
+          coordinates.end - targetFlankSize)
+        case _ => throw new IllegalArgumentException("Fragment " + reference + " is missing flank description.")
+      }
+    }
 
     // compute activity statistics
     val (mismatchRate, clipRate, coverage) = CheckActivity.time {
@@ -175,11 +195,17 @@ class ReassemblyExplorer(kmerLength: Int,
           observation
         })
       }
-    }
+    }.filter(o => unflankedRegion.contains(o.pos))
   }
 
   def discover(reads: RDD[AlignmentRecord]): RDD[Observation] = {
     val joinReadsAndContigs = JoiningReads.time {
+      // resize and flank contig fragments
+      val flankedFragments = ResizeAndFlankReferenceFragments(reference,
+        sd,
+        targetRegionSize,
+        targetFlankSize)
+
       // zip reference contig fragments with uuids, cache
       val refIds = reference.zipWithUniqueId()
         .map(vk => (vk._2, vk._1))

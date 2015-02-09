@@ -97,7 +97,10 @@ object ResizeAndFlankReferenceFragments extends Serializable {
 
           // update fragments with flanking sequences
           copyLastFragment._2.setFragmentSequence(lastSequence + currSequence.take(flankSize))
+          copyLastFragment._2.setDescription(Option(copyLastFragment._2.getDescription)
+            .fold("rr")(_ + "rr"))
           f._2.setFragmentSequence(lastSequence.takeRight(flankSize) + currSequence)
+          f._2.setDescription("f")
 
           // we must change the start position of the fragment we are appending in front of
           f._2.setFragmentStartPosition(f._2.getFragmentStartPosition - flankSize.toLong)

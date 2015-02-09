@@ -87,7 +87,9 @@ class ReassemblyExplorerSuite extends AvocadoFunSuite {
       Double.PositiveInfinity,
       -1.0,
       0.0,
-      0.0)
+      0.0,
+      1000,
+      200)
     val obs = re.discover(reads)
     val vc = bg.genotype(obs)
       .flatMap(_.genotypes)
@@ -116,7 +118,9 @@ class ReassemblyExplorerSuite extends AvocadoFunSuite {
       Double.PositiveInfinity,
       -1.0,
       0.0,
-      0.0)
+      0.0,
+      1000,
+      200)
     val obs = re.discover(reads)
     val vc = bg.genotype(obs)
       .flatMap(_.genotypes)
