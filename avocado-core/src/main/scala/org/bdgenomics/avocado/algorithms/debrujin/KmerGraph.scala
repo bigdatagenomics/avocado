@@ -492,7 +492,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   val finalObs = addObservations()
 
                   // now, we must be out of k-mers, or something has gone wrong
-                  assert(!kmerIter.hasNext)
+                  if (kmerIter.hasNext) {
+                    log.warn("Possible poorly formed complex allele at " + pos + " with observations " + finalObs._1.mkString(", ") + " and remaining k-mers " + kmerIter.mkString(", "))
+                  }
                   finalObs._1
                 } else {
                   // get the next alignment state
