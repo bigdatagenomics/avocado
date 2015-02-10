@@ -334,13 +334,15 @@ class KmerGraph(protected val kmers: Array[Kmer],
             // simple insert: # kmers = gap length + allele length
             // simple deletion: # kmers < kmer length
             if (offset < 0 && reversed.length < kmerLength) {
+              val delBase = reversed.head.kmerSeq.dropRight(1).takeRight(1)
+
               // create observations of the alt allele
               val altObs = reversed.takeRight(1)
                 .map(buildReadObservations(_,
                   ReferencePosition(refSink.referenceName,
                     refSink.pos - 1),
-                  alleleLength,
-                  ("_" * alleleLength),
+                  alleleLength + 1,
+                  (delBase),
                   ca.activeReads))
                 .reduce(_ ++ _)
 
@@ -348,7 +350,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
               var refPoint = ReferencePosition(ca.branchPoint.referenceName,
                 ca.branchPoint.pos + 1)
               val refObs = reversed.dropRight(1)
-                .map(k => {
+                .flatMap(k => {
                   // take observations
                   val obs = buildReadObservations(k,
                     refPoint,
@@ -362,7 +364,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
                   // emit observations
                   obs
-                }).reduce(_ ++ _)
+                })
 
               // combine observations into a new observation set and recurse
               val newObs = observations ++ altObs ++ refObs

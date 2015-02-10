@@ -403,7 +403,21 @@ class KmerGraphSuite extends AvocadoFunSuite {
       .filter(kv => kv._1.pos == 107L)
       .map(kv => kv._2
         .map(ao => ao.allele)
-        .toSet).foreach(v => assert(v.size === 2))
+        .toSet).foreach(v => {
+        assert(v.size === 2)
+      })
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .filter(kv => kv._1.pos == 107L)
+      .map(kv => kv._2
+        .map(ao => ao.length)
+        .toSet).foreach(v => {
+        assert(v.size === 2)
+        assert(v.min === 1)
+        assert(v.max === 2)
+      })
   }
 
   test("put reads into graph, introduce a complex deletion") {
