@@ -34,7 +34,7 @@ private[stats] object SliceReference extends Serializable {
       // map over sequence and emit observations
       sequence.map(base => {
         val observation = new Observation(ReferencePosition(reference, pos),
-          base.toString)
+          base.toString.toUpperCase)
 
         // increment site
         pos += 1

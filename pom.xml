@@ -15,14 +15,15 @@
   <name>avocado: A Variant Caller, Distributed</name>
   
   <properties>
-    <adam.version>0.14.1-SNAPSHOT</adam.version>
+    <adam.version>0.15.1-SNAPSHOT</adam.version>
     <avro.version>1.7.6</avro.version>
     <java.version>1.7</java.version>
     <scala.version>2.10.3</scala.version>
     <scala.version.prefix>2.10</scala.version.prefix>
-    <spark.version>1.1.0</spark.version>
+    <spark.version>1.2.0</spark.version>
     <!-- Edit the following line to configure the Hadoop (HDFS) version. -->
     <hadoop.version>2.2.0</hadoop.version>
+    <utils.version>0.1.1</utils.version>
   </properties>
   
   <modules>
@@ -234,10 +235,27 @@
         <version>${project.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.bdgenomics.bdg-utils</groupId>
+        <artifactId>bdg-utils-misc</artifactId>
+        <version>${utils.version}</version>
+        <type>test-jar</type>
+        <scope>test</scope>        
+      </dependency>
+      <dependency>
+        <groupId>org.bdgenomics.bdg-utils</groupId>
+        <artifactId>bdg-utils-metrics</artifactId>
+        <version>${utils.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-client</artifactId>
         <version>${hadoop.version}</version>
+        <scope>provided</scope>
         <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
           <exclusion>
             <groupId>asm</groupId>
             <artifactId>asm</artifactId>
@@ -267,13 +285,6 @@
       </dependency>
       <dependency>
         <groupId>org.bdgenomics.adam</groupId>
-        <artifactId>adam-core</artifactId>
-        <version>${adam.version}</version>
-        <type>test-jar</type>
-        <scope>test</scope>
-      </dependency>
-      <dependency>
-        <groupId>org.bdgenomics.adam</groupId>
         <artifactId>adam-cli</artifactId>
         <version>${adam.version}</version>
       </dependency>
@@ -297,6 +308,7 @@
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-core_${scala.version.prefix}</artifactId>
         <version>${spark.version}</version>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.avro</groupId>

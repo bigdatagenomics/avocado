@@ -22,6 +22,7 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.SequenceDictionary
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.contig.NucleotideContigFragmentContext._
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 
 class AvocadoConfigAndStats(val sc: SparkContext,
@@ -29,17 +30,29 @@ class AvocadoConfigAndStats(val sc: SparkContext,
                             inputDataset: RDD[AlignmentRecord],
                             reference: RDD[NucleotideContigFragment]) {
 
-  lazy val coverage = ScoreCoverage(inputDataset)
+  lazy val coverage = ComputingCoverage.time {
+    ScoreCoverage(inputDataset)
+  }
 
-  lazy val contigLengths = GetReferenceContigLengths(reference)
+  lazy val contigLengths = ReferenceLengths.time {
+    GetReferenceContigLengths(reference)
+  }
 
-  lazy val referenceSeq = reference.collect()
+  lazy val referenceSeq = CollectingReference.time {
+    reference.collect()
+  }
 
-  lazy val sequenceDict = reference.adamGetSequenceDictionary()
+  lazy val sequenceDict = ExtractingSequenceDictionary.time {
+    reference.adamGetSequenceDictionary()
+  }
 
-  lazy val samplesInDataset = inputDataset.map(_.getRecordGroupSample)
-    .distinct()
-    .collect()
+  lazy val samplesInDataset = CollectingSamples.time {
+    inputDataset.map(_.getRecordGroupSample)
+      .distinct()
+      .collect()
+  }
 
-  lazy val referenceObservations = SliceReference(reference)
+  lazy val referenceObservations = ExploringReference.time {
+    SliceReference(reference)
+  }
 }

@@ -24,6 +24,7 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferencePosition
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichAlignmentRecord
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.AlignmentRecord
@@ -42,7 +43,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
 
   val companion: ExplorerCompanion = ReadExplorer
 
-  def readToObservations(read: AlignmentRecord): Seq[Observation] = {
+  def readToObservations(r: (AlignmentRecord, Long)): Seq[Observation] = ExploringRead.time {
+    val (read, readId) = r
     val richRead: RichAlignmentRecord = RichAlignmentRecord(read)
 
     // get read start, contig, strand, sample, mapq, and sequence
@@ -71,7 +73,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         quals(readPos),
         mapq,
         negativeStrand,
-        sample) +: observations
+        sample,
+        readId) +: observations
       readPos += 1
       pos += 1
     }
@@ -83,16 +86,34 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
 
         // add the observation
         observations = AlleleObservation(ReferencePosition(contig, pos),
-          alleleLength,
+          1,
           sequence.drop(readPos).take(alleleLength),
           quals.drop(readPos).take(alleleLength).reduce(_ + _) / alleleLength,
           mapq,
           negativeStrand,
-          sample).asInstanceOf[Observation] +: observations
+          sample,
+          readId).asInstanceOf[Observation] +: observations
 
         // increment read pointers
         readPos += alleleLength
         pos += 1
+      } else if (idx + 1 < cigar.length && cigar(idx + 1).getOperator == CigarOperator.D) {
+        // the allele includes the matching base
+        val alleleLength = 1 + cigar(idx + 1).getLength
+
+        // add the observation
+        observations = AlleleObservation(ReferencePosition(contig, pos),
+          alleleLength,
+          sequence.drop(readPos).take(1),
+          quals.drop(readPos).head,
+          mapq,
+          negativeStrand,
+          sample,
+          readId).asInstanceOf[Observation] +: observations
+
+        // increment read pointers
+        readPos += 1
+        pos += alleleLength
       } else {
         processAlignmentMatch()
       }
@@ -116,17 +137,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           // no op; handle inserts by looking ahead from match/mismatch operator
         }
         case CigarOperator.D => {
-          (0 until cigar(i).getLength).foreach(j => {
-            observations = AlleleObservation(ReferencePosition(contig, pos),
-              cigar(i).getLength,
-              "_",
-              mapq, // TODO: is this the correct choice/a good choice?
-              mapq,
-              negativeStrand,
-              sample).asInstanceOf[Observation] +: observations
-
-            pos += 1
-          })
+          // no op; handle inserts by looking ahead from match/mismatch operator
         }
         case CigarOperator.S => {
           readPos += cigar(i).getLength
@@ -148,7 +159,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
   }
 
   def discover(reads: RDD[AlignmentRecord]): RDD[Observation] = {
-    reads.filter(_.getReadMapped)
-      .flatMap(readToObservations) ++ referenceObservations
+    ExploringReads.time {
+      reads.filter(_.getReadMapped)
+        .zipWithUniqueId()
+        .flatMap(readToObservations)
+    } ++ referenceObservations
   }
 }

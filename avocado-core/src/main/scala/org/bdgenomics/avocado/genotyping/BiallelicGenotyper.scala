@@ -18,21 +18,25 @@
 package org.bdgenomics.avocado.genotyping
 
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
+import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.{
   ReferencePosition,
+  ReferenceRegion,
   SequenceDictionary,
   SequenceRecord,
   VariantContext
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.GenomicPositionPartitioner
 import org.bdgenomics.adam.util.PhredUtils
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, GenotypeAllele, Variant }
 import scala.annotation.tailrec
-import scala.math.pow
+import scala.math.{ exp, expm1, log => mathLog, log1p, max, min, pow }
 
 object BiallelicGenotyper extends GenotyperCompanion {
 
@@ -42,16 +46,45 @@ object BiallelicGenotyper extends GenotyperCompanion {
                       config: SubnodeConfiguration): Genotyper = {
 
     new BiallelicGenotyper(stats.sequenceDict,
+      stats.contigLengths,
       config.getInt("ploidy", 2),
       config.getBoolean("useEM", false))
   }
 }
 
 class BiallelicGenotyper(sd: SequenceDictionary,
+                         contigLengths: Map[String, Long],
                          ploidy: Int = 2,
                          useEM: Boolean = false) extends Genotyper with Logging {
 
   val companion: GenotyperCompanion = BiallelicGenotyper
+
+  // necessary for conversion to/from phred
+  private val LOG10 = mathLog(10.0)
+
+  // precompute log ploidy
+  private val logPloidy = mathLog(ploidy.toDouble)
+
+  /**
+   * Conversion between log _success_ probabilities and Phred scores.
+   *
+   * Q = -10 log_{10} (1 - p)
+   *
+   * If l = ln p, then:
+   *
+   * l_e = ln 1 + ln (1 - exp(l_e / 1))
+   *     = ln(1 - exp(l_e))
+   * Q = -10 l_e / ln 10
+   *
+   * @note Just remember kids: if you want to live a happy, fulfilling life, don't use Phred!
+   * @note We don't have a conversion the other way around because it doesn't really make sense.
+   *
+   * @param l Log probability.
+   * @return Returns the Phred score corresponding to that log probability.
+   */
+  def log2phred(l: Double): Int = {
+    (-10.0 * mathLog(-expm1(l)) / LOG10).toInt
+  }
 
   /**
    * Scores likelihoods for genotypes using equation from Li 2009.
@@ -64,7 +97,7 @@ class BiallelicGenotyper(sd: SequenceDictionary,
    */
   def scoreGenotypeLikelihoods(reference: String,
                                allele: String,
-                               observations: Iterable[AlleleObservation]): (Iterable[AlleleObservation], Array[Double], Array[Double]) = {
+                               observations: Iterable[AlleleObservation]): (Iterable[AlleleObservation], Array[Double], Array[Double]) = ScoringLikelihoods.time {
 
     // count bases observed
     val k = observations.size
@@ -92,7 +125,9 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     val mismatchBases = observations.filter(o => o.allele != reference && o.allele != allele)
 
     def epsilon(observed: Iterable[AlleleObservation]): Iterable[Double] = {
-      observed.map(o => PhredUtils.phredToErrorProbability((o.phred + o.mapq) / 2))
+      // we must take the min here; if we don't, phred=0 mapq=0 bases have epsilon of 1.0
+      // which leads to log(1.0 - 1.0) = log(0.0) = -Infinity, which messes everything up
+      observed.map(o => min(0.99999, PhredUtils.phredToErrorProbability((o.phred + o.mapq) / 2)))
     }
 
     // compute error observations
@@ -105,14 +140,14 @@ class BiallelicGenotyper(sd: SequenceDictionary,
                              alleleEpsilon: Iterable[Double]): Array[Double] = {
       states.map(g => {
         // contribution of bases that match the reference
-        val productMatch = refEpsilon.map(epsilon => (ploidy - g) * epsilon + g * (1 - epsilon))
-          .fold(1.0)(_ * _)
+        val productMatch = refEpsilon.map(epsilon => mathLog((ploidy - g) * epsilon + g * (1 - epsilon)))
+          .sum
 
         // contribution of bases that do not match the base
-        val productMismatch = alleleEpsilon.map(epsilon => (ploidy - g) * (1 - epsilon) + g * epsilon)
-          .fold(1.0)(_ * _)
+        val productMismatch = alleleEpsilon.map(epsilon => mathLog((ploidy - g) * (1 - epsilon) + g * epsilon))
+          .sum
 
-        productMatch * productMismatch / pow(ploidy.toDouble, k.toDouble)
+        productMatch + productMismatch - (logPloidy * k.toDouble)
       })
     }
 
@@ -142,23 +177,52 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     }
   }
 
+  def sumLogProbabilities(pArray: Array[Double], debug: Boolean = false): Double = {
+    assert(pArray.length > 0)
+
+    // first, sort the array
+    val sortP = pArray.toSeq.sortWith(_ > _)
+
+    var iter = 0
+
+    // this is a nifty little trick; not sure exactly where it's originally from,
+    // but apparently durbin et al '98 features it. evidently:
+    // log(p + q) = log(p(1 + q/p)
+    //            = log(p) + log(1 + exp(log(q/p)))
+    //            = log(p) + log(1 + exp(log(q) - log(p)))
+    def sumFunction(logP: Double,
+                    logIter: Iterator[Double]): Double = {
+      if (!logIter.hasNext) {
+        logP
+      } else {
+        val logQ = logIter.next
+        sumFunction(logP + log1p(exp(logQ - logP)), logIter)
+      }
+    }
+
+    sumFunction(sortP.head, sortP.toIterator.drop(1))
+  }
+
   def emitCall(variant: Variant,
                sampleId: String,
                observations: Iterable[AlleleObservation],
                likelihoods: Array[Double],
                anyAltLikelihoods: Array[Double],
-               priors: Array[Double]): Genotype = {
+               priors: Array[Double]): Genotype = EmittingCall.time {
 
     // were we able to make any observations at this site?
     if (observations.size > 0) {
       // compute and marginalize posterior
       val posteriors = new Array[Double](likelihoods.length)
       (0 until posteriors.length).foreach(i => {
-        posteriors(i) = likelihoods(i) * priors(i)
+        posteriors(i) = likelihoods(i) + priors(i)
       })
-      val norm = posteriors.sum
+      val norm = sumLogProbabilities(posteriors)
+      if (norm.isInfinite || norm.isNaN) {
+        sumLogProbabilities(posteriors, true)
+      }
       (0 until posteriors.length).foreach(i => {
-        posteriors(i) /= norm
+        posteriors(i) = posteriors(i) - norm
       })
 
       // find the genotype state with the maximum posterior probability
@@ -186,9 +250,9 @@ class BiallelicGenotyper(sd: SequenceDictionary,
         .setSampleId(sampleId)
         .setReadDepth(observations.size)
         .setAlleles(calls.toList)
-        .setGenotypeLikelihoods(likelihoods.map(PhredUtils.successProbabilityToPhred).toList)
-        .setNonReferenceLikelihoods(anyAltLikelihoods.map(PhredUtils.successProbabilityToPhred).toList)
-        .setGenotypeQuality(PhredUtils.successProbabilityToPhred(genotypeProbability))
+        .setGenotypeLikelihoods(likelihoods.map(v => log2phred(v)).toList)
+        .setNonReferenceLikelihoods(anyAltLikelihoods.map(v => log2phred(v)).toList)
+        .setGenotypeQuality(log2phred(genotypeProbability))
         .setReferenceReadDepth(observations.filter(_.allele == ref).size)
         .setAlternateReadDepth(observations.filter(_.allele == alt).size)
         .build()
@@ -209,29 +273,19 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     }
   }
 
-  def genotypeSite(site: (ReferencePosition, Iterable[Observation])): Option[VariantContext] = {
-    val (pos, observations) = site
+  def genotypeSite(region: ReferenceRegion,
+                   referenceObservation: Observation,
+                   alleleObservations: Iterable[AlleleObservation]): VariantContext = GenotypingSite.time {
 
     // get reference allele
-    val reference = observations.find(obs => obs match {
-      case ao: AlleleObservation => false
-      case _                     => true
-    }).fold({
-      log.info("Had alleles observed, but no reference at " + pos)
-      return None
-    })(_.allele)
-
-    // get allele observations
-    val alleleObservations: Iterable[AlleleObservation] = observations.flatMap(obs => obs match {
-      case ao: AlleleObservation => Some(ao)
-      case _                     => None
-    })
+    val reference = referenceObservation.allele
 
     // get observations per sample
     val observationsBySample = alleleObservations.groupBy(_.sample)
 
     // find most frequently observed non-ref allele
     val nonRefAlleles = alleleObservations.filter(_.allele != reference)
+
     val allele = if (nonRefAlleles.size > 0) {
       nonRefAlleles.groupBy(_.allele)
         .maxBy(kv => kv._2.size)
@@ -250,16 +304,16 @@ class BiallelicGenotyper(sd: SequenceDictionary,
       // TODO: connect up EM algorithm
       ???
     } else {
-      (0 to ploidy).map(i => 1.0).toArray
+      (0 to ploidy).map(i => mathLog(1.0)).toArray
     }
 
     // construct variant
     val variant = Variant.newBuilder()
       .setReferenceAllele(reference)
       .setAlternateAllele(allele)
-      .setContig(SequenceRecord.toADAMContig(sd(pos.referenceName).get))
-      .setStart(pos.pos)
-      .setEnd(pos.pos + reference.length)
+      .setContig(SequenceRecord.toADAMContig(sd(region.referenceName).get))
+      .setStart(region.start)
+      .setEnd(region.end)
       .build()
 
     // emit calls
@@ -277,11 +331,122 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     })
 
     // emit the variant context
-    Some(VariantContext(variant, genotypes, None))
+    VariantContext(variant, genotypes, None)
   }
 
   def genotype(observations: RDD[Observation]): RDD[VariantContext] = {
-    observations.groupBy(_.pos)
-      .flatMap(genotypeSite)
+    observations.keyBy(_.pos)
+      .repartitionAndSortWithinPartitions(GenomicPositionPartitioner(observations.partitions.size,
+        contigLengths))
+      .mapPartitions(genotypeIterator)
+  }
+
+  def updateObservations(region: ReferenceRegion,
+                         obs: List[Observation]): (Observation, Iterable[AlleleObservation]) = {
+    // extract references
+    val ref = obs.flatMap(o => o match {
+      case ao: AlleleObservation => None
+      case oo: Observation       => Some(oo)
+    }).sortBy(_.pos)
+      .map(_.allele)
+      .mkString
+    val refLen = ref.length
+    val refPos = ReferencePosition(region.referenceName, region.start)
+
+    // put read observations together
+    val readObservations = obs.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case oo: Observation       => None
+    })
+
+    // if the reference length is greater than 1, we need to expand the values
+    val finalObservations = if (refLen > 1) {
+      readObservations.groupBy(_.readId)
+        .map(ro => {
+          // sort the read observations
+          val sortedRo = ro._2.sortBy(_.pos)
+
+          // get the start and end position
+          val start = sortedRo.head.pos.pos
+          val end = sortedRo.last.pos.pos + sortedRo.last.length
+
+          // reduce down to get the sequence
+          val sequence = (ref.take((start - region.start).toInt) +
+            sortedRo.map(_.allele).mkString +
+            ref.takeRight((region.end - end).toInt))
+          val phred = sortedRo.map(_.phred).sum / sortedRo.length
+
+          // make observation
+          AlleleObservation(refPos,
+            refLen,
+            sequence,
+            phred,
+            sortedRo.head.mapq,
+            sortedRo.head.onNegativeStrand,
+            sortedRo.head.sample,
+            sortedRo.head.readId)
+        })
+    } else {
+      readObservations
+    }
+
+    // emit reference observation
+    (new Observation(refPos, ref), finalObservations)
+  }
+
+  def genotypeIterator(iter: Iterator[(ReferencePosition, Observation)]): Iterator[VariantContext] = {
+    // do we have any elements in this iterator?
+    if (iter.hasNext) {
+      // peek at the head element
+      val (headPos, headObs) = iter.next
+
+      // and initialize state
+      var windowStart = headPos.pos
+      var windowEnd = windowStart + headObs.length
+      var obsList = List(headObs)
+
+      def flush(): VariantContext = {
+        val region = ReferenceRegion(headPos.referenceName, windowStart, windowEnd)
+
+        // update observations
+        val (refObs, obsIterable) = updateObservations(region, obsList)
+
+        // compute genotypes
+        genotypeSite(region,
+          refObs,
+          obsIterable)
+      }
+
+      // start processing observation windows!
+      iter.flatMap(kv => {
+        val (pos, obs) = kv
+
+        // does this observation start past the end of this window? if so, flush our observations
+        // and rebuild the window
+        if (pos.pos >= windowEnd) {
+          // flush the window
+          val vc = flush()
+
+          // reinitialize state
+          windowStart = pos.pos
+          windowEnd = windowStart + obs.length
+          obsList = List(obs)
+
+          // emit variant context
+          Some(vc)
+        } else {
+          // make possible update to window end
+          windowEnd = max(windowEnd, pos.pos + obs.length)
+
+          // append observation to list
+          obsList = obs :: obsList
+
+          // nothing to emit
+          None
+        }
+      }) ++ Iterator(flush())
+    } else {
+      Iterator()
+    }
   }
 }

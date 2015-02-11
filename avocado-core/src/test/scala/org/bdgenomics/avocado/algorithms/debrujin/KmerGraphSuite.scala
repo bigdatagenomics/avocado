@@ -22,11 +22,11 @@ import org.bdgenomics.formats.avro.{ Contig, AlignmentRecord }
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichAlignmentRecord
-import org.bdgenomics.adam.util.SparkFunSuite
+import org.bdgenomics.avocado.AvocadoFunSuite
 import scala.collection.immutable.{ NumericRange, SortedMap }
 import scala.collection.mutable.ArrayBuffer
 
-class KmerGraphSuite extends SparkFunSuite {
+class KmerGraphSuite extends AvocadoFunSuite {
 
   override val properties = Map(("spark.serializer", "org.apache.spark.serializer.KryoSerializer"),
     ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"),

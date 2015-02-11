@@ -19,6 +19,7 @@ package org.bdgenomics.avocado.discovery
 
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.spark.rdd.RDD
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.Observation
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.AlignmentRecord
@@ -32,7 +33,7 @@ object Explore {
             explorerName: String,
             rdd: RDD[AlignmentRecord],
             stats: AvocadoConfigAndStats,
-            config: HierarchicalConfiguration): RDD[Observation] = {
+            config: HierarchicalConfiguration): RDD[Observation] = DiscoverObservations.time {
 
     explorers.find(_.explorerName == explorerAlgorithm)
       .fold(throw new IllegalArgumentException("Couldn't find exploration algorithm: " +

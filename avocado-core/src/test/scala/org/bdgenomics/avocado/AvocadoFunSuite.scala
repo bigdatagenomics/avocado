@@ -15,20 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.bdgenomics.avocado.models
+package org.bdgenomics.avocado
 
-import org.bdgenomics.adam.models.ReferencePosition
+import org.bdgenomics.utils.misc.SparkFunSuite
 
-case class AlleleObservation(override val pos: ReferencePosition,
-                             override val length: Int,
-                             override val allele: String,
-                             phred: Int,
-                             mapq: Int,
-                             onNegativeStrand: Boolean,
-                             sample: String,
-                             readId: Long) extends Observation(pos, allele) {
+trait AvocadoFunSuite extends SparkFunSuite {
 
-  override def toString(): String = {
-    "Allele: " + allele + " @ " + pos + " with mapq: " + mapq + " and phred: " + phred
-  }
+  override val appName: String = "avocado"
+  override val properties: Map[String, String] = Map(("spark.serializer", "org.apache.spark.serializer.KryoSerializer"),
+    ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"),
+    ("spark.kryoserializer.buffer.mb", "4"),
+    ("spark.kryo.referenceTracking", "true"))
 }
+
