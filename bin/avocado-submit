@@ -54,6 +54,7 @@ fi
   --conf spark.kryoserializer.buffer.mb=4 \
   --conf spark.kryo.referenceTracking=true \
   --conf spark.executor.memory=${AVOCADO_EXECUTOR_MEMORY:-4g} \
+  ${AVOCADO_OPTS:- } \
   --driver-memory ${AVOCADO_DRIVER_MEMORY:-4g} \
   --jars "$AVOCADO_JARS" \
   "$AVOCADO_CLI_JAR" \
