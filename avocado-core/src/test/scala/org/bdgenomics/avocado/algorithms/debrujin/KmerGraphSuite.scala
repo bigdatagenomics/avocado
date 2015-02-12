@@ -319,7 +319,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
 
     val observations = graph.toObservations
 
-    assert(observations.size === 32)
+    assert(observations.size === 30)
     observations.foreach(o => {
       val r = o.pos
       assert(r.referenceName === "chr1")
@@ -328,12 +328,12 @@ class KmerGraphSuite extends AvocadoFunSuite {
     assert(observations.flatMap(o => o match {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
-    }).size === 22)
+    }).size === 20)
     observations.flatMap(o => o match {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
     }).groupBy(_.pos)
-      .filter(kv => kv._1.pos != 107L && kv._1.pos != 106L)
+      .filter(kv => kv._1.pos != 107L)
       .map(kv => kv._2
         .map(ao => ao.allele)
         .toSet).foreach(v => assert(v.size === 1))
@@ -341,10 +341,22 @@ class KmerGraphSuite extends AvocadoFunSuite {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
     }).groupBy(_.pos)
-      .filter(kv => kv._1.pos == 107L || kv._1.pos == 106L)
+      .filter(kv => kv._1.pos == 107L)
       .map(kv => kv._2
         .map(ao => ao.allele)
         .toSet).foreach(v => assert(v.size === 2))
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .filter(kv => kv._1.pos == 107L)
+      .map(kv => kv._2
+        .map(ao => ao.allele)
+        .toSet)
+      .foreach(s => {
+        assert(s("TTA"))
+        assert(s("G"))
+      })
   }
 
   test("put reads into graph, introduce a deletion") {
@@ -451,7 +463,7 @@ class KmerGraphSuite extends AvocadoFunSuite {
 
     val observations = graph.toObservations
 
-    assert(observations.size === 30)
+    assert(observations.size === 28)
     observations.foreach(o => {
       val r = o.pos
       assert(r.referenceName === "chr1")
@@ -460,12 +472,12 @@ class KmerGraphSuite extends AvocadoFunSuite {
     assert(observations.flatMap(o => o match {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
-    }).size === 20)
+    }).size === 18)
     observations.flatMap(o => o match {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
     }).groupBy(_.pos)
-      .filter(kv => kv._1.pos != 105L && kv._1.pos != 106L && kv._1.pos != 108L)
+      .filter(kv => kv._1.pos != 106L)
       .map(kv => kv._2
         .map(ao => ao.allele)
         .toSet).foreach(v => assert(v.size === 1))
@@ -473,10 +485,22 @@ class KmerGraphSuite extends AvocadoFunSuite {
       case ao: AlleleObservation => Some(ao)
       case _                     => None
     }).groupBy(_.pos)
-      .filter(kv => kv._1.pos == 105L || kv._1.pos == 106L || kv._1.pos == 108L)
+      .filter(kv => kv._1.pos == 106L)
       .map(kv => kv._2
         .map(ao => ao.allele)
         .toSet).foreach(v => assert(v.size === 2))
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .filter(kv => kv._1.pos != 107L && kv._1.pos != 108L)
+      .foreach(v => assert(v._2.size === 2))
+    observations.flatMap(o => o match {
+      case ao: AlleleObservation => Some(ao)
+      case _                     => None
+    }).groupBy(_.pos)
+      .filter(kv => kv._1.pos == 107L || kv._1.pos == 108L)
+      .foreach(v => assert(v._2.size === 1))
   }
 
   test("put reads into graph, introduce a bubble with two alleles") {

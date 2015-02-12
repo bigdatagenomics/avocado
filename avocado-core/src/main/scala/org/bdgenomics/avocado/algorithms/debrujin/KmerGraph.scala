@@ -210,9 +210,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
   private val hmm = new HMMAligner(new TransitionMatrixConfiguration(LOG_PADDING_PENALTY = Double.NegativeInfinity))
 
   override def toString(): String = {
-    "Sources: " + sourceKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
-      "Sinks: " + sinkKmers.map(_.kmerSeq).reduce(_ + ", " + _) + "\n" +
-      kmers.map(_.toDetailedString).reduce(_ + "\n" + _)
+    "Sources: " + sourceKmers.map(_.kmerSeq).mkString(", ") + "\n" +
+      "Sinks: " + sinkKmers.map(_.kmerSeq).mkString(", ") + "\n" +
+      kmers.map(_.toDetailedString).mkString("\n")
   }
 
   /**
@@ -223,7 +223,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
    */
   def toDot(): String = {
     "digraph kg { \n" +
-      kmers.map(_.toDot).reduce(_ + "\n" + _) + "\n}\n"
+      kmers.map(_.toDot).mkString("\n") + "\n}\n"
   }
 
   /**
@@ -238,7 +238,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
                               pos: ReferencePosition,
                               length: Int,
                               allele: String,
-                              activeReads: Set[Long]): Seq[Observation] = {
+                              activeReads: Set[Long]): Seq[AlleleObservation] = {
       val setSize = if (activeReads == null) {
         0
       } else {
@@ -267,7 +267,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
       if (kmer.multiplicity == 0) {
         site
       } else {
-        site ++ buildReadObservations(kmer, kmer.refPos.get, 1, kmer.kmerSeq.take(1), null)
+        site ++ (buildReadObservations(kmer, kmer.refPos.get, 1, kmer.kmerSeq.take(1), null)
+          .map(_.asInstanceOf[Observation]))
       }
     }
 
@@ -321,7 +322,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
             // what is the length of the allele?
             // a snp has length 0, while a n-base indel has length n
-            val offset = reversed.length - (refSink.pos - ca.branchPoint.pos).toInt + 1
+            val refGap = (refSink.pos - ca.branchPoint.pos).toInt
+            val offset = reversed.length - refGap + 1
             val alleleLength = abs(offset)
             lazy val gapLength = if (ca.branchPoint.referenceName == refSink.referenceName) {
               (refSink.pos - ca.branchPoint.pos).toInt - 1
@@ -338,13 +340,13 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
               // create observations of the alt allele
               val altObs = reversed.takeRight(1)
-                .map(buildReadObservations(_,
+                .flatMap(buildReadObservations(_,
                   ReferencePosition(refSink.referenceName,
                     refSink.pos - 1),
                   alleleLength + 1,
                   (delBase),
                   ca.activeReads))
-                .reduce(_ ++ _)
+                .map(_.asInstanceOf[Observation])
 
               // now, count (k - 1) from the start and build reference observations
               var refPoint = ReferencePosition(ca.branchPoint.referenceName,
@@ -357,6 +359,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
                     1,
                     k.kmerSeq.take(1),
                     ca.activeReads)
+                    .map(_.asInstanceOf[Observation])
 
                   // increment position
                   refPoint = ReferencePosition(refPoint.referenceName,
@@ -372,49 +375,85 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 newObs,
                 branches,
                 referenceSites)
-            } else if (offset == 0 ||
-              (offset > 0 && gapLength + 1 == kmerLength)) {
+            } else {
               // create observations of the alt allele
               val altObs = if (offset == 0) {
                 // if we have a s/mnp, we must index into the allele
                 var idx = 0
                 val alt = ca.allele.drop(kmerLength - alleleLength - 1)
                 reversed.drop(kmerLength - 1)
-                  .map(kmer => {
+                  .flatMap(kmer => {
                     val obs = buildReadObservations(kmer,
                       ReferencePosition(ca.branchPoint.referenceName,
                         ca.branchPoint.pos + kmerLength - offset + idx),
-                      alleleLength,
+                      1,
                       alt(idx).toString,
                       ca.activeReads)
+                      .map(_.asInstanceOf[Observation])
 
                     // increment index into allele
                     idx += 1
 
                     obs
-                  }).reduce(_ ++ _)
+                  })
               } else {
-                reversed.drop(kmerLength - 1)
-                  .map(buildReadObservations(_,
-                    ReferencePosition(ca.branchPoint.referenceName,
-                      ca.branchPoint.pos + kmerLength - offset),
-                    alleleLength,
+                // are we in an insert, or a complex allele? if we are in an insert, we have
+                // allele length of 1, if we're in a complex allele, we emit the short
+                // haplotype corresponding to the complex allele
+                val (altLength, altAllele, rp) = if (offset > 0 && gapLength + 1 == kmerLength) {
+                  // a simple insert left aligns to the reference position prior to the insert
+                  (1,
                     ca.allele.drop(kmerLength - alleleLength - 1),
+                    ReferencePosition(ca.branchPoint.referenceName,
+                      ca.branchPoint.pos + kmerLength - offset))
+                } else {
+                  // a complex allele covers multiple reference positions
+                  (abs(offset - 1),
+                    ca.allele.drop(kmerLength - 1),
+                    ReferencePosition(ca.branchPoint.referenceName,
+                      ca.branchPoint.pos + kmerLength))
+                }
+                reversed.drop(kmerLength - 1)
+                  .flatMap(buildReadObservations(_,
+                    rp,
+                    altLength,
+                    altAllele,
                     ca.activeReads))
-                  .reduce(_ ++ _)
+                  .groupBy(ao => ao.readId)
+                  .map(kv => {
+                    val (_, observations) = kv
+
+                    // seed from the head observation
+                    val headObs = observations.head
+
+                    // we need to average out the phred scores
+                    val numObservations = observations.length
+                    val phred = observations.map(_.phred).sum
+
+                    // create new observation that is the average of the others
+                    AlleleObservation(headObs.pos,
+                      headObs.length,
+                      headObs.allele,
+                      phred / numObservations,
+                      headObs.mapq,
+                      headObs.onNegativeStrand,
+                      headObs.sample,
+                      headObs.readId).asInstanceOf[Observation]
+                  })
               }
 
               // now, count (k - 1) from the start and build reference observations
               var refPoint = ReferencePosition(ca.branchPoint.referenceName,
                 ca.branchPoint.pos + 1)
               val refObs = reversed.take(kmerLength - 1)
-                .map(k => {
+                .flatMap(k => {
                   // take observations
                   val obs = buildReadObservations(k,
                     refPoint,
                     1,
                     k.kmerSeq.take(1),
                     ca.activeReads)
+                    .map(_.asInstanceOf[Observation])
 
                   // increment position
                   refPoint = ReferencePosition(refPoint.referenceName,
@@ -422,126 +461,10 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
                   // emit observations
                   obs
-                }).reduce(_ ++ _)
+                })
 
               // combine observations into a new observation set and recurse
               val newObs = observations ++ altObs ++ refObs
-              (Reference(ca.kmer),
-                newObs,
-                branches,
-                referenceSites)
-            } else {
-              // complex alleles represent up in this else statement!
-              // processing complex alleles is a 3 step process. we must:
-              // 1. recover the reference
-              assert(references.length == 1)
-              val (refRegion, ref) = references.head
-              val refSeq = ref.drop((ca.branchPoint.pos - refRegion.start).toInt + 1).take(gapLength)
-
-              // 2. realign the _allele_ to the reference at that site
-              val alignment = hmm.alignSequences(refSeq, ca.allele, null)
-
-              // 3. step through and process the local alignment information
-
-              def kmersToObservations(kmers: Iterator[Kmer],
-                                      length: Int,
-                                      pos: ReferencePosition): (Seq[Observation], Kmer) = {
-                assert(length > 0 && kmers.hasNext)
-
-                // duplicate iterator
-                val (k1, k2) = kmers.duplicate
-                var kmer: Kmer = null // we must return the last kmer, in case we are followed by a deletion
-
-                // generate allele
-                val allele = k1.take(length).map(k => {
-                  kmer = k
-                  k.kmerSeq.take(1)
-                }).reduce(_ + _)
-
-                // generate observations
-                (k2.take(length).flatMap(k => buildReadObservations(k,
-                  pos,
-                  1,
-                  allele,
-                  ca.activeReads)).toSeq, kmer)
-              }
-
-              @tailrec def processComplexAllele(lastKmer: Kmer,
-                                                alignmentIter: Iterator[Char],
-                                                kmerIter: Iterator[Kmer],
-                                                pos: ReferencePosition,
-                                                alleleLength: Int = 0,
-                                                obs: Seq[Observation] = Seq()): Seq[Observation] = {
-                // append the current observations
-                // and return the current head kmer, in case we have a deletion
-                def addObservations(): (Seq[Observation], Kmer) = {
-                  if (alleleLength > 0) {
-                    val (newObs, k) = kmersToObservations(kmerIter, alleleLength, pos)
-                    (obs ++ newObs, k)
-                  } else {
-                    (obs, lastKmer)
-                  }
-                }
-
-                // do we have any more state in the alignment? if not, process the last allele.
-                if (!alignmentIter.hasNext) {
-                  // when we run out of alignment states, we should either have:
-                  // - 1 n-length (n > 0) allele left, and thus n k-mers left
-                  // - or, have just processed a 0 length allele (a deletion)
-                  assert(kmerIter.hasNext || alleleLength == 0)
-                  val finalObs = addObservations()
-
-                  // now, we must be out of k-mers, or something has gone wrong
-                  if (kmerIter.hasNext) {
-                    log.warn("Possible poorly formed complex allele at " + pos + " with observations " + finalObs._1.mkString(", ") + " and remaining k-mers " + kmerIter.mkString(", "))
-                  }
-                  finalObs._1
-                } else {
-                  // get the next alignment state
-                  val alignmentState = alignmentIter.next
-
-                  // if we are here, we must have k-mers left, unless we're in a long deletion
-                  assert(kmerIter.hasNext || (alleleLength == 0 && alignmentState == 'D'))
-
-                  // handle the different alignment states:
-                  // 1. if we have an alignment match (=/X), we advance the position by 1
-                  // 2. if we have a deletion, we emit a length 0 allele and advance the position by 1
-                  // 3. if we have an insert, we increment the allele length and don't move
-                  val (newLength, newPos, newObs, newKmer) = alignmentState match {
-                    case '=' | 'X' => {
-                      val (ob, km) = addObservations()
-                      (1, ReferencePosition(pos.referenceName, pos.pos + 1), ob, km)
-                    }
-                    case 'P' | 'D' => {
-                      val currPos = ReferencePosition(pos.referenceName, pos.pos + 1)
-                      val (ob, km) = addObservations()
-                      val delObs = buildReadObservations(km, currPos, 1, "_", ca.activeReads)
-                      (0, currPos, ob ++ delObs, km)
-                    }
-                    case 'I' => {
-                      (alleleLength + 1, pos, obs, lastKmer)
-                    }
-                    case _ => {
-                      throw new IllegalArgumentException("Received illegal alignment state in " + alignment)
-                    }
-                  }
-
-                  // recurse until we are done processing
-                  processComplexAllele(newKmer,
-                    alignmentIter,
-                    kmerIter,
-                    newPos,
-                    newLength,
-                    newObs)
-                }
-              }
-
-              val newObs = processComplexAllele(reversed.head,
-                alignment.alignmentStateSequence.toIterator,
-                reversed.toIterator,
-                ReferencePosition(ca.branchPoint.referenceName,
-                  ca.branchPoint.pos)) ++ observations
-
               (Reference(ca.kmer),
                 newObs,
                 branches,
