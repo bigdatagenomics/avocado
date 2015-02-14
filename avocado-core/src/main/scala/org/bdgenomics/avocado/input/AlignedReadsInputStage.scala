@@ -21,8 +21,6 @@ import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 import org.bdgenomics.adam.predicates.UniqueMappedReadPredicate
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMContext
-import org.bdgenomics.adam.rdd.contig.NucleotideContigFragmentContext._
-import org.bdgenomics.adam.rdd.read.AlignmentRecordContext._
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
@@ -46,7 +44,7 @@ private[input] object AlignedReadsInputStage extends InputStage {
 
     println("Loading reads in from " + inputPath)
 
-    new ADAMContext(sc).loadAlignments(inputPath, Some(classOf[UniqueMappedReadPredicate]))
+    sc.loadAlignments(inputPath, Some(classOf[UniqueMappedReadPredicate]))
   }
 
 }

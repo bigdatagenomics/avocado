@@ -22,7 +22,6 @@ import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.SnpTable
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.read.AlignmentRecordContext._
 import org.bdgenomics.formats.avro.AlignmentRecord
 
 object RecalibrateBaseQualities extends PreprocessingStage {
@@ -42,5 +41,4 @@ object RecalibrateBaseQualities extends PreprocessingStage {
     // run bqsr with snp table loaded
     rdd.adamBQSR(snpTable)
   }
-
 }
