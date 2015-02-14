@@ -21,7 +21,6 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.SequenceDictionary
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.contig.NucleotideContigFragmentContext._
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 

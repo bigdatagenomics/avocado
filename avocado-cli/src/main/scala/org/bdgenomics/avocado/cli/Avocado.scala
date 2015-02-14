@@ -32,7 +32,6 @@ import org.bdgenomics.adam.cli.{
 }
 import org.bdgenomics.adam.models.{ VariantContext, ReferenceRegion }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.contig.NucleotideContigFragmentContext
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.discovery.Explore
 import org.bdgenomics.avocado.genotyping.CallGenotypes
@@ -193,8 +192,7 @@ class Avocado(protected val args: AvocadoArgs) extends ADAMSparkCommand[AvocadoA
 
     // load in reference from ADAM file
     val reference: RDD[NucleotideContigFragment] = LoadContigs.time {
-      new NucleotideContigFragmentContext(sc)
-        .adamSequenceLoad(args.referenceInput, args.fragmentLength)
+      sc.loadSequence(args.referenceInput, fragmentLength = args.fragmentLength)
     }
 
     log.info("Loading reads in from " + args.readInput)
