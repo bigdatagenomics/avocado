@@ -20,7 +20,7 @@ package org.bdgenomics.avocado.genotyping
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
-import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.{ InstrumentedRDD, RDD }
 import org.bdgenomics.adam.models.{
   ReferencePosition,
   ReferenceRegion,
@@ -364,10 +364,14 @@ class BiallelicGenotyper(sd: SequenceDictionary,
   }
 
   def genotype(observations: RDD[Observation]): RDD[VariantContext] = {
-    observations.keyBy(_.pos)
+    val sortedRdd = observations.keyBy(_.pos)
       .repartitionAndSortWithinPartitions(GenomicPositionPartitioner(observations.partitions.size,
         contigLengths))
-      .mapPartitions(genotypeIterator)
+    val instrumentedRdd = {
+      import org.apache.spark.rdd.MetricsContext._
+      sortedRdd.instrument
+    }
+    instrumentedRdd.mapPartitions(genotypeIterator)
   }
 
   def updateObservations(region: ReferenceRegion,
