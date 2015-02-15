@@ -229,6 +229,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
     k.refPos.fold(0)(v => 1) + k.multiplicity
   }).sum)
 
+  // a summary string for this region
+  private lazy val refString = references.map(_._1).mkString(", ")
+
   override def toString(): String = {
     "Sources: " + sourceKmers.map(_.kmerSeq).mkString(", ") + "\n" +
       "Sinks: " + sinkKmers.map(_.kmerSeq).mkString(", ") + "\n" +
@@ -255,8 +258,26 @@ class KmerGraph(protected val kmers: Array[Kmer],
    */
   def toObservations: Seq[Observation] = {
     // preallocate an array for observations
-    val observations = new Array[Observation](coverage)
+    var observations = new Array[Observation](coverage)
     var obsIdx = 0
+    var obsArrayLen = coverage
+
+    def updateObservations(os: Iterable[Observation]): Unit = UpdatingObservations.time {
+      if (obsIdx + os.size >= obsArrayLen) {
+        ExtendingArray.time {
+          val increment = obsArrayLen >> 2
+          log.warn("Extending observation array in " + refString + " by " + increment +
+            " from " + obsArrayLen + " to " + (obsArrayLen += increment))
+          observations = observations.padTo(obsArrayLen, null)
+        }
+      }
+
+      // loop and add observations
+      os.foreach(o => {
+        observations(obsIdx) = o
+        obsIdx += 1
+      })
+    }
 
     def buildReadObservations(kmer: Kmer,
                               pos: ReferencePosition,
@@ -393,10 +414,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
                 // combine observations into a new observation set and recurse
                 val newObs = altObs ++ refObs
-                newObs.foreach(o => {
-                  observations(obsIdx) = o
-                  obsIdx += 1
-                })
+                updateObservations(newObs)
                 (Reference(ca.kmer),
                   branches,
                   referenceSites)
@@ -490,10 +508,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
                 // combine observations into a new observation set and recurse
                 val newObs = altObs ++ refObs
-                newObs.foreach(o => {
-                  observations(obsIdx) = o
-                  obsIdx += 1
-                })
+                updateObservations(newObs)
                 (Reference(ca.kmer),
                   branches,
                   referenceSites)
@@ -521,11 +536,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 ProcessingUnseenSite.time {
                   // build observations
                   val newObservations = ProcessingObservations.time {
-                    val obs = buildReferenceObservations(r.kmer)
-                    obs.foreach(o => {
-                      observations(obsIdx) = o
-                      obsIdx += 1
-                    })
+                    buildReferenceObservations(r.kmer)
                   }
 
                   // add new position to set
@@ -544,6 +555,8 @@ class KmerGraph(protected val kmers: Array[Kmer],
                     }
                   }
 
+                  // update observations and return
+                  updateObservations(newObservations)
                   BuildingBranchInfo.time {
                     (next,
                       newBranches,
@@ -563,14 +576,14 @@ class KmerGraph(protected val kmers: Array[Kmer],
     }
 
     if (sourceKmers.size > 0) {
-      log.info("Started crawling " + references.map(_._1).mkString(", "))
+      log.info("Started crawling " + refString)
       crawl(Reference(sourceKmers.head),
         sourceKmers.drop(1).map(p => Reference(p)).toList,
         Set())
-      log.info("Finished crawling " + references.map(_._1).mkString(", "))
+      log.info("Finished crawling " + refString)
       observations.take(obsIdx).toSeq
     } else {
-      log.warn("No sources seen on " + references.map(_._1).mkString(", "))
+      log.warn("No sources seen on " + refString)
       Seq()
     }
   }

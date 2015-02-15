@@ -73,6 +73,8 @@ private[avocado] object Timers extends Metrics {
   val BuildingObservationSeq = timer("Building Seq of Observations")
   val EvaluatingSet = timer("Evaluating Reference Set")
   val ProcessingObservations = timer("Processing Observations")
+  val UpdatingObservations = timer("Inserting New Observations")
+  val ExtendingArray = timer("Copying and Extending Observation Array")
 
   // Statistics
   val ComputingCoverage = timer("Computing Coverage")
