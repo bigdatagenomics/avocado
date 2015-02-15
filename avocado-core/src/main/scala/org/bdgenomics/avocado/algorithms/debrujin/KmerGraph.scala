@@ -51,6 +51,8 @@ object KmerGraph extends Logging {
     log.info("Building indexed de Bruijn graph for region " + references.map(_._1).mkString +
       " from " + reads.size + " reads.")
 
+    var observationEstimate = 0
+
     @tailrec def addReferenceKmers(iter: Iterator[String],
                                    pos: ReferencePosition,
                                    lastKmer: Kmer,
@@ -59,6 +61,9 @@ object KmerGraph extends Logging {
       if (iter.hasNext) {
         var newKmer: Kmer = null
         val ks = iter.next
+
+        // increment our observation pointer
+        observationEstimate += 1
 
         // if we have a predecessor, populate the predecessor fields
         if (lastKmer != null) {
@@ -92,6 +97,9 @@ object KmerGraph extends Logging {
         var newKmer: Kmer = null
         val ks = kmerIter.next
         val q = qualIter.next
+
+        // increment our observation pointer
+        observationEstimate += 1
 
         // is this a valid k-mer?
         if (!ks.contains('N')) {
@@ -152,6 +160,9 @@ object KmerGraph extends Logging {
     readsBySample.map(kv => {
       val (sample, sampleReads) = kv
 
+      // reset observation count
+      observationEstimate = 0
+
       val kmerMap = HashMap[String, Kmer]()
 
       BuildingReferenceGraph.time {
@@ -182,7 +193,11 @@ object KmerGraph extends Logging {
 
       ConstructingGraph.time {
         // build the graph for this sample
-        new KmerGraph(kmerMap.values.toArray, kmerLength, sample, references)
+        new KmerGraph(kmerMap.values.toArray,
+          kmerLength,
+          sample,
+          references,
+          Some(observationEstimate))
       }
     })
   }
@@ -196,7 +211,8 @@ object KmerGraph extends Logging {
 class KmerGraph(protected val kmers: Array[Kmer],
                 protected val kmerLength: Int,
                 val sample: String,
-                protected val references: Seq[(ReferenceRegion, String)]) extends Serializable with Logging {
+                protected val references: Seq[(ReferenceRegion, String)],
+                hintedCoverage: Option[Int] = None) extends Serializable with Logging {
 
   // get reference start/end positions
   private val starts = references.map(kv => ReferencePosition(kv._1.referenceName, kv._1.start)).toSet
@@ -207,6 +223,11 @@ class KmerGraph(protected val kmers: Array[Kmer],
   private val allSinkKmers = kmers.filter(_.successors.length == 0)
   private val sourceKmers = kmers.filter(_.refPos.fold(false)(starts(_)))
   private val sinkKmers = kmers.filter(_.refPos.fold(false)(ends(_)))
+
+  // how many observations will we have in this region?
+  private lazy val coverage = hintedCoverage.getOrElse(kmers.map(k => {
+    k.refPos.fold(0)(v => 1) + k.multiplicity
+  }).sum)
 
   override def toString(): String = {
     "Sources: " + sourceKmers.map(_.kmerSeq).mkString(", ") + "\n" +
@@ -233,6 +254,10 @@ class KmerGraph(protected val kmers: Array[Kmer],
    * @return Returns a seq of observations.
    */
   def toObservations: Seq[Observation] = {
+    // preallocate an array for observations
+    val observations = new Array[Observation](coverage)
+    var obsIdx = 0
+
     def buildReadObservations(kmer: Kmer,
                               pos: ReferencePosition,
                               length: Int,
@@ -243,8 +268,10 @@ class KmerGraph(protected val kmers: Array[Kmer],
       } else {
         activeReads.size
       }
+      var seen = 0
       (0 until kmer.multiplicity).flatMap(i => {
-        if (activeReads == null || (i < setSize && activeReads(kmer.readId(i)))) {
+        if (activeReads == null || (seen < setSize && activeReads(kmer.readId(i)))) {
+          seen += 1
           Some(AlleleObservation(pos,
             length,
             allele,
@@ -272,15 +299,11 @@ class KmerGraph(protected val kmers: Array[Kmer],
     }
 
     @tailrec def crawl(context: BranchContext,
-                       observations: Seq[Observation],
                        branches: List[BranchContext],
-                       referenceSites: Set[ReferencePosition]): Seq[Observation] = {
+                       referenceSites: Set[ReferencePosition]) {
 
-      if (context == null) {
-        observations
-      } else {
+      if (context != null) {
         val (newContext,
-          newObservations,
           newBranches,
           newSites) = Stepping.time {
           context match {
@@ -292,9 +315,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
               if (a.kmer.successors.isEmpty) {
                 // do we have branches remaining?
                 if (branches.isEmpty) {
-                  (null, observations, branches, referenceSites)
+                  (null, branches, referenceSites)
                 } else {
-                  (branches.head, observations, branches.drop(1), referenceSites)
+                  (branches.head, branches.drop(1), referenceSites)
                 }
               } else {
                 // build next step
@@ -308,7 +331,6 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
                 // return next step
                 (ctxs.head,
-                  observations,
                   branches ::: ctxs.drop(1),
                   referenceSites)
               }
@@ -370,9 +392,12 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   })
 
                 // combine observations into a new observation set and recurse
-                val newObs = observations ++ altObs ++ refObs
+                val newObs = altObs ++ refObs
+                newObs.foreach(o => {
+                  observations(obsIdx) = o
+                  obsIdx += 1
+                })
                 (Reference(ca.kmer),
-                  newObs,
                   branches,
                   referenceSites)
               } else {
@@ -464,9 +489,12 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   })
 
                 // combine observations into a new observation set and recurse
-                val newObs = observations ++ altObs ++ refObs
+                val newObs = altObs ++ refObs
+                newObs.foreach(o => {
+                  observations(obsIdx) = o
+                  obsIdx += 1
+                })
                 (Reference(ca.kmer),
-                  newObs,
                   branches,
                   referenceSites)
               }
@@ -486,7 +514,6 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   }
 
                   (next,
-                    observations,
                     newBranches,
                     referenceSites)
                 }
@@ -495,8 +522,10 @@ class KmerGraph(protected val kmers: Array[Kmer],
                   // build observations
                   val newObservations = ProcessingObservations.time {
                     val obs = buildReferenceObservations(r.kmer)
-                    assert(obs.size >= 0)
-                    obs
+                    obs.foreach(o => {
+                      observations(obsIdx) = o
+                      obsIdx += 1
+                    })
                   }
 
                   // add new position to set
@@ -517,7 +546,6 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
                   BuildingBranchInfo.time {
                     (next,
-                      BuildingObservationSeq.time { observations ++ newObservations },
                       newBranches,
                       EvaluatingSet.time { newSet })
                   }
@@ -529,7 +557,6 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
         // recurse and compute next iteration
         crawl(newContext,
-          newObservations,
           newBranches,
           newSites)
       }
@@ -537,12 +564,11 @@ class KmerGraph(protected val kmers: Array[Kmer],
 
     if (sourceKmers.size > 0) {
       log.info("Started crawling " + references.map(_._1).mkString(", "))
-      val obs = crawl(Reference(sourceKmers.head),
-        Seq(),
+      crawl(Reference(sourceKmers.head),
         sourceKmers.drop(1).map(p => Reference(p)).toList,
         Set())
       log.info("Finished crawling " + references.map(_._1).mkString(", "))
-      obs
+      observations.take(obsIdx).toSeq
     } else {
       log.warn("No sources seen on " + references.map(_._1).mkString(", "))
       Seq()
