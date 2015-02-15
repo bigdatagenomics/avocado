@@ -54,6 +54,26 @@ private[avocado] object Timers extends Metrics {
   val ObservingGraph = timer("Crawling Indexed de Bruijn Graph")
   val InactiveReads = timer("Extracting Read Observations from Inactive Regions")
 
+  // K-mer Graph
+  val BuildingReferenceGraph = timer("Initializing de Bruijn Graph from Reference")
+  val AddingReadsToGraph = timer("Adding Reads to Initialized de Bruijn Graph")
+  val ConstructingGraph = timer("Finalizing Construction of Graph")
+  val ReadObservations = timer("Building Read Observations")
+  val ReferenceObservations = timer("Building Reference Observations")
+  val Stepping = timer("Taking One Step Through Graph")
+  val CrawlAllele = timer("Crawling an Allele")
+  val ClosingAllele = timer("Closing Out an Allele")
+  val CrawlReference = timer("Crawling the Reference")
+  val CheckingIfHaveSeen = timer("Checking to See if Site Was Seen Before")
+  val SiteSeenBefore = timer("Moving To Next Site")
+  val ProcessingUnseenSite = timer("Processing an Unseen Reference Site")
+  val RebuildingSet = timer("Rebuilding Position Set")
+  val PickingBranch = timer("Picking Next Branch")
+  val BuildingBranchInfo = timer("Building Branch")
+  val BuildingObservationSeq = timer("Building Seq of Observations")
+  val EvaluatingSet = timer("Evaluating Reference Set")
+  val ProcessingObservations = timer("Processing Observations")
+
   // Statistics
   val ComputingCoverage = timer("Computing Coverage")
   val ReferenceLengths = timer("Computing Contig Lengths")

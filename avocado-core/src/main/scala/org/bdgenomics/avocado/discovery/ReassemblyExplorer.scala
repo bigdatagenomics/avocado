@@ -157,6 +157,12 @@ class ReassemblyExplorer(kmerLength: Int,
         coordinates.start)
     }
 
+    log.info("Region " + coordinates + " has activity summary:\n" +
+      "Mismatch rate: " + mismatchRate + " vs " + activeRegionMismatchRateThreshold + "\n" +
+      "Clip rate: " + clipRate + " vs " + activeRegionClipRateThreshold + "\n" +
+      "Coverage: " + coverage + " vs " + activeRegionLowCoverageThreshold + ", " +
+      activeRegionHighCoverageThreshold)
+
     // is the region that we're currently looking at active?
     if ((mismatchRate > activeRegionMismatchRateThreshold ||
       clipRate > activeRegionClipRateThreshold) &&
@@ -243,9 +249,15 @@ class ReassemblyExplorer(kmerLength: Int,
       jrdd
     }
 
+    // we seem to lose the instrumentation on the joined RDD
+    val instrumentedReadsAndContigs = {
+      import org.apache.spark.rdd.MetricsContext._
+      joinReadsAndContigs.instrument()
+    }
+
     // reassemble our regions into observations
     ProcessingRegions.time {
-      joinReadsAndContigs.flatMap(discoverRegion)
+      instrumentedReadsAndContigs.flatMap(discoverRegion)
     }
   }
 }
