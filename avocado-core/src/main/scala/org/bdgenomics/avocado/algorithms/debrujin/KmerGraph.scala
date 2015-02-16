@@ -263,13 +263,10 @@ class KmerGraph(protected val kmers: Array[Kmer],
     var obsArrayLen = coverage
 
     def updateObservations(os: Iterable[Observation]): Unit = UpdatingObservations.time {
-      if (obsIdx + os.size >= obsArrayLen) {
-        ExtendingArray.time {
-          val increment = obsArrayLen >> 2
-          log.warn("Extending observation array in " + refString + " by " + increment +
-            " from " + obsArrayLen + " to " + (obsArrayLen += increment))
-          observations = observations.padTo(obsArrayLen, null)
-        }
+      if (obsIdx + os.size > obsArrayLen) {
+        log.warn("Graph is overflowing expected array length at " + refString +
+          "\nDebug graph is:" + toDot)
+        throw new IllegalStateException("Possible loop in graph.")
       }
 
       // loop and add observations

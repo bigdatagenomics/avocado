@@ -157,11 +157,22 @@ class ReassemblyExplorer(kmerLength: Int,
         coordinates.start)
     }
 
-    log.info("Region " + coordinates + " has activity summary:\n" +
-      "Mismatch rate: " + mismatchRate + " vs " + activeRegionMismatchRateThreshold + "\n" +
-      "Clip rate: " + clipRate + " vs " + activeRegionClipRateThreshold + "\n" +
-      "Coverage: " + coverage + " vs " + activeRegionLowCoverageThreshold + ", " +
-      activeRegionHighCoverageThreshold)
+    def observeRegion(): Iterable[Observation] = {
+      var refPos = coordinates.start
+      var readId = refPos.toLong << 32
+      reads.flatMap(r => {
+        readId += 1L
+        ReadExplorer.readToObservations(r, readId)
+      }) ++ refSeq.map(base => {
+        val observation = new Observation(ReferencePosition(coordinates.referenceName, refPos),
+          base.toString)
+
+        // increment site
+        refPos += 1
+
+        observation
+      })
+    }
 
     // is the region that we're currently looking at active?
     if ((mismatchRate > activeRegionMismatchRateThreshold ||
@@ -180,26 +191,19 @@ class ReassemblyExplorer(kmerLength: Int,
 
         // turn the reassembly graph into observations
         ObservingGraph.time {
-          graphs.flatMap(_.toObservations)
+          try {
+            graphs.flatMap(_.toObservations)
+          } catch {
+            case t: Throwable => {
+              log.warn("Observing " + coordinates + " failed with exception " + t)
+              observeRegion()
+            }
+          }
         }
       }
     } else {
       InactiveReads.time {
-        log.info("Observing inactive region " + coordinates)
-        var refPos = coordinates.start
-        var readId = refPos.toLong << 32
-        reads.flatMap(r => {
-          readId += 1L
-          ReadExplorer.readToObservations(r, readId)
-        }) ++ refSeq.map(base => {
-          val observation = new Observation(ReferencePosition(coordinates.referenceName, refPos),
-            base.toString)
-
-          // increment site
-          refPos += 1
-
-          observation
-        })
+        observeRegion()
       }
     }.filter(o => unflankedRegion.contains(o.pos))
   }
