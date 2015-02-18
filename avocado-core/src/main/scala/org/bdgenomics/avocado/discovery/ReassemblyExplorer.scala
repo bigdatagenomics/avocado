@@ -217,7 +217,7 @@ class ReassemblyExplorer(kmerLength: Int,
         targetFlankSize)
 
       // zip reference contig fragments with uuids, cache
-      val refIds = reference.zipWithUniqueId()
+      val refIds = flankedFragments.zipWithUniqueId()
         .map(vk => (vk._2, vk._1))
         .cache()
 

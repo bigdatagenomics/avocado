@@ -27,7 +27,7 @@ object Allele {
   def apply(kmer: Kmer,
             branchPoint: ReferencePosition): Allele = {
     Allele(kmer,
-      "",
+      new StringBuffer(""),
       branchPoint,
       List(),
       kmer.readId.toSet)
@@ -35,7 +35,7 @@ object Allele {
 }
 
 private[debrujin] case class Allele(kmer: Kmer,
-                                    allele: String,
+                                    allele: StringBuffer,
                                     branchPoint: ReferencePosition,
                                     pending: List[Kmer],
                                     activeReads: Set[Long]) extends BranchContext {

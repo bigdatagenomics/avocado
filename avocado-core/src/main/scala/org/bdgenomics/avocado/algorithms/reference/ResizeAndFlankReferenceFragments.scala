@@ -21,6 +21,7 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.{ ReferenceRegion, SequenceDictionary }
 import org.bdgenomics.formats.avro.NucleotideContigFragment
+import scala.math.max
 
 object ResizeAndFlankReferenceFragments extends Serializable {
 
@@ -39,7 +40,7 @@ object ResizeAndFlankReferenceFragments extends Serializable {
 
     // we can't guarantee that we'll split the fragment perfectly into the target length,
     // but we'll pick the closest integer splits
-    val numSplits = (region.length.toDouble / targetLength).toInt
+    val numSplits = max(1, (region.length.toDouble / targetLength).toInt)
     val splitLength = (region.length / numSplits).toInt
 
     // state for splitter

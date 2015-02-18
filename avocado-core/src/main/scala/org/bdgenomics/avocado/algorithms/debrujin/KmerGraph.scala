@@ -102,48 +102,52 @@ object KmerGraph extends Logging {
         observationEstimate += 1
 
         // is this a valid k-mer?
-        if (!ks.contains('N')) {
+        if (CheckValidity.time { !ks.contains('N') }) {
           // have we already seen this k-mer?
           if (kmerMap.contains(ks)) {
-            newKmer = kmerMap(ks)
+            UpdatingExistingKmer.time {
+              newKmer = kmerMap(ks)
 
-            // add phred score and mapq
-            newKmer.phred = q.toInt :: newKmer.phred
-            newKmer.mapq = mapq :: newKmer.mapq
-            newKmer.readId = readId :: newKmer.readId
-            newKmer.isNegativeStrand = isNegativeStrand :: newKmer.isNegativeStrand
-            assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
+              // add phred score and mapq
+              newKmer.phred = q.toInt :: newKmer.phred
+              newKmer.mapq = mapq :: newKmer.mapq
+              newKmer.readId = readId :: newKmer.readId
+              newKmer.isNegativeStrand = isNegativeStrand :: newKmer.isNegativeStrand
+              assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
 
-            // do we have a predecessor? if so, perform book keeping...
-            if (lastKmer != null) {
-              // if we have a predecessor, and it isn't in the k-mer map, then add it
-              if (newKmer.predecessors.filter(_.kmerSeq == lastKmer.kmerSeq).length == 0) {
-                newKmer.predecessors = lastKmer :: newKmer.predecessors
-              }
+              // do we have a predecessor? if so, perform book keeping...
+              if (lastKmer != null) {
+                // if we have a predecessor, and it isn't in the k-mer map, then add it
+                if (newKmer.predecessors.filter(_.kmerSeq == lastKmer.kmerSeq).length == 0) {
+                  newKmer.predecessors = lastKmer :: newKmer.predecessors
+                }
 
-              // if this k-mer isn't in the successor list, then add it
-              if (lastKmer.successors.filter(_.kmerSeq == ks).length == 0) {
-                lastKmer.successors = newKmer :: lastKmer.successors
+                // if this k-mer isn't in the successor list, then add it
+                if (lastKmer.successors.filter(_.kmerSeq == ks).length == 0) {
+                  lastKmer.successors = newKmer :: lastKmer.successors
+                }
               }
             }
           } else {
-            val phred = List(q.toInt)
-            val mapQ = List(mapq)
-            val rid = List(readId)
-            val ns = List(isNegativeStrand)
+            AddingNewKmer.time {
+              val phred = List(q.toInt)
+              val mapQ = List(mapq)
+              val rid = List(readId)
+              val ns = List(isNegativeStrand)
 
-            // if we have a predecessor, populate the predecessor fields
-            if (lastKmer != null) {
-              val kl = List(lastKmer)
-              newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns, predecessors = kl)
-              assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
-              lastKmer.successors = newKmer :: lastKmer.successors
-            } else {
-              newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns)
+              // if we have a predecessor, populate the predecessor fields
+              if (lastKmer != null) {
+                val kl = List(lastKmer)
+                newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns, predecessors = kl)
+                assert(newKmer.multiplicity > 0, newKmer.toDetailedString)
+                lastKmer.successors = newKmer :: lastKmer.successors
+              } else {
+                newKmer = Kmer(ks, phred = phred, mapq = mapQ, readId = rid, isNegativeStrand = ns)
+              }
+
+              // add the kmer to the graph
+              kmerMap(ks) = newKmer
             }
-
-            // add the kmer to the graph
-            kmerMap(ks) = newKmer
           }
         }
 
@@ -180,8 +184,9 @@ object KmerGraph extends Logging {
       AddingReadsToGraph.time {
         // loop over reads and collect statistics
         sampleReads.foreach(r => {
-          addReadKmers(r.getSequence.toString.sliding(kmerLength),
-            r.getQual.toString.toIterator,
+          addReadKmers(
+            r.getSequence.sliding(kmerLength),
+            r.getQual.toIterator,
             r.getMapq,
             rId,
             r.getReadNegativeStrand,
@@ -326,7 +331,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
           newSites) = Stepping.time {
           context match {
             case a: Allele => CrawlAllele.time {
-              val newAllele = a.allele + a.kmer.kmerSeq.take(1)
+              val newAllele = a.allele.append(a.kmer.kmerSeq.take(1))
               val newPending = a.kmer :: a.pending
 
               // is this allele a spur? if so, move on, else continue building the allele
@@ -339,11 +344,18 @@ class KmerGraph(protected val kmers: Array[Kmer],
                 }
               } else {
                 // build next step
+                val numSuccessors = a.kmer.successors.count(!_.isReference)
                 val ctxs = a.kmer.successors.map(nextKmer => {
                   if (nextKmer.isReference) {
-                    ClosedAllele(nextKmer, newAllele, a.branchPoint, newPending, a.activeReads)
+                    ClosedAllele(nextKmer, newAllele.toString, a.branchPoint, newPending, a.activeReads)
                   } else {
-                    Allele(nextKmer, newAllele, a.branchPoint, newPending, a.activeReads)
+                    // if our allele forks, we must duplicate the buffer
+                    val buffer = if (numSuccessors > 1) {
+                      new StringBuffer(newAllele.toString)
+                    } else {
+                      newAllele
+                    }
+                    Allele(nextKmer, buffer, a.branchPoint, newPending, a.activeReads)
                   }
                 })
 
