@@ -174,7 +174,8 @@ class BiallelicGenotyper(sd: SequenceDictionary,
     def epsilon(observed: Iterable[AlleleObservation]): Iterable[Double] = {
       // we must take the min here; if we don't, phred=0 mapq=0 bases have epsilon of 1.0
       // which leads to log(1.0 - 1.0) = log(0.0) = -Infinity, which messes everything up
-      observed.map(o => min(0.99999, PhredUtils.phredToErrorProbability((o.phred + o.mapq) / 2)))
+      observed.map(o => min(0.99999, o.mapq.fold(PhredUtils.phredToErrorProbability(o.phred))(mq =>
+        PhredUtils.phredToErrorProbability((o.phred + mq) >> 1))))
     }
 
     // compute error observations
