@@ -52,7 +52,12 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     val contig: String = read.getContig.getContigName
     val negativeStrand: Boolean = read.getReadNegativeStrand
     val sample: String = read.getRecordGroupSample.toString
-    val mapq: Int = read.getMapq
+    // you can't use Option(read.getMapq), because scala calls scala.Predef$.Integer2int...
+    val mapq: Option[Int] = if (read.getMapq == null) {
+      None
+    } else {
+      Some(read.getMapq)
+    }
     val sequence: String = read.getSequence
 
     // get cigar, md tag, and phred scores for bases
