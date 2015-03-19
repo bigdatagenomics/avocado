@@ -86,7 +86,7 @@ object KmerGraph extends Logging {
 
     @tailrec def addReadKmers(kmerIter: Iterator[String],
                               qualIter: Iterator[Char],
-                              mapq: Int,
+                              mapq: Option[Int],
                               readId: Long,
                               isNegativeStrand: Boolean,
                               lastKmer: Kmer,
@@ -187,7 +187,7 @@ object KmerGraph extends Logging {
           addReadKmers(
             r.getSequence.sliding(kmerLength),
             r.getQual.toIterator,
-            r.getMapq,
+            Option(r.getMapq),
             rId,
             r.getReadNegativeStrand,
             null,

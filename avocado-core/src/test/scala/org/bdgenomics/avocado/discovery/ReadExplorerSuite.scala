@@ -138,7 +138,6 @@ class ReadExplorerSuite extends AvocadoFunSuite {
   }
 
   sparkTest("observe a simple read without map quality") {
-    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
 
     val read = AlignmentRecord.newBuilder()
       .setStart(10L)
@@ -152,7 +151,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample1")
       .build()
 
-    val observations = re.readToObservations((read, 0L))
+    val observations = ReadExplorer.readToObservations((read, 0L))
       .flatMap(o => o match {
         case ao: AlleleObservation => Some(ao)
         case _                     => None

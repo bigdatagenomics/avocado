@@ -23,14 +23,12 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.{
-  ReferenceMapping,
   ReferencePosition,
   ReferenceRegion,
   SequenceDictionary
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ShuffleRegionJoin
-import org.bdgenomics.adam.rich.ReferenceMappingContext._
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.algorithms.debrujin.KmerGraph
 import org.bdgenomics.avocado.algorithms.reference.ResizeAndFlankReferenceFragments
@@ -55,11 +53,6 @@ object ReassemblyExplorer extends ExplorerCompanion with Serializable {
       config.getDouble("clipRateThreshold", 0.05),
       config.getInt("targetRegionLength", 2000),
       config.getInt("targetFlankLength", 250))
-  }
-
-  implicit object ContigReferenceMapping extends ReferenceMapping[(Long, NucleotideContigFragment)] with Serializable {
-    override def getReferenceName(value: (Long, NucleotideContigFragment)): String = value._2.getContig.getContigName.toString
-    override def getReferenceRegion(value: (Long, NucleotideContigFragment)): ReferenceRegion = ReferenceRegion(value._2).get
   }
 
   private[discovery] def calculateMismatchAndClipRate(reads: Iterable[AlignmentRecord],
@@ -218,13 +211,12 @@ class ReassemblyExplorer(kmerLength: Int,
 
       // zip reference contig fragments with uuids, cache
       val refIds = flankedFragments.zipWithUniqueId()
-        .map(vk => (vk._2, vk._1))
+        .map(vk => (ReferenceRegion(vk._1).get, (vk._2, vk._1)))
         .cache()
 
       // filter mapped reads, join with reference contigs, then extract contig ids
-      val joinWithId = ShuffleRegionJoin.partitionAndJoin(reference.context,
-        refIds,
-        reads.filter(_.getReadMapped),
+      val joinWithId = ShuffleRegionJoin.partitionAndJoin(refIds,
+        reads.filter(_.getReadMapped).keyBy(ReferenceRegion(_).get),
         sd,
         totalAssembledReferenceLength / reads.partitions.size)
         .flatMap(kv => {
@@ -244,7 +236,7 @@ class ReassemblyExplorer(kmerLength: Int,
       // join against reference contigs, and throw away id
       // ideally, we should optimize the partitioning; this is a to-do for later
       val jrdd = joinWithId.groupByKey()
-        .join(refIds)
+        .join(refIds.map(kv => kv._2))
         .map(kv => kv._2)
 
       // we are done with the original reference contig rdd, so we can unpersist

@@ -28,7 +28,7 @@ import org.bdgenomics.adam.models.ReferencePosition
 private[debrujin] case class Kmer(kmerSeq: String,
                                   refPos: Option[ReferencePosition] = None,
                                   var phred: List[Int] = List(),
-                                  var mapq: List[Int] = List(),
+                                  var mapq: List[Option[Int]] = List(),
                                   var readId: List[Long] = List(),
                                   var isNegativeStrand: List[Boolean] = List(),
                                   var predecessors: List[Kmer] = List(),
