@@ -188,8 +188,11 @@ class ReassemblyExplorer(kmerLength: Int,
             graphs.flatMap(_.toObservations)
           } catch {
             case t: Throwable => {
-              log.warn("Observing " + coordinates + " failed with exception " + t)
-              observeRegion()
+              FallBack.time {
+                log.warn("Observing " + coordinates + " failed with exception " + t +
+                         ". Falling back to simple read explorer.")
+                observeRegion()
+              }
             }
           }
         }

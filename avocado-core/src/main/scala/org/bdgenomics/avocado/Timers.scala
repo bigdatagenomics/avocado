@@ -78,6 +78,7 @@ private[avocado] object Timers extends Metrics {
   val AddingNewKmer = timer("Adding a New Read k-mer")
   val UpdatingExistingKmer = timer("Updating an Existing k-mer")
   val CheckValidity = timer("Checking k-mer Validity")
+  val FallBack = timer("Falling Back After Failure")
 
   // Statistics
   val ComputingCoverage = timer("Computing Coverage")

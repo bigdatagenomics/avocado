@@ -617,4 +617,31 @@ class KmerGraphSuite extends AvocadoFunSuite {
         .map(ao => ao.allele)
         .toSet).foreach(v => assert(v.size === 2))
   }
+
+  test("put reads into graph in a way that causes a repeat") {
+    val ref = "ACACTGAGACATGC"
+    val region = ReferenceRegion("chr1", 100L, 114L)
+
+    val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+      .setSequence("ACTGAGAGA")
+      .setQual("*********")
+      .setRecordGroupSample("sample1")
+      .setMapq(50)
+      .setReadNegativeStrand(false)
+      .build(),
+      AlignmentRecord.newBuilder()
+        .setSequence("AGAGAGACAT")
+        .setQual("*********")
+        .setRecordGroupSample("sample1")
+        .setMapq(50)
+        .setReadNegativeStrand(false)
+        .build()))
+
+    assert(graphs.size === 1)
+    val graph = graphs.head
+
+    intercept[IllegalStateException] {
+      val observations = graph.toObservations
+    }
+  }
 }

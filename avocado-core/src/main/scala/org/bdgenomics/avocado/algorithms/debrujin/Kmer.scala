@@ -32,7 +32,19 @@ private[debrujin] case class Kmer(kmerSeq: String,
                                   var readId: List[Long] = List(),
                                   var isNegativeStrand: List[Boolean] = List(),
                                   var predecessors: List[Kmer] = List(),
-                                  var successors: List[Kmer] = List()) {
+                                  var successors: List[Kmer] = List(),
+                                  var visited: Boolean = false) {
+  def visit() {
+    if (visited) {
+      throw new IllegalStateException("In loop at %s.".format(kmerSeq));
+    }
+    visited = true
+  }
+
+  def reset() {
+    visited = false
+  }
+
   def multiplicity = {
     val mult = phred.length
 

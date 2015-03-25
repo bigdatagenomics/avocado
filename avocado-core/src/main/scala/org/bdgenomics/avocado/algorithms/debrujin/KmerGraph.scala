@@ -270,7 +270,7 @@ class KmerGraph(protected val kmers: Array[Kmer],
     def updateObservations(os: Iterable[Observation]): Unit = UpdatingObservations.time {
       if (obsIdx + os.size > obsArrayLen) {
         log.warn("Graph is overflowing expected array length at " + refString +
-          "\nDebug graph is:" + toDot)
+          "\nDebug graph is:\n" + toDot)
         throw new IllegalStateException("Possible loop in graph.")
       }
 
@@ -331,11 +331,17 @@ class KmerGraph(protected val kmers: Array[Kmer],
           newSites) = Stepping.time {
           context match {
             case a: Allele => CrawlAllele.time {
+              // set the visit flag
+              a.kmer.visit()
+
               val newAllele = a.allele.append(a.kmer.kmerSeq.take(1))
               val newPending = a.kmer :: a.pending
 
               // is this allele a spur? if so, move on, else continue building the allele
               if (a.kmer.successors.isEmpty) {
+                // reset visitiation status
+                newPending.foreach(_.reset())
+
                 // do we have branches remaining?
                 if (branches.isEmpty) {
                   (null, branches, referenceSites)
@@ -366,6 +372,9 @@ class KmerGraph(protected val kmers: Array[Kmer],
               }
             }
             case ca: ClosedAllele => ClosingAllele.time {
+              // reset visit flags
+              ca.pending.foreach(_.reset())
+
               // where have we connected back to, and where did we start?
               val refSink = ca.kmer.refPos.get
 
