@@ -39,7 +39,8 @@ import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 object ReassemblyExplorer extends ExplorerCompanion with Serializable {
 
   val explorerName: String = "ReassemblyExplorer"
-  @transient lazy private val CIGAR_CODEC: TextCigarCodec = TextCigarCodec.getSingleton
+
+  @transient lazy private val CIGAR_CODEC: TextCigarCodec = new TextCigarCodec()
 
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Explorer = {
@@ -190,7 +191,7 @@ class ReassemblyExplorer(kmerLength: Int,
             case t: Throwable => {
               FallBack.time {
                 log.warn("Observing " + coordinates + " failed with exception " + t +
-                         ". Falling back to simple read explorer.")
+                  ". Falling back to simple read explorer.")
                 observeRegion()
               }
             }
