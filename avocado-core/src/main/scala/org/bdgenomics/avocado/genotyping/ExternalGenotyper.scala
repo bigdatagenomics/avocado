@@ -64,7 +64,7 @@ class ExternalGenotyper(contigLengths: Map[String, Long],
 
   val companion: GenotyperCompanion = ExternalGenotyper
 
-  class ExternalWriter(records: Array[(ReferencePosition, SAMRecordWritable)],
+  class ExternalWriter(records: Iterator[(ReferencePosition, SAMRecordWritable)],
                        header: SAMFileHeader,
                        stream: OutputStream) extends Runnable {
 
@@ -99,17 +99,10 @@ class ExternalGenotyper(contigLengths: Map[String, Long],
   def callVariants(iter: Iterator[(ReferencePosition, SAMRecordWritable)],
                    header: SAMFileHeaderWritable): Iterator[VariantContextWritable] = {
 
-    // sort records
-    val reads = iter.toArray
-    Sorting.stableSort(reads, (kv1: (ReferencePosition, SAMRecordWritable), kv2: (ReferencePosition, SAMRecordWritable)) => {
-      kv1._1.compare(kv2._1) == -1
-    })
-    log.info("have " + reads.length + " reads")
-
     // we can get empty partitions if we:
     // - have contigs that do not have reads mapped to them
     // - don't have unmapped reads in our dataset
-    if (reads.length == 0) {
+    if (!iter.hasNext) {
       // can't write a bam file of length 0 ;)
       Iterator()
     } else {
@@ -133,7 +126,7 @@ class ExternalGenotyper(contigLengths: Map[String, Long],
       val pool: ExecutorService = Executors.newFixedThreadPool(2)
 
       // build java list of things to execute
-      pool.submit(new ExternalWriter(reads, header.header, inp))
+      pool.submit(new ExternalWriter(iter, header.header, inp))
 
       // wait for process to finish
       val result = process.waitFor()
@@ -198,7 +191,7 @@ class ExternalGenotyper(contigLengths: Map[String, Long],
 
     // key reads by position and repartition
     val readsByPosition = reads.keyBy(r => ReferencePosition(r.get.getReferenceName.toString, r.get.getAlignmentStart))
-      .partitionBy(GenomicPositionPartitioner(numPart, contigLengths))
+      .repartitionAndSortWithinPartitions(GenomicPositionPartitioner(numPart, contigLengths))
 
     if (debug) {
       log.info("have " + readsByPosition.count + " reads after partitioning")
