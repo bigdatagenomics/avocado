@@ -220,7 +220,7 @@ class ReassemblyExplorer(kmerLength: Int,
 
       // filter mapped reads, join with reference contigs, then extract contig ids
       val joinWithId = ShuffleRegionJoin.partitionAndJoin(refIds,
-        reads.filter(_.getReadMapped).keyBy(ReferenceRegion(_).get),
+        reads.filter(_.getReadMapped).keyBy(ReferenceRegion(_)),
         sd,
         totalAssembledReferenceLength / reads.partitions.size)
         .flatMap(kv => {
