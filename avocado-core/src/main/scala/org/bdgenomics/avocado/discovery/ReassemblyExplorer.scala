@@ -40,8 +40,6 @@ object ReassemblyExplorer extends ExplorerCompanion with Serializable {
 
   val explorerName: String = "ReassemblyExplorer"
 
-  @transient lazy private val CIGAR_CODEC: TextCigarCodec = new TextCigarCodec()
-
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Explorer = {
     new ReassemblyExplorer(config.getInt("kmerLength", 20),
@@ -60,7 +58,7 @@ object ReassemblyExplorer extends ExplorerCompanion with Serializable {
                                                       reference: String,
                                                       referenceStartPos: Long): (Double, Double, Double) = {
     val (bases, mismatchedBases, clippedBases) = reads.map(r => {
-      val cigar: List[CigarElement] = CIGAR_CODEC.decode(r.getCigar).getCigarElements
+      val cigar: List[CigarElement] = TextCigarCodec.decode(r.getCigar).getCigarElements
       val readSequence = r.getSequence
       var refIdx = (r.getStart - referenceStartPos).toInt
       var readIdx = 0
