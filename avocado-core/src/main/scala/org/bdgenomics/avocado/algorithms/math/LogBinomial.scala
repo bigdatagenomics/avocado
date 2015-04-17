@@ -23,8 +23,8 @@ import scala.math.log
 object LogBinomial extends Serializable {
 
   // TODO: for efficiency, we should cache these values and not recompute
-  private def logBinomial(n: Int,
-                          k: Int): Double = {
+  def logBinomial(n: Int,
+                  k: Int): Double = {
     ((n - k + 1) to n).map(v => log(v.toDouble)).sum - (1 to k).map(v => log(v.toDouble)).sum
   }
 

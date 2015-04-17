@@ -34,9 +34,11 @@ import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.algorithms.em.EMForAlleles
 import org.bdgenomics.avocado.algorithms.math._
+import org.bdgenomics.avocado.genotyping.annotators.VariantCallingAnnotator
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
-import org.bdgenomics.formats.avro.{ Contig, Genotype, GenotypeAllele, Variant }
+import org.bdgenomics.avocado.algorithms.math.LogToPhred.log2phred
+import org.bdgenomics.formats.avro.{ Contig, Genotype, GenotypeAllele, Variant, VariantCallingAnnotations }
 import scala.annotation.tailrec
 import scala.math.{ exp, expm1, log => mathLog, log1p, max, min, pow }
 
@@ -107,31 +109,9 @@ class BiallelicGenotyper(sd: SequenceDictionary,
   val companion: GenotyperCompanion = BiallelicGenotyper
 
   // necessary for conversion to/from phred
-  private val LOG10 = mathLog(10.0)
 
   // precompute log ploidy
   private val logPloidy = mathLog(ploidy.toDouble)
-
-  /**
-   * Conversion between log _success_ probabilities and Phred scores.
-   *
-   * Q = -10 log_{10} (1 - p)
-   *
-   * If l = ln p, then:
-   *
-   * l_e = ln 1 + ln (1 - exp(l_e / 1))
-   *     = ln(1 - exp(l_e))
-   * Q = -10 l_e / ln 10
-   *
-   * @note Just remember kids: if you want to live a happy, fulfilling life, don't use Phred!
-   * @note We don't have a conversion the other way around because it doesn't really make sense.
-   *
-   * @param l Log probability.
-   * @return Returns the Phred score corresponding to that log probability.
-   */
-  def log2phred(l: Double): Int = {
-    (-10.0 * mathLog(-expm1(l)) / LOG10).toInt
-  }
 
   /**
    * Scores likelihoods for genotypes using equation from Li 2009.
@@ -263,18 +243,26 @@ class BiallelicGenotyper(sd: SequenceDictionary,
       val alt = variant.getAlternateAllele.toString
       val ref = variant.getReferenceAllele.toString
 
+      // get variant annotations
+      val variantAnnotations = VariantCallingAnnotator(variant,
+        observations,
+        log2phred(genotypeProbability),
+        likelihoods).build()
+
       // build and return genotype record - just simple statistics for now
       Genotype.newBuilder()
         .setVariant(variant)
         .setSampleId(sampleId)
         .setReadDepth(observations.size)
         .setAlleles(calls.toList)
-        .setGenotypeLikelihoods(likelihoods.map(v => log2phred(v)).toList)
-        .setNonReferenceLikelihoods(anyAltLikelihoods.map(v => log2phred(v)).toList)
-        .setGenotypeQuality(log2phred(genotypeProbability))
+        .setGenotypeLikelihoods(likelihoods.map(v => log2phred(v).toInt).toList)
+        .setNonReferenceLikelihoods(anyAltLikelihoods.map(v => log2phred(v).toInt).toList)
+        .setGenotypeQuality(log2phred(genotypeProbability).toInt)
         .setReferenceReadDepth(observations.filter(_.allele == ref).size)
         .setAlternateReadDepth(observations.filter(_.allele == alt).size)
+        .setVariantCallingAnnotations(variantAnnotations)
         .build()
+
     } else {
       // emit no call
       val calls = new Array[GenotypeAllele](ploidy)
