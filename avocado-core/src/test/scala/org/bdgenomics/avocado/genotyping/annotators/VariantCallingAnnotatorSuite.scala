@@ -4,7 +4,7 @@ import org.bdgenomics.avocado.algorithms.math.MathTestUtils
 import org.bdgenomics.avocado.genotyping.BiallelicGenotyper
 import org.scalatest.FunSuite
 import org.bdgenomics.formats.avro.{ Variant, VariantCallingAnnotations }
-import org.bdgenomics.adam.models.{SequenceRecord, SequenceDictionary, ReferencePosition}
+import org.bdgenomics.adam.models.{ SequenceRecord, SequenceDictionary, ReferencePosition }
 import org.bdgenomics.avocado.algorithms.math.LogToPhred.log2phred
 import org.bdgenomics.avocado.models.AlleleObservation
 
@@ -16,9 +16,9 @@ class VariantCallingAnnotatorSuite extends FunSuite {
   val ref = "A"
   val alt = "G"
   val variant = Variant.newBuilder()
-                       .setReferenceAllele(ref)
-                       .setAlternateAllele(alt)
-                       .build()
+    .setReferenceAllele(ref)
+    .setAlternateAllele(alt)
+    .build()
 
   val variantQuality = 35d
 
@@ -35,8 +35,8 @@ class VariantCallingAnnotatorSuite extends FunSuite {
 
   test("annotate variant quality by depth") {
     val observed = Iterable(createAllele(ref, 20, true),
-                            createAllele(ref, 30, true),
-                            createAllele(alt, 40, true))
+      createAllele(ref, 30, true),
+      createAllele(alt, 40, true))
 
     val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
     val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
@@ -45,8 +45,8 @@ class VariantCallingAnnotatorSuite extends FunSuite {
 
   test("annotate read depth") {
     val observed = Iterable(createAllele(ref, 20, true),
-                            createAllele(ref, 30, true),
-                            createAllele(alt, 40, true))
+      createAllele(ref, 30, true),
+      createAllele(alt, 40, true))
     val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
     val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
     assert(annotator.readDepth() == 3)
@@ -58,27 +58,49 @@ class VariantCallingAnnotatorSuite extends FunSuite {
     val observed = refBaseQ.map(createAllele(ref, _, true)) ++ altBaseQ.map(createAllele(alt, _, false))
     val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
     val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
-    MathTestUtils.assertAlmostEqual(annotator.mapQRankSum(), -2.154f, 1e-3)
+    val rs = annotator.mapQRankSum()
+    assert(rs.isDefined)
+    MathTestUtils.assertAlmostEqual(rs.get, -2.154f, 1e-3)
+  }
+
+  test("can't calculate map quality rank sum for empty ref") {
+    val refBaseQ = List()
+    val altBaseQ = List(0, 7, 10, 17, 20, 21, 30, 34, 40, 45)
+    val observed = refBaseQ.map(createAllele(ref, _, true)) ++ altBaseQ.map(createAllele(alt, _, false))
+    val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
+    val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
+    val rs = annotator.mapQRankSum()
+    assert(rs.isEmpty)
+  }
+
+  test("can't calculate map quality rank sum for empty alt") {
+    val refBaseQ = List(20, 25, 26, 30, 32, 40, 47, 50, 53, 60)
+    val altBaseQ = List()
+    val observed = refBaseQ.map(createAllele(ref, _, true)) ++ altBaseQ.map(createAllele(alt, _, false))
+    val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
+    val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
+    val rs = annotator.mapQRankSum()
+    assert(rs.isEmpty)
   }
 
   test("annotate fisher strand bias value") {
     val observed = Iterable(createAllele(ref, 20, true),
-                            createAllele(ref, 30, true),
-                            createAllele(alt, 40, false),
-                            createAllele(alt, 40, false))
+      createAllele(ref, 30, true),
+      createAllele(alt, 40, false),
+      createAllele(alt, 40, false))
     val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
     val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
-    MathTestUtils.assertAlmostEqual(annotator.fisherStrandBiasValue(), log2phred(log(1/6f)))
+    MathTestUtils.assertAlmostEqual(annotator.fisherStrandBiasValue(), log2phred(log(1 / 6f)))
   }
 
   test("annotate rms map q") {
     val observed = Iterable(createAllele(ref, 20, true),
-                            createAllele(ref, 30, true),
-                            createAllele(alt, 40, false),
-                            createAllele(alt, 40, false))
+      createAllele(ref, 30, true),
+      createAllele(alt, 40, false),
+      createAllele(alt, 40, false))
     val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
     val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
-    val rmsMapQ = sqrt((pow(20d, 2d) + pow(30d, 2d) + pow(40d, 2d) + pow(40d, 2d))/4d)
+    val rmsMapQ = sqrt((pow(20d, 2d) + pow(30d, 2d) + pow(40d, 2d) + pow(40d, 2d)) / 4d)
     MathTestUtils.assertAlmostEqual(annotator.rmsMapQ(), rmsMapQ)
   }
 }
