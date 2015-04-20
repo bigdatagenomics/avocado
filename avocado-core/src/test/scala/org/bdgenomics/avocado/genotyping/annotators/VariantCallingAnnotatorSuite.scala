@@ -58,7 +58,29 @@ class VariantCallingAnnotatorSuite extends FunSuite {
     val observed = refBaseQ.map(createAllele(ref, _, true)) ++ altBaseQ.map(createAllele(alt, _, false))
     val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
     val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
-    MathTestUtils.assertAlmostEqual(annotator.mapQRankSum(), -2.154f, 1e-3)
+    val rs = annotator.mapQRankSum()
+    assert(rs.isDefined)
+    MathTestUtils.assertAlmostEqual(rs.get, -2.154f, 1e-3)
+  }
+
+  test("can't calculate map quality rank sum for empty ref") {
+    val refBaseQ = List()
+    val altBaseQ = List(0, 7, 10, 17, 20, 21, 30, 34, 40, 45)
+    val observed = refBaseQ.map(createAllele(ref, _, true)) ++ altBaseQ.map(createAllele(alt, _, false))
+    val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
+    val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
+    val rs = annotator.mapQRankSum()
+    assert(rs.isEmpty)
+  }
+
+  test("can't calculate map quality rank sum for empty alt") {
+    val refBaseQ = List(20, 25, 26, 30, 32, 40, 47, 50, 53, 60)
+    val altBaseQ = List()
+    val observed = refBaseQ.map(createAllele(ref, _, true)) ++ altBaseQ.map(createAllele(alt, _, false))
+    val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
+    val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
+    val rs = annotator.mapQRankSum()
+    assert(rs.isEmpty)
   }
 
   test("annotate fisher strand bias value") {

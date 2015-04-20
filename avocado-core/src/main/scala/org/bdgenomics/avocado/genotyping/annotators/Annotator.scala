@@ -43,9 +43,12 @@ class VariantCallingAnnotator(variant: Variant, observations: Iterable[AlleleObs
   val annotationBuilder = VariantCallingAnnotations.newBuilder()
 
   def build(): VariantCallingAnnotations = {
+    // get optional rank sum
+    mapQRankSum().foreach(annotationBuilder.setMqRankSum(_))
+
+    // other values are not optional
     annotationBuilder.setVariantQualityByDepth(variantQualityByDepth())
       .setReadDepth(readDepth())
-      .setMqRankSum(mapQRankSum())
       .setFisherStrandBiasPValue(fisherStrandBiasValue())
       .setRmsMapQ(rmsMapQ())
       .build()
@@ -60,37 +63,42 @@ class VariantCallingAnnotator(variant: Variant, observations: Iterable[AlleleObs
   }
 
   // Calculate RankSum as according to https://www.broadinstitute.org/gatk/guide/article?id=473
-  def mapQRankSum(): Float = {
-    val sortedObservations: Array[AlleleObservation] = (altObservations ++ refObservations).toArray.sortBy(_.mapq)
-    //Make (observation, rank) tuples
-    val rankedObservations: Array[(AlleleObservation, Float)] = sortedObservations.map((x: AlleleObservation) => (x, 0f))
+  def mapQRankSum(): Option[Float] = {
 
-    for (idx <- 0 until sortedObservations.length) {
-      val curMapQ = sortedObservations(idx).mapq
+    if (altObservations.isEmpty || refObservations.isEmpty) {
+      None
+    } else {
+      val sortedObservations: Array[AlleleObservation] = (altObservations ++ refObservations).toArray.sortBy(_.mapq)
+      //Make (observation, rank) tuples
+      val rankedObservations: Array[(AlleleObservation, Float)] = sortedObservations.map((x: AlleleObservation) => (x, 0f))
 
-      // Scan above and under for same mapq
-      var minIdx = idx
-      while (minIdx > 0 && sortedObservations(minIdx - 1).mapq == curMapQ) {
-        minIdx = minIdx - 1
+      for (idx <- 0 until sortedObservations.length) {
+        val curMapQ = sortedObservations(idx).mapq
+
+        // Scan above and under for same mapq
+        var minIdx = idx
+        while (minIdx > 0 && sortedObservations(minIdx - 1).mapq == curMapQ) {
+          minIdx = minIdx - 1
+        }
+        var maxIdx = idx
+        while (maxIdx < sortedObservations.size - 1 && sortedObservations(maxIdx + 1).mapq == curMapQ) {
+          maxIdx = maxIdx + 1
+        }
+
+        val rank = (minIdx + maxIdx) / 2f + 1
+        rankedObservations(idx) = rankedObservations(idx).copy(_2 = rank)
       }
-      var maxIdx = idx
-      while (maxIdx < sortedObservations.size - 1 && sortedObservations(maxIdx + 1).mapq == curMapQ) {
-        maxIdx = maxIdx + 1
-      }
 
-      val rank = (minIdx + maxIdx) / 2f + 1
-      rankedObservations(idx) = rankedObservations(idx).copy(_2 = rank)
+      val rankRef = rankedObservations.filter(_._1.allele == ref).map(_._2).reduce(_ + _)
+      val rankAlt = rankedObservations.filter(_._1.allele == alt).map(_._2).reduce(_ + _)
+
+      val uRef = rankRef - numRef * (numRef + 1) / 2f
+      val uAlt = rankAlt - numAlt * (numAlt + 1) / 2f
+
+      val mu = (numRef * numAlt) / 2f
+      val std = math.sqrt((numRef * numAlt * (numRef + numAlt + 1)) / 12f)
+      Some(((uAlt - mu) / std).toFloat)
     }
-
-    val rankRef = rankedObservations.filter(_._1.allele == ref).map(_._2).reduce(_ + _)
-    val rankAlt = rankedObservations.filter(_._1.allele == alt).map(_._2).reduce(_ + _)
-
-    val uRef = rankRef - numRef * (numRef + 1) / 2f
-    val uAlt = rankAlt - numAlt * (numAlt + 1) / 2f
-
-    val mu = (numRef * numAlt) / 2f
-    val std = math.sqrt((numRef * numAlt * (numRef + numAlt + 1)) / 12f)
-    ((uAlt - mu) / std).toFloat
   }
 
   def fisherStrandBiasValue(): Float = {
