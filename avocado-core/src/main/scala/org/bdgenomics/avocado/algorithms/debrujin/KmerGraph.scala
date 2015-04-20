@@ -74,6 +74,11 @@ object KmerGraph extends Logging {
           newKmer = Kmer(ks, Some(pos))
         }
 
+        // is this kmer already in the graph
+        if (kmerMap.contains(ks)) {
+          throw new IllegalStateException("Loop in reference de Bruijn graph at %s.".format(ks))
+        }
+
         // add the kmer to the graph
         kmerMap(ks) = newKmer
 

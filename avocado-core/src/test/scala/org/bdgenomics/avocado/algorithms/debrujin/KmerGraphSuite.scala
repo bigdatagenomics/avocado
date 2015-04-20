@@ -39,6 +39,20 @@ class KmerGraphSuite extends AvocadoFunSuite {
     }
   }
 
+  test("cannot build a graph if there is a loop in the reference") {
+    val ref = "ACACTGAGAGAGAG"
+    val region = ReferenceRegion("chr1", 100L, 114L)
+
+    intercept[IllegalStateException] {
+      val graphs = KmerGraph(5, Seq((region, ref)), Seq(AlignmentRecord.newBuilder()
+        .setSequence("")
+        .setQual("")
+        .setRecordGroupSample("sample1")
+        .setMapq(0)
+        .build()))
+    }
+  }
+
   test("put reference into graph") {
     val ref = "ACACTGAGACATGC"
     val region = ReferenceRegion("chr1", 100L, 114L)
