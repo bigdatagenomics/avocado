@@ -182,7 +182,7 @@ class ReassemblyExplorer(kmerLength: Int,
         }
 
         // turn the reassembly graph into observations
-        ObservingGraph.time {
+        val obs = ObservingGraph.time {
           try {
             graphs.flatMap(_.toObservations)
           } catch {
@@ -195,11 +195,16 @@ class ReassemblyExplorer(kmerLength: Int,
             }
           }
         }
+        log.info("Finished active region " + coordinates)
+        obs
       }
     } else {
-      InactiveReads.time {
+      log.info("Observing inactive region " + coordinates)
+      val obs = InactiveReads.time {
         observeRegion()
       }
+      log.info("Finished inactive region " + coordinates)
+      obs
     }.filter(o => unflankedRegion.contains(o.pos))
   }
 
