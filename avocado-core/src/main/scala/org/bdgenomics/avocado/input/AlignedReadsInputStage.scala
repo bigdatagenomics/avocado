@@ -18,6 +18,7 @@
 package org.bdgenomics.avocado.input
 
 import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
+import org.bdgenomics.adam.projections.{ AlignmentRecordField, Projection }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMContext
 import org.apache.commons.configuration.SubnodeConfiguration
@@ -43,7 +44,19 @@ private[input] object AlignedReadsInputStage extends InputStage {
 
     println("Loading reads in from " + inputPath)
 
-    sc.loadAlignments(inputPath)
+    sc.loadAlignments(inputPath,
+      projection = Some(Projection(AlignmentRecordField.contig,
+        AlignmentRecordField.start,
+        AlignmentRecordField.end,
+        AlignmentRecordField.mapq,
+        AlignmentRecordField.readName,
+        AlignmentRecordField.sequence,
+        AlignmentRecordField.cigar,
+        AlignmentRecordField.qual,
+        AlignmentRecordField.recordGroupId,
+        AlignmentRecordField.readMapped,
+        AlignmentRecordField.readNegativeStrand,
+        AlignmentRecordField.primaryAlignment)))
   }
 
 }
