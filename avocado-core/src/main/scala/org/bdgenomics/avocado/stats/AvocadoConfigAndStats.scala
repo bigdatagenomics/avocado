@@ -27,7 +27,7 @@ import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 class AvocadoConfigAndStats(val sc: SparkContext,
                             val debug: Boolean,
                             inputDataset: RDD[AlignmentRecord],
-                            reference: RDD[NucleotideContigFragment]) {
+                            val reference: RDD[NucleotideContigFragment]) {
 
   lazy val coverage = ComputingCoverage.time {
     ScoreCoverage(inputDataset)

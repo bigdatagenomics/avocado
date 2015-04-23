@@ -29,6 +29,7 @@ case class AlleleObservation(override val pos: ReferencePosition,
                              readId: Long) extends Observation(pos, allele) {
 
   override def toString(): String = {
-    "Allele: " + allele + " @ " + pos + " with mapq: " + mapq + " and phred: " + phred
+    "Length " + length + " allele: " + allele + " @ " + pos + " with mapq: " +
+      mapq + " and phred: " + phred
   }
 }

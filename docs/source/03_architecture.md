@@ -106,6 +106,23 @@ unioned with "observations" from the reference genome. Specifically, we take eac
 the provided reference assembly contigs and create an observation that tags the reference base
 with its position.
 
+### Discover By Reassembling Regions
+
+This method takes all of the reads that align to a region of a reference contig and locally
+reassembles the genome in that site. Our reasembly method differs from _most_ reassembly-based
+approaches. In the conventional reassembly formulation, reads are put into an assembly graph.
+Putative local haplotypes are then extracted from the reassembly graph. These haplotypes are
+then scored by realigning the reads against the reassembly graphs. In our approach, we directly
+emit allele observations from a de Brujin reassembly graph. This eliminates the need to generate
+haplotypes and to realign reads, which both improves performance and allows for a less constrained
+reassembly/realignment process. The approach we use to do this is described in more detail in
+the [algorithms section](#local-reassembler).
+
+The reassembler is referred to as `ReassemblyExplorer`. It takes a single parameter:
+
+* `kmerLength`: The length of _k_-mers to use when building the de Brujin assembly graph. By
+default, this is set to 20.
+
 ## Genotyping
 
 Currently, the main genotyping model supported by avocado is a biallelic model that allows for

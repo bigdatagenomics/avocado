@@ -22,7 +22,6 @@ import org.bdgenomics.adam.models.ReferencePosition
 class Observation(val pos: ReferencePosition,
                   val allele: String,
                   val length: Int = 1) extends Serializable {
-
   override def toString(): String = {
     "Allele: " + allele + " @ " + pos
   }
