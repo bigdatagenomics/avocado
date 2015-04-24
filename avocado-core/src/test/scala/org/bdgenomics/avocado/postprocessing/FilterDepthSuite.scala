@@ -37,12 +37,13 @@ class FilterDepthSuite extends FunSuite {
       .build
     val gt1 = Genotype.newBuilder
       .setVariant(variant)
-      .build()
 
-    val seq = Seq(gt1, gt1, gt1)
+    val seq = Seq(gt1, gt1, gt1).map(_.build())
     val filt = new DepthFilter(10)
+    val gts = filt.filterGenotypes(seq)
 
-    assert(filt.filterGenotypes(seq).length === 3)
+    assert(gts.length === 3)
+    assert(gts.forall(_.getVariantCallingAnnotations == null))
   }
 
   test("do not filter genotypes that have sufficient coverage") {
@@ -59,12 +60,15 @@ class FilterDepthSuite extends FunSuite {
     val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setReadDepth(10)
-      .build()
 
-    val seq = Seq(gt1, gt1)
+    val seq = Seq(gt1, gt1).map(_.build())
     val filt = new DepthFilter(10)
+    val gts = filt.filterGenotypes(seq)
 
-    assert(filt.filterGenotypes(seq).length === 2)
+    assert(gts.length === 2)
+    assert(gts.forall(_.getVariantCallingAnnotations.getVariantIsPassing))
+    assert(gts.forall(_.getVariantCallingAnnotations.getVariantFilters.size == 1))
+    assert(gts.forall(_.getVariantCallingAnnotations.getVariantFilters.contains("DEPTH>=10")))
   }
 
   test("filter genotypes that have low coverage") {
@@ -81,12 +85,15 @@ class FilterDepthSuite extends FunSuite {
     val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setReadDepth(5)
-      .build()
 
-    val seq = Seq(gt1, gt1)
+    val seq = Seq(gt1, gt1).map(_.build())
     val filt = new DepthFilter(10)
+    val gts = filt.filterGenotypes(seq)
 
-    assert(filt.filterGenotypes(seq).length === 0)
+    assert(gts.length === 2)
+    assert(gts.forall(!_.getVariantCallingAnnotations.getVariantIsPassing))
+    assert(gts.forall(_.getVariantCallingAnnotations.getVariantFilters.size == 1))
+    assert(gts.forall(_.getVariantCallingAnnotations.getVariantFilters.contains("DEPTH>=10")))
   }
 
   test("do not filter genotypes that have no depth info or that have sufficient coverage") {
@@ -103,17 +110,21 @@ class FilterDepthSuite extends FunSuite {
     val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("me")
-      .build()
     val gt2 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("you")
       .setReadDepth(15)
-      .build()
 
-    val seq = Seq(gt1, gt1, gt2, gt2)
+    val seq = Seq(gt1, gt1, gt2, gt2).map(_.build())
     val filt = new DepthFilter(10)
+    val gts = filt.filterGenotypes(seq)
 
-    assert(filt.filterGenotypes(seq).length === 4)
+    assert(gts.length === 4)
+    assert(gts.filter(_.getVariantCallingAnnotations == null).length === 2)
+    assert(gts.filter(_.getVariantCallingAnnotations != null).length === 2)
+    assert(gts.filter(_.getVariantCallingAnnotations != null).forall(_.getVariantCallingAnnotations.getVariantIsPassing))
+    assert(gts.filter(_.getVariantCallingAnnotations != null).forall(_.getVariantCallingAnnotations.getVariantFilters.size == 1))
+    assert(gts.filter(_.getVariantCallingAnnotations != null).forall(_.getVariantCallingAnnotations.getVariantFilters.contains("DEPTH>=10")))
   }
 
   test("do not filter genotypes that have no depth info but filter low coverage calls") {
@@ -130,19 +141,24 @@ class FilterDepthSuite extends FunSuite {
     val gt1 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("me")
-      .build()
     val gt2 = Genotype.newBuilder
       .setVariant(variant)
       .setSampleId("you")
       .setReadDepth(6)
-      .build()
 
-    val seq = Seq(gt1, gt1, gt2, gt2)
+    val seq = Seq(gt1, gt1, gt2, gt2).map(_.build())
     val filt = new DepthFilter(10)
 
-    assert(filt.filterGenotypes(seq).length === 2)
-    assert(filt.filterGenotypes(seq).filter(_.getSampleId == "me").length === 2)
-    assert(filt.filterGenotypes(seq).filter(_.getSampleId == "you").length === 0)
+    val gts = filt.filterGenotypes(seq)
+
+    assert(gts.length === 4)
+    assert(gts.filter(_.getVariantCallingAnnotations == null).length === 2)
+    assert(gts.filter(_.getVariantCallingAnnotations == null).forall(_.getSampleId == "me"))
+    assert(gts.filter(_.getVariantCallingAnnotations != null).length === 2)
+    assert(gts.filter(_.getVariantCallingAnnotations != null).forall(_.getSampleId == "you"))
+    assert(gts.filter(_.getVariantCallingAnnotations != null).forall(!_.getVariantCallingAnnotations.getVariantIsPassing))
+    assert(gts.filter(_.getVariantCallingAnnotations != null).forall(_.getVariantCallingAnnotations.getVariantFilters.size == 1))
+    assert(gts.filter(_.getVariantCallingAnnotations != null).forall(_.getVariantCallingAnnotations.getVariantFilters.contains("DEPTH>=10")))
   }
 }
 

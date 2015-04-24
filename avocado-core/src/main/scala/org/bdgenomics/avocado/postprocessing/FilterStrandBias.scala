@@ -23,15 +23,12 @@ import org.bdgenomics.formats.avro.{ Genotype, VariantCallingAnnotations }
 import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
-private[postprocessing] object FilterDepth extends PostprocessingStage {
+private[postprocessing] object FilterStrandBias extends PostprocessingStage {
 
-  val stageName = "filterDepth"
+  val stageName = "filterStrandBias"
 
   /**
-   * Filters out genotype calls that have low coverage. The coverage requirement can either
-   * be specified as an absolute, or as a value relative to the measured coverage for this dataset.
-   *
-   * @throws IllegalArgumentException Throws exception if both config options are passed.
+   * Filters out genotype calls that show signs of strand bias.
    *
    * @param rdd Rdd on which to filter.
    * @param stats Global stats.
@@ -42,30 +39,23 @@ private[postprocessing] object FilterDepth extends PostprocessingStage {
             stats: AvocadoConfigAndStats,
             config: SubnodeConfiguration): RDD[VariantContext] = {
 
-    val depth = if (config.containsKey("absoluteDepth") && !config.containsKey("relativeDepth")) {
-      config.getInt("absoluteDepth")
-    } else if (!config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
-      (config.getDouble("relativeDepth") * stats.coverage).toInt
-    } else if (config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
-      throw new IllegalArgumentException("Both absoluteDepth and relativeDepth are specified.")
-    } else {
-      (0.75 * stats.coverage).toInt
-    }
+    val pvalue = config.getFloat("fisherStrandBiasPValue")
 
-    val genotypeFilter = new DepthFilter(depth)
+    val genotypeFilter = new StrandBiasFilter(pvalue)
 
     genotypeFilter.filter(rdd)
   }
 }
 
-private[postprocessing] class DepthFilter(depth: Int) extends GenotypeAttributeFilter[Int] {
+private[postprocessing] class StrandBiasFilter(strandBiasPValueThreshold: Float) extends GenotypeAttributeFilter[Float] {
 
-  val filterName = "DEPTH>=%d".format(depth)
+  val filterName = "FISHER_STRAND_BIAS_PVALUE>=%f".format(strandBiasPValueThreshold)
 
-  def keyFn(g: Genotype): Option[Int] = {
-    val i: Integer = g.getReadDepth
-    Option(i).map(_.toInt)
-  }
+  def keyFn(g: Genotype): Option[Float] = Option(g.getVariantCallingAnnotations)
+    .flatMap(a => {
+      val f: java.lang.Float = a.getFisherStrandBiasPValue
+      Option(f).map(_.toFloat)
+    })
 
-  def filterFn(genotypeDepth: Int): Boolean = genotypeDepth >= depth
+  def filterFn(strandBiasPValue: Float): Boolean = strandBiasPValue >= strandBiasPValueThreshold
 }

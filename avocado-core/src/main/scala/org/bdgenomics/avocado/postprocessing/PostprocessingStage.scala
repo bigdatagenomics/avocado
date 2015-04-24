@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.postprocessing
 
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.formats.avro.Genotype
+import org.bdgenomics.formats.avro.{ Genotype, VariantCallingAnnotations }
 import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
@@ -31,6 +31,47 @@ private[postprocessing] trait PostprocessingStage {
             stats: AvocadoConfigAndStats,
             config: SubnodeConfiguration): RDD[VariantContext]
 
+}
+
+private[postprocessing] trait GenotypeAttributeFilter[T] extends GenotypeFilter {
+  val filterName: String
+
+  def keyFn(g: Genotype): Option[T]
+
+  def filterFn(attribute: T): Boolean
+
+  def filterGenotypes(genotypes: Seq[Genotype]): Seq[Genotype] = {
+    val keyed = genotypes.map(g => (keyFn(g), g))
+
+    val genotypesNoStats: Seq[Genotype] = keyed.filter(t => t._1.isEmpty)
+      .map(t => t._2)
+    val genotypesWithStats: Seq[Genotype] = keyed.filter(t => t._1.isDefined)
+      .map(kv => {
+        val stats = Option(kv._2.getVariantCallingAnnotations)
+          .fold(VariantCallingAnnotations.newBuilder().build())(v => v)
+        val variantIsPassing = Option(stats.getVariantIsPassing)
+
+        // we only apply the filter if the variant call is currently passing
+        if (variantIsPassing.fold(true)(v => v)) {
+          val passed = filterFn(kv._1.get)
+
+          // add to filter list
+          val filterList = stats.getVariantFilters
+          filterList.add(filterName)
+
+          // if we failed, update flag
+          if (!passed || variantIsPassing.isEmpty) {
+            stats.setVariantIsPassing(passed)
+          }
+
+          kv._2.setVariantCallingAnnotations(stats)
+        }
+
+        kv._2
+      })
+
+    genotypesNoStats ++ genotypesWithStats
+  }
 }
 
 private[postprocessing] trait GenotypeFilter extends Serializable {
