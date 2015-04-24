@@ -20,14 +20,16 @@ package org.bdgenomics.avocado.preprocessing
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.formats.avro.AlignmentRecord
-import org.bdgenomics.adam.rich.RichAlignmentRecord._
 
-object BaseQualityFilter extends PreprocessingStage {
-  override val stageName: String = "base_quality_filter"
+object BaseQualityFilter extends ReadFilter[Char] {
+  val stageName: String = "baseQualityFilter"
 
-  override def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] =
-    rdd.filter {
-      case record =>
-        record.qualityScores.forall(_ >= 5)
-    }
+  def getThreshold(config: SubnodeConfiguration): Char = {
+    // what quality score do we use for filtering?
+    (config.getInt("phredThreshold", 5) + 33).toChar
+  }
+
+  private[preprocessing] def filterRead(r: AlignmentRecord, phred: Char): Boolean = {
+    r.getQual.forall(_ >= phred)
+  }
 }

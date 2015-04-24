@@ -17,34 +17,18 @@
  */
 package org.bdgenomics.avocado.preprocessing
 
-import org.bdgenomics.formats.avro.AlignmentRecord
-import org.apache.commons.configuration.HierarchicalConfiguration
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
+import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.formats.avro.AlignmentRecord
 
-object Preprocessor {
+object DuplicateFilter extends ReadFilter[Boolean] {
 
-  private val stages = List(MarkDuplicates,
-    RecalibrateBaseQualities,
-    SortReads,
-    CoalesceReads,
-    RealignIndels,
-    BaseQualityFilter,
-    ClippingFilter,
-    DuplicateFilter)
+  val stageName = "duplicateFilter"
 
-  def apply(rdd: RDD[AlignmentRecord],
-            stageName: String,
-            stageAlgorithm: String,
-            config: HierarchicalConfiguration): RDD[AlignmentRecord] = {
+  def getThreshold(config: SubnodeConfiguration): Boolean = true
 
-    // get configuration for this stage
-    val stageConfig = config.configurationAt(stageName)
-
-    // find and run stage
-    val stage = stages.find(_.stageName == stageAlgorithm)
-
-    assert(stage.isDefined, "Could not find stage with name: " + stageName)
-    stage.get.apply(rdd, stageConfig)
+  private[preprocessing] def filterRead(r: AlignmentRecord, ignored: Boolean): Boolean = {
+    Option(r.getDuplicateRead).fold(true)(!_)
   }
-
 }
