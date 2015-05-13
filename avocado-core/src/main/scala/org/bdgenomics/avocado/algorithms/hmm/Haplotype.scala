@@ -40,9 +40,6 @@ class Haplotype(val sequence: String,
     name + ", " + start + ", " + end
   }
 
-  val fastAligner = new FastAligner(sequence, region.head.record.getSequence.length)
-  val exactAligner = new ExactReadAligner(sequence, region.head.record.getSequence.length)
-
   assert(reference.length > 0, "Reference has length 0 on " + reg + ".")
   assert(sequence.length > 0, "Haplotype has length 0 on " + reg + ".")
   lazy val referenceAlignment = hmm.alignSequences(reference, sequence, null)
@@ -53,13 +50,7 @@ class Haplotype(val sequence: String,
 
   lazy val perReadAlignments: Seq[Alignment] = {
     region.map(read => {
-      try {
-        fastAligner.alignSequences(sequence, read.getSequence.toString, read.getQual.toString)
-      } catch {
-        case _: Throwable => {
-          exactAligner.alignSequences(sequence, read.getSequence.toString, read.getQual.toString)
-        }
-      }
+      hmm.alignSequences(sequence, read.getSequence.toString, read.getQual.toString)
     })
   }
   lazy val perReadLikelihoods: Seq[Double] = perReadAlignments.map(_.likelihood)
