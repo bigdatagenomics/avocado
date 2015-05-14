@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to Big Data Genomics (BDG) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,33 +18,25 @@
 package org.bdgenomics.avocado.preprocessing
 
 import org.bdgenomics.formats.avro.AlignmentRecord
-import org.apache.commons.configuration.HierarchicalConfiguration
-import org.apache.spark.rdd.RDD
+import org.scalatest.FunSuite
 
-object Preprocessor {
+class ClippingFilterSuite extends FunSuite {
 
-  private val stages = List(MarkDuplicates,
-    RecalibrateBaseQualities,
-    SortReads,
-    CoalesceReads,
-    RealignIndels,
-    BaseQualityFilter,
-    ClippingFilter,
-    DuplicateFilter)
+  test("should filter out a read with many soft clipped bases") {
+    val read = AlignmentRecord.newBuilder()
+      .setSequence("ACACACACAC")
+      .setCigar("5S5M")
+      .build()
 
-  def apply(rdd: RDD[AlignmentRecord],
-            stageName: String,
-            stageAlgorithm: String,
-            config: HierarchicalConfiguration): RDD[AlignmentRecord] = {
-
-    // get configuration for this stage
-    val stageConfig = config.configurationAt(stageName)
-
-    // find and run stage
-    val stage = stages.find(_.stageName == stageAlgorithm)
-
-    assert(stage.isDefined, "Could not find stage with name: " + stageName)
-    stage.get.apply(rdd, stageConfig)
+    assert(!ClippingFilter.filterRead(read, 0.3))
   }
 
+  test("should keep a read with no soft clipped bases") {
+    val read = AlignmentRecord.newBuilder()
+      .setSequence("ACACACACAC")
+      .setCigar("10M")
+      .build()
+
+    assert(ClippingFilter.filterRead(read, 0.3))
+  }
 }

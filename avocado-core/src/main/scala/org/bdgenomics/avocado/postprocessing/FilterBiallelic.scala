@@ -23,9 +23,9 @@ import org.bdgenomics.formats.avro.{ Genotype, VariantCallingAnnotations }
 import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
-private[postprocessing] object FilterDepth extends PostprocessingStage {
+private[postprocessing] object FilterBiallelic extends PostprocessingStage {
 
-  val stageName = "filterDepth"
+  val stageName = "filterBiallelic"
 
   /**
    * Filters out genotype calls that have low coverage. The coverage requirement can either
@@ -42,30 +42,19 @@ private[postprocessing] object FilterDepth extends PostprocessingStage {
             stats: AvocadoConfigAndStats,
             config: SubnodeConfiguration): RDD[VariantContext] = {
 
-    val depth = if (config.containsKey("absoluteDepth") && !config.containsKey("relativeDepth")) {
-      config.getInt("absoluteDepth")
-    } else if (!config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
-      (config.getDouble("relativeDepth") * stats.coverage).toInt
-    } else if (config.containsKey("absoluteDepth") && config.containsKey("relativeDepth")) {
-      throw new IllegalArgumentException("Both absoluteDepth and relativeDepth are specified.")
-    } else {
-      (0.75 * stats.coverage).toInt
-    }
-
-    val genotypeFilter = new DepthFilter(depth)
+    val genotypeFilter = new BiallelicFilter()
 
     genotypeFilter.filter(rdd)
   }
 }
 
-private[postprocessing] class DepthFilter(depth: Int) extends GenotypeAttributeFilter[Int] {
+private[postprocessing] class BiallelicFilter extends GenotypeAttributeFilter[Boolean] {
 
-  val filterName = "DEPTH>=%d".format(depth)
+  val filterName = "BIALLELIC"
 
-  def keyFn(g: Genotype): Option[Int] = {
-    val i: Integer = g.getReadDepth
-    Option(i).map(_.toInt)
+  def keyFn(g: Genotype): Option[Boolean] = {
+    Option(g.getSplitFromMultiAllelic)
   }
 
-  def filterFn(genotypeDepth: Int): Boolean = genotypeDepth >= depth
+  def filterFn(isMultiAllelic: Boolean): Boolean = !isMultiAllelic
 }
