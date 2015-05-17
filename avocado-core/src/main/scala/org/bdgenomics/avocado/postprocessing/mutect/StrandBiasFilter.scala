@@ -37,6 +37,6 @@ class StrandBiasFilter extends MutectPostprocessor {
   override def filter(variants: RDD[VariantContext],
                       tumorReads: RDD[Classified[AlignmentRecord]],
                       normalReads: RDD[Classified[AlignmentRecord]]): RDD[VariantContext] = {
-
+    ???
   }
 }

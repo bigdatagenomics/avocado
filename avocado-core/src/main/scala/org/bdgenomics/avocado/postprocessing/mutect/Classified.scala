@@ -19,7 +19,7 @@
 package org.bdgenomics.avocado.postprocessing.mutect
 
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.{ ReferenceRegion, ReferenceMapping }
+import org.bdgenomics.adam.models.{ ReferenceRegion }
 
 import scala.reflect.ClassTag
 
@@ -31,29 +31,32 @@ class Classified[T](val value: T, val classes: Set[String]) extends Serializable
 
 }
 
-class ClassifiedReferenceMapping[T](tMapping: ReferenceMapping[T]) extends ReferenceMapping[Classified[T]] {
-  override def getReferenceName(value: Classified[T]): String =
-    tMapping.getReferenceName(value.value)
-  override def getReferenceRegion(value: Classified[T]): ReferenceRegion =
-    tMapping.getReferenceRegion(value.value)
-}
-
-class ClassifiedRDDFunctions[T](val rdd: RDD[Classified[T]])(implicit kt: ClassTag[T]) extends Serializable {
-
-  def filterByClasses(cls: String*): RDD[Classified[T]] = rdd.filter(_.hasClasses(cls: _*))
-  def filterBySomeClasses(cls: String*): RDD[Classified[T]] = rdd.filter(_.hasSomeClasses(cls: _*))
-  def classify(cls: String): RDD[Classified[T]] = rdd.map(_.classify(cls))
-  def values(): RDD[T] = rdd.map(_.value)
-}
-
-object ClassifiedContext {
-
-  implicit def mappingToClassifiedMapping[T](mapping: ReferenceMapping[T]): ReferenceMapping[Classified[T]] =
-    new ClassifiedReferenceMapping[T](mapping)
-
-  implicit def classifiedRDDToClassifiedRDDFunctions[T](rdd: RDD[Classified[T]])(implicit kt: ClassTag[T]): ClassifiedRDDFunctions[T] =
-    new ClassifiedRDDFunctions[T](rdd)
-
-  implicit def toClassifiedRDD[T](rdd: RDD[T])(implicit kt: ClassTag[T]): RDD[Classified[T]] =
-    rdd.map(t => new Classified[T](t, Set()))
-}
+/**
+ * FIXME move away from ReferenceMapping
+ * class ClassifiedReferenceMapping[T](tMapping: ReferenceMapping[T]) extends ReferenceMapping[Classified[T]] {
+ * override def getReferenceName(value: Classified[T]): String =
+ * tMapping.getReferenceName(value.value)
+ * override def getReferenceRegion(value: Classified[T]): ReferenceRegion =
+ * tMapping.getReferenceRegion(value.value)
+ * }
+ *
+ * class ClassifiedRDDFunctions[T](val rdd: RDD[Classified[T]])(implicit kt: ClassTag[T]) extends Serializable {
+ *
+ * def filterByClasses(cls: String*): RDD[Classified[T]] = rdd.filter(_.hasClasses(cls: _*))
+ * def filterBySomeClasses(cls: String*): RDD[Classified[T]] = rdd.filter(_.hasSomeClasses(cls: _*))
+ * def classify(cls: String): RDD[Classified[T]] = rdd.map(_.classify(cls))
+ * def values(): RDD[T] = rdd.map(_.value)
+ * }
+ *
+ * object ClassifiedContext {
+ *
+ * implicit def mappingToClassifiedMapping[T](mapping: ReferenceMapping[T]): ReferenceMapping[Classified[T]] =
+ * new ClassifiedReferenceMapping[T](mapping)
+ *
+ * implicit def classifiedRDDToClassifiedRDDFunctions[T](rdd: RDD[Classified[T]])(implicit kt: ClassTag[T]): ClassifiedRDDFunctions[T] =
+ * new ClassifiedRDDFunctions[T](rdd)
+ *
+ * implicit def toClassifiedRDD[T](rdd: RDD[T])(implicit kt: ClassTag[T]): RDD[Classified[T]] =
+ * rdd.map(t => new Classified[T](t, Set()))
+ * }
+ */

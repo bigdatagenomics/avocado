@@ -21,11 +21,8 @@ package org.bdgenomics.avocado.postprocessing.mutect
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.VariantContext
-import org.bdgenomics.adam.rdd.RegionRDDFunctions._
 import org.bdgenomics.adam.rich.RichAlignmentRecord._
 import org.bdgenomics.formats.avro.AlignmentRecord
-
-import ClassifiedContext._
 
 import scala.math._
 
@@ -54,13 +51,15 @@ class PoorMappingFilter(val mapq0Fraction: Double = 0.5,
                       tumorReads: RDD[Classified[AlignmentRecord]],
                       normalReads: RDD[Classified[AlignmentRecord]]): RDD[VariantContext] = {
 
-    val tumorMapqFractions: RDD[(VariantContext, (Int, Int))] = variants
-      .groupByOverlap(tumorReads.values())
-      .map(p => (p._1, (p._2.count(r => r.getMapq == 0), p._2.size)))
+    val tumorMapqFractions: RDD[(VariantContext, (Int, Int))] = ???
+    //      variants
+    //      .groupByOverlap(tumorReads.values())
+    //      .map(p => (p._1, (p._2.count(r => r.getMapq == 0), p._2.size)))
 
-    val normalMapqFractions: RDD[(VariantContext, (Int, Int))] = variants
-      .groupByOverlap(normalReads.values())
-      .map(p => (p._1, (p._2.count(r => r.getMapq == 0), p._2.size)))
+    val normalMapqFractions: RDD[(VariantContext, (Int, Int))] = ???
+    //      variants
+    //      .groupByOverlap(normalReads.values())
+    //      .map(p => (p._1, (p._2.count(r => r.getMapq == 0), p._2.size)))
 
     // This captures the set of variants which _pass_ condition (i)
     val filter1 = tumorMapqFractions.join(normalMapqFractions)
@@ -76,11 +75,12 @@ class PoorMappingFilter(val mapq0Fraction: Double = 0.5,
       }.map(_._1)
 
     // This captures the set of variants which _pass_ condition (ii)
-    val filter2 = variants.groupByOverlap(tumorReads.filterByClasses("retained").values())
-      .filter {
-        case (vc: VariantContext, reads: Iterable[AlignmentRecord]) =>
-          reads.exists(observesMutantAllele(vc))
-      }.map(_._1)
+    val filter2 = ???
+    //      variants.groupByOverlap(tumorReads.filterByClasses("retained").values())
+    //      .filter {
+    //        case (vc: VariantContext, reads: Iterable[AlignmentRecord]) =>
+    //          reads.exists(observesMutantAllele(vc))
+    //      }.map(_._1)
 
     // And we return the intersection of the variants (i.e. that pass _both_ filters)
     filter1.intersection(filter2)

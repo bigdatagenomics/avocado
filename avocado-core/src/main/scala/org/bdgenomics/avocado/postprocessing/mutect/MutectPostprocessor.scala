@@ -20,11 +20,8 @@ package org.bdgenomics.avocado.postprocessing.mutect
 
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion, ReferenceMapping, VariantContext }
+import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion, VariantContext }
 import org.bdgenomics.formats.avro.AlignmentRecord
-import org.bdgenomics.adam.rich.ReferenceMappingContext._
-import ClassifiedContext._
-import org.bdgenomics.adam.rdd.RegionRDDFunctions._
 import scala.math.max
 import org.bdgenomics.adam.rich.RichAlignmentRecord._
 

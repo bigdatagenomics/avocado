@@ -20,10 +20,7 @@ package org.bdgenomics.avocado.postprocessing.mutect
 
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.VariantContext
-import org.bdgenomics.adam.rdd.RegionRDDFunctions._
 import org.bdgenomics.formats.avro.AlignmentRecord
-
-import ClassifiedContext._
 
 object ProximalGapFilter {
 
@@ -68,11 +65,11 @@ class ProximalGapFilter(val indelReadThreshold: Int = 3,
 
   override def filter(variants: RDD[VariantContext],
                       tumorReads: RDD[Classified[AlignmentRecord]],
-                      normalReads: RDD[Classified[AlignmentRecord]]): RDD[VariantContext] =
-    variants
-      .groupWithinRange(
-        tumorReads.filterByClasses("retained").values(),
-        windowDistance.toLong)
-      .filter(_._2.count(gapFilter) < indelReadThreshold)
-      .map(_._1)
+                      normalReads: RDD[Classified[AlignmentRecord]]): RDD[VariantContext] = ???
+  //    variants
+  //      .groupWithinRange(
+  //        tumorReads.filterByClasses("retained").values(),
+  //        windowDistance.toLong)
+  //      .filter(_._2.count(gapFilter) < indelReadThreshold)
+  //      .map(_._1)
 }
