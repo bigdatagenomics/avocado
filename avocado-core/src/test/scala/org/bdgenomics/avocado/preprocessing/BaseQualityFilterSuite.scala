@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to Big Data Genomics (BDG) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,33 +18,19 @@
 package org.bdgenomics.avocado.preprocessing
 
 import org.bdgenomics.formats.avro.AlignmentRecord
-import org.apache.commons.configuration.HierarchicalConfiguration
-import org.apache.spark.rdd.RDD
+import org.scalatest.FunSuite
 
-object Preprocessor {
+class BaseQualityFilterSuite extends FunSuite {
 
-  private val stages = List(MarkDuplicates,
-    RecalibrateBaseQualities,
-    SortReads,
-    CoalesceReads,
-    RealignIndels,
-    BaseQualityFilter,
-    ClippingFilter,
-    DuplicateFilter)
-
-  def apply(rdd: RDD[AlignmentRecord],
-            stageName: String,
-            stageAlgorithm: String,
-            config: HierarchicalConfiguration): RDD[AlignmentRecord] = {
-
-    // get configuration for this stage
-    val stageConfig = config.configurationAt(stageName)
-
-    // find and run stage
-    val stage = stages.find(_.stageName == stageAlgorithm)
-
-    assert(stage.isDefined, "Could not find stage with name: " + stageName)
-    stage.get.apply(rdd, stageConfig)
+  test("if all qualities are above the threshold, the read should pass the filter") {
+    assert(BaseQualityFilter.filterRead(AlignmentRecord.newBuilder()
+      .setQual("*****")
+      .build(), (5 + 33).toChar))
   }
 
+  test("if any qualities are below the threshold, the read should fail the filter") {
+    assert(!BaseQualityFilter.filterRead(AlignmentRecord.newBuilder()
+      .setQual("**!**")
+      .build(), (5 + 33).toChar))
+  }
 }
