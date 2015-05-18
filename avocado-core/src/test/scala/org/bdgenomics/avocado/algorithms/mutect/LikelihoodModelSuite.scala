@@ -90,7 +90,6 @@ class LikelihoodModelSuite extends FunSuite {
     // > -39.27121
     MathTestUtils.assertAlmostEqual(m0likelihood, -39.27121255)
 
-
   }
 
 }

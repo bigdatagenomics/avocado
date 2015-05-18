@@ -99,15 +99,15 @@ object MfmModel extends LikelihoodModel {
 object BinomialModel extends LikelihoodModel {
   private val log2Pi = log10(2.0 * Pi)
 
-  private def logBinomialCoefficient(n: Int, m: Int): Double = {
+  private def log10BinomialCoefficient(n: Int, m: Int): Double = {
     val logN = log10(n)
     val logM = log10(m)
     val logNminusM = log10(n - m)
     (n + 0.5) * logN - (m + 0.5) * logM - (n - m + 0.5) * logNminusM - 0.5 * log2Pi
   }
 
-  private def logBinomialLikelihood(p: Double, n: Int, k: Int): Double = {
-    logBinomialCoefficient(n, k) + k * log10(p) + (n - k) * log10(1.0 - p)
+  private def log10BinomialLikelihood(p: Double, n: Int, k: Int): Double = {
+    log10BinomialCoefficient(n, k) + k * log10(p) + (n - k) * log10(1.0 - p)
   }
 
   override def logLikelihood(ref: String, alt: String,
@@ -117,6 +117,6 @@ object BinomialModel extends LikelihoodModel {
     val refCount = refObs.size
     val altCount = altObs.size
     val p: Double = f.getOrElse(altCount.toDouble / (refCount + altCount))
-    logBinomialLikelihood(p, refCount + altCount, altCount)
+    log10BinomialLikelihood(p, refCount + altCount, altCount)
   }
 }
