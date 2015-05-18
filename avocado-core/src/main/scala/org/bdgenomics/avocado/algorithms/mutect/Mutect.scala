@@ -26,12 +26,14 @@ import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
  *
  * @param threshold Default value of 6.3 corresponds to a 3x10-6 mutation rate,
  *                  see the Online Methods of the Mutect paper for more details.
+ *
  */
 class Mutect(val threshold: Double = 6.3, val f: Option[Double] = None) {
 
   val model = MutectLogOdds
   val alleles: Set[String] = Set("A", "T", "G", "C")
 
+  // TODO make sure we only consider the tumor AlleleObservations for this calculation
   def constructVariant(pos: ReferencePosition,
                        ref: String,
                        alt: String,
@@ -54,6 +56,7 @@ class Mutect(val threshold: Double = 6.3, val f: Option[Double] = None) {
     (variant, genotypes)
   }
 
+  // TODO make sure we only consider the tumor AlleleObservations for this calculation
   def detect(pos: ReferencePosition,
              ref: String,
              obs: Seq[AlleleObservation]): Option[(Variant, Seq[Genotype])] = {
