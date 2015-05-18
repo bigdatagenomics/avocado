@@ -101,9 +101,11 @@ class LikelihoodModelSuite extends FunSuite {
 
   }
 
-  test("Likelihood of small mutant, first 3 reads (30,31,32) MfModel") {
+  test("Likelihood/log10 likelihood of small mutant, first 3 reads (30,31,32) MfModel") {
     val mflikelihood = MfmModel.logLikelihood("C", "A", some_muts, None)
     val m03likelihood = MfmModel.logLikelihood("C", "A", some_muts, Some(0.3))
+    val mhlikelihood = MHModel.logLikelihood("C", "A", some_muts, None)
+    val m0likelihood = M0Model.logLikelihood("C", "A", some_muts, None)
     // f should be 0.3
     // in R
     // pm = seq(30,32)
@@ -114,6 +116,18 @@ class LikelihoodModelSuite extends FunSuite {
     // -2.653910268
     MathTestUtils.assertAlmostEqual(mflikelihood, -2.653910268)
     MathTestUtils.assertAlmostEqual(m03likelihood, mflikelihood) //same if f properly calculated here
+
+    // the no mutants model in R
+    // log10(prod(0*(1-em) + 1*(em/3))*prod( 0*(er/3) + 1*(1-er)))
+    // -10.73221105
+    MathTestUtils.assertAlmostEqual(m0likelihood, -10.73221105)
+
+    // the heterozygous site model in R:
+    // log10(prod(0.5*(1-em) + 0.5*(em/3))*prod( 0.5*(er/3) + 0.5*(1-er)))
+    // -3.01156717
+    MathTestUtils.assertAlmostEqual(mhlikelihood, -3.01156717)
+    val prob_mutant = MutectLogOdds.logOdds("C", "A", some_muts, None)
+    MathTestUtils.assertAlmostEqual(prob_mutant, mflikelihood - m0likelihood)
   }
 
 }
