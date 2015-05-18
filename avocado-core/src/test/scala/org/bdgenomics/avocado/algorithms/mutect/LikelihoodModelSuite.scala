@@ -32,17 +32,6 @@ class LikelihoodModelSuite extends FunSuite {
       readId = 1L)
   }
 
-  val normals_het = for (read_id <- 11 to 20) yield {
-    AlleleObservation(pos = ReferencePosition("ctg", 0L),
-      length = 1,
-      allele = if (read_id % 2 == 0) "A" else "C", //phreads == 31, 33, ... 39
-      phred = 30 + (read_id - 11), // 30 to 39
-      mapq = Some(30),
-      onNegativeStrand = true,
-      sample = "shouldntmatter",
-      readId = 1L)
-  }
-
   test("Likelihood of simple model, no errors or mutants, all reference sites") {
     val m0likelihood = M0Model.logLikelihood("C", "A", all_c, None)
     val mflikelihood = MfmModel.logLikelihood("C", "A", all_c, None)
@@ -128,7 +117,8 @@ class LikelihoodModelSuite extends FunSuite {
     // log10(prod(0.5*(1-em) + 0.5*(em/3))*prod( 0.5*(er/3) + 0.5*(1-er)))
     // -3.01156717
     MathTestUtils.assertAlmostEqual(mhlikelihood, -3.01156717)
-
+    val logOddsHet = MutectSomaticLogOdds.logOdds("C", "A", some_muts, None)
+    MathTestUtils.assertAlmostEqual(logOddsHet, m0likelihood - mhlikelihood)
   }
 
 }
