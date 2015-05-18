@@ -121,13 +121,14 @@ class LikelihoodModelSuite extends FunSuite {
     // log10(prod(0*(1-em) + 1*(em/3))*prod( 0*(er/3) + 1*(1-er)))
     // -10.73221105
     MathTestUtils.assertAlmostEqual(m0likelihood, -10.73221105)
+    val logOddsMutant = MutectLogOdds.logOdds("C", "A", some_muts, None)
+    MathTestUtils.assertAlmostEqual(logOddsMutant, mflikelihood - m0likelihood)
 
     // the heterozygous site model in R:
     // log10(prod(0.5*(1-em) + 0.5*(em/3))*prod( 0.5*(er/3) + 0.5*(1-er)))
     // -3.01156717
     MathTestUtils.assertAlmostEqual(mhlikelihood, -3.01156717)
-    val prob_mutant = MutectLogOdds.logOdds("C", "A", some_muts, None)
-    MathTestUtils.assertAlmostEqual(prob_mutant, mflikelihood - m0likelihood)
+
   }
 
 }
