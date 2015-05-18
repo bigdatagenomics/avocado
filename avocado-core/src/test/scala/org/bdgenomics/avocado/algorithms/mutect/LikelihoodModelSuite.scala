@@ -59,15 +59,16 @@ class LikelihoodModelSuite extends FunSuite {
     val mhlikelihood = MHModel.logLikelihood("C", "A", all_c, None)
     // assuming f = 0.5 mhlikelihood
     // in R
-    // log10(prod(0.5*(1-e) + 0.5*(e/3)))
+    // log10(prod(0.5*(e/3) + 0.5*(1-e)))
     // -3.01156717
     MathTestUtils.assertAlmostEqual(mhlikelihood, -3.01156717)
   }
   test("Likelihood of simple model, all errors, no reference or mutant sites") {
     val m0likelihood = M0Model.logLikelihood("T", "G", all_c, None)
     val mflikelihood = MfmModel.logLikelihood("T", "G", all_c, None)
+    val mhlikelihood = MHModel.logLikelihood("T", "G", all_c, None)
 
-    // Assuming f = 0, mflikelihood or m0likelihood
+    // Assuming f = 0 or 0.5, mflikelihood or m0likelihood
     // in R:
     // options(digits=10)
     // p = seq(30,39)
@@ -76,6 +77,7 @@ class LikelihoodModelSuite extends FunSuite {
     // > -39.27121
     MathTestUtils.assertAlmostEqual(m0likelihood, -39.27121255)
     MathTestUtils.assertAlmostEqual(mflikelihood, m0likelihood)
+    MathTestUtils.assertAlmostEqual(mhlikelihood, m0likelihood)
 
   }
 
@@ -90,6 +92,28 @@ class LikelihoodModelSuite extends FunSuite {
     // > -39.27121
     MathTestUtils.assertAlmostEqual(m0likelihood, -39.27121255)
 
+    val mhlikelihood = MHModel.logLikelihood("C", "A", all_c, None)
+    // assuming f = 0.5 mhlikelihood
+    // in R
+    // log10(prod(0.5*(1-e) + 0.5*(e/3)))
+    // -3.01156717
+    MathTestUtils.assertAlmostEqual(mhlikelihood, -3.01156717)
+
+  }
+
+  test("Likelihood of small mutant, first 3 reads (30,31,32) MfModel") {
+    val mflikelihood = MfmModel.logLikelihood("C", "A", some_muts, None)
+    val m03likelihood = MfmModel.logLikelihood("C", "A", some_muts, Some(0.3))
+    // f should be 0.3
+    // in R
+    // pm = seq(30,32)
+    // pr = seq(33,39)
+    // em = 10^(-pm/10)
+    // er = 10^(-pr/10)
+    // log10(prod(0.3*(1-em) + 0.7*(em/3))*prod( 0.3*(er/3) + 0.7*(1-er)))
+    // -2.653910268
+    MathTestUtils.assertAlmostEqual(mflikelihood, -2.653910268)
+    MathTestUtils.assertAlmostEqual(m03likelihood, mflikelihood) //same if f properly calculated here
   }
 
 }
