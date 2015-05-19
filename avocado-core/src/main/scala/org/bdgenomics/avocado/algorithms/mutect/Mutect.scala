@@ -26,13 +26,16 @@ import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
  *
  * @param threshold Default value of 6.3 corresponds to a 3x10-6 mutation rate,
  *                  see the Online Methods of the Mutect paper for more details.
+ * @param somDbSnpThreshold if the site is a known dbSnp site, apply this cutoff for somatic classification
+ * @param somNovelThreshold if the site is a novel variant, apply this cutoff for somatic classification
  *
  */
-class Mutect(val threshold: Double = 6.3, val f: Option[Double] = None) {
+class Mutect(val threshold: Double = 6.3, val somDbSnpThreshold: Double = 5.5,
+             val somNovelThreshold: Double = 2.2, val f: Option[Double] = None) {
 
   val model = MutectLogOdds
   // TODO: do we want to do somatic classification here?
-  // val somaticClassifier = MutectSomaticLogOdds
+  val somaticModel = MutectSomaticLogOdds
   val alleles: Set[String] = Set("A", "T", "G", "C")
 
   // TODO make sure we only consider the tumor AlleleObservations for this calculation
@@ -65,7 +68,7 @@ class Mutect(val threshold: Double = 6.3, val f: Option[Double] = None) {
 
     //TODO do we want to split up normal/tumor here, or earlier in code?
     val tumors = obs.filter(a => a.sample == "tumor")
-    //val normals = obs.filter(a => a.sample == "normal")
+    val normals = obs.filter(a => a.sample == "normal")
 
     val rankedAlts: Seq[(Double, String)] =
       (alleles - ref).map { alt =>
@@ -78,10 +81,17 @@ class Mutect(val threshold: Double = 6.3, val f: Option[Double] = None) {
 
     // TODO do we want to output any kind of info for sites where multiple passing variants are found
     if (passingOddsAlts.size == 1) {
+      val alt = passingOddsAlts(0)._2
       // TODO classify somatic status here? or as a downstream step?
 
-      val alt = passingOddsAlts(0)._2
-      Option(constructVariant(pos, ref, alt, obs))
+      val normalNotHet = somaticModel.logOdds(ref, alt, normals, None)
+      val dbSNPsite = false //TODO figure out if this is a dbSNP position
+
+      if ((dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)) {
+        Option(constructVariant(pos, ref, alt, obs))
+      } else {
+        None
+      }
     } else {
       // either there are 0 passing variants, or there are > 1 passing variants
       None
