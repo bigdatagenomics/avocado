@@ -16,7 +16,7 @@ class LikelihoodModelSuite extends FunSuite {
       allele = "C",
       phred = 30 + (read_id - 1), // 30 to 39
       mapq = Some(30),
-      onNegativeStrand = true,
+      onNegativeStrand = read_id % 2 == 0,
       sample = "shouldntmatter",
       readId = 1L)
   }
@@ -27,7 +27,7 @@ class LikelihoodModelSuite extends FunSuite {
       allele = if (read_id <= 3) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
       phred = 30 + (read_id - 1), // 30 to 39
       mapq = Some(30),
-      onNegativeStrand = true,
+      onNegativeStrand = read_id % 2 == 0,
       sample = "shouldntmatter",
       readId = 1L)
   }
