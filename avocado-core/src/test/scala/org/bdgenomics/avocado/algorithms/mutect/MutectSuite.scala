@@ -64,6 +64,8 @@ class MutectSuite extends FunSuite {
     assert(resultClean.isEmpty, "Result should be empty")
     val resultHet = mt.detect(pos, "C", noMutHet)
     assert(resultHet.isEmpty, "Although normal is het, tumor has no mutants and there should be no result")
+    val resultEmptyTumor = mt.detect(pos, "C", normal_het)
+    assert(resultEmptyTumor.isEmpty, "A position with no tumor reads should not be classified somatic.")
   }
 
   test("Sites with mutations should return a variant") {
