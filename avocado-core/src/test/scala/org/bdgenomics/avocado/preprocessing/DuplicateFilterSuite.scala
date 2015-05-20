@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to Big Data Genomics (BDG) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,27 +17,31 @@
  */
 package org.bdgenomics.avocado.preprocessing
 
-import org.apache.commons.configuration.SubnodeConfiguration
-import org.apache.spark.rdd.RDD
 import org.bdgenomics.formats.avro.AlignmentRecord
+import org.scalatest.FunSuite
 
-trait ReadFilter[T] extends PreprocessingStage {
+class DuplicateFilterSuite extends FunSuite {
 
-  final def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
-    val threshold = getThreshold(config)
+  test("should filter out a read that is marked as a duplicate") {
+    val read = AlignmentRecord.newBuilder()
+      .setDuplicateRead(true)
+      .build()
 
-    rdd.filter(filterRead(_, threshold))
+    assert(!DuplicateFilter.filterRead(read, true))
   }
 
-  def getThreshold(config: SubnodeConfiguration): T
+  test("should keep a unique read") {
+    val read = AlignmentRecord.newBuilder()
+      .setDuplicateRead(false)
+      .build()
 
-  private[preprocessing] def filterRead(r: AlignmentRecord, threshold: T): Boolean
-}
+    assert(DuplicateFilter.filterRead(read, true))
+  }
 
-trait PreprocessingStage {
+  test("should keep an unmarked read") {
+    val read = AlignmentRecord.newBuilder()
+      .build()
 
-  val stageName: String
-
-  def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord]
-
+    assert(DuplicateFilter.filterRead(read, true))
+  }
 }
