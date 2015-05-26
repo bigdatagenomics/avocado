@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
-package org.bdgenomics.avocado.algorithms.mutect
+package org.bdgenomics.avocado.genotyping
 
 import org.bdgenomics.adam.models.ReferencePosition
+import org.bdgenomics.avocado.algorithms.mutect.{ MutectLogOdds, MutectSomaticLogOdds }
 import org.bdgenomics.avocado.models.AlleleObservation
 import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
 

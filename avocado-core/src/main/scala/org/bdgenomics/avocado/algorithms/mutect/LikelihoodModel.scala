@@ -19,6 +19,7 @@
 package org.bdgenomics.avocado.algorithms.mutect
 
 import org.bdgenomics.avocado.models.AlleleObservation
+import org.bdgenomics.adam.util.PhredUtils.phredToSuccessProbability
 import scala.math._
 
 trait LikelihoodModel {
@@ -47,10 +48,10 @@ object MutectSomaticLogOdds extends LogOdds(M0Model, MHModel) {
 
 object M0Model extends LikelihoodModel {
 
-  override def logLikelihood(ref: String,
-                             alt: String,
-                             obs: Iterable[AlleleObservation],
-                             f: Option[Double]): Double =
+  def logLikelihood(ref: String,
+                    alt: String,
+                    obs: Iterable[AlleleObservation],
+                    f: Option[Double]): Double =
     MfmModel.logLikelihood(ref, alt, obs, Some(0.0))
 }
 
@@ -59,10 +60,10 @@ object M0Model extends LikelihoodModel {
  */
 object MHModel extends LikelihoodModel {
 
-  override def logLikelihood(ref: String,
-                             alt: String,
-                             obs: Iterable[AlleleObservation],
-                             f: Option[Double]): Double =
+  def logLikelihood(ref: String,
+                    alt: String,
+                    obs: Iterable[AlleleObservation],
+                    f: Option[Double]): Double =
     MfmModel.logLikelihood(ref, alt, obs, Some(0.5))
 }
 
@@ -71,10 +72,11 @@ object MHModel extends LikelihoodModel {
  */
 object MfmModel extends LikelihoodModel {
 
-  def e(q: Int): Double = pow(10.0, -0.1 * q.toDouble)
-
   def P_bi(obs: AlleleObservation, r: String, m: String, f: Double): Double = {
+    def e(q: Int): Double = pow(10.0, -0.1 * q.toDouble)
+    //val ei = phredToSuccessProbability(obs.phred)
     val ei = e(obs.phred)
+
     if (obs.allele == r) {
       f * (ei / 3.0) + (1.0 - f) * (1.0 - ei)
     } else if (obs.allele == m) {
@@ -84,39 +86,11 @@ object MfmModel extends LikelihoodModel {
     }
   }
 
-  override def logLikelihood(ref: String, alt: String,
-                             obs: Iterable[AlleleObservation],
-                             f: Option[Double]): Double = {
+  def logLikelihood(ref: String, alt: String,
+                    obs: Iterable[AlleleObservation],
+                    f: Option[Double]): Double = {
     val fEstimate: Double = f.getOrElse(obs.count(_.allele == alt).toDouble / obs.size)
     obs.map { ob => log10(P_bi(ob, ref, alt, fEstimate)) }.sum
   }
 }
 
-/**
- * This is just a stupid stand-in -- estimate an allelic fraction and then compute
- * a binomial likelihood
- */
-object BinomialModel extends LikelihoodModel {
-  private val log2Pi = log10(2.0 * Pi)
-
-  private def log10BinomialCoefficient(n: Int, m: Int): Double = {
-    val logN = log10(n)
-    val logM = log10(m)
-    val logNminusM = log10(n - m)
-    (n + 0.5) * logN - (m + 0.5) * logM - (n - m + 0.5) * logNminusM - 0.5 * log2Pi
-  }
-
-  private def log10BinomialLikelihood(p: Double, n: Int, k: Int): Double = {
-    log10BinomialCoefficient(n, k) + k * log10(p) + (n - k) * log10(1.0 - p)
-  }
-
-  override def logLikelihood(ref: String, alt: String,
-                             obs: Iterable[AlleleObservation],
-                             f: Option[Double]): Double = {
-    val (refObs, altObs) = obs.partition(_.allele == ref)
-    val refCount = refObs.size
-    val altCount = altObs.size
-    val p: Double = f.getOrElse(altCount.toDouble / (refCount + altCount))
-    log10BinomialLikelihood(p, refCount + altCount, altCount)
-  }
-}
