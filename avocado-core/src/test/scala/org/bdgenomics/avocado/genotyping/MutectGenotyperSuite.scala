@@ -1,15 +1,18 @@
-package org.bdgenomics.avocado.algorithms.mutect
+package org.bdgenomics.avocado.genotyping
 
 import org.bdgenomics.adam.models.ReferencePosition
-import org.bdgenomics.avocado.models.AlleleObservation
+import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.scalatest.FunSuite
 
 /**
  * Created by john on 5/17/15.
  */
-class MutectSuite extends FunSuite {
+class MutectGenotyperSuite extends FunSuite {
   val pos = ReferencePosition("ctg", 101l)
-  val mt = new Mutect()
+  val mt = new MutectGenotyper("normal", "tumor")
+
+  val ref = new Observation(ReferencePosition("ctg", 101L), "C")
+
   //Demo data
   val all_c = for (read_id <- 1 to 10) yield {
     AlleleObservation(pos = ReferencePosition("ctg", 0L),
@@ -60,18 +63,18 @@ class MutectSuite extends FunSuite {
   val mutHet = some_muts ++ normal_het
 
   test("Sites with no mutations should not have any variants returned") {
-    val resultClean = mt.detect(pos, "C", noMutClean)
+    val resultClean = mt.genotypeSite(pos, ref, noMutClean)
     assert(resultClean.isEmpty, "Result should be empty")
-    val resultHet = mt.detect(pos, "C", noMutHet)
+    val resultHet = mt.genotypeSite(pos, ref, noMutHet)
     assert(resultHet.isEmpty, "Although normal is het, tumor has no mutants and there should be no result")
-    val resultEmptyTumor = mt.detect(pos, "C", normal_het)
+    val resultEmptyTumor = mt.genotypeSite(pos, ref, normal_het)
     assert(resultEmptyTumor.isEmpty, "A position with no tumor reads should not be classified somatic.")
   }
 
   test("Sites with mutations should return a variant") {
-    val result = mt.detect(pos, "C", mutClean)
+    val result = mt.genotypeSite(pos, ref, mutClean)
     assert(result.isDefined, "Result should not be empty")
-    val (variant, genotype) = result.get
+    val variant = result.get.variant.variant
     assert(variant.getAlternateAllele === "A", "Alternate allele should be a")
     assert(variant.getReferenceAllele === "C", "Reference allele should be c")
     assert(variant.getContig.getContigName === "ctg", "Contig should be 'ctg'")
@@ -80,10 +83,9 @@ class MutectSuite extends FunSuite {
   }
 
   test("Sites with tumor mutations that are heterozygous in normal should not return a variant") {
-    val result = mt.detect(pos, "C", mutHet)
+    val result = mt.genotypeSite(pos, ref, mutHet)
     assert(result.isEmpty, "Site should not be classified somatic, strong het in normal")
-    val resultMissingNormal = mt.detect(pos, "C", some_muts)
+    val resultMissingNormal = mt.genotypeSite(pos, ref, some_muts)
     assert(resultMissingNormal.isEmpty, "When there is no normal coverage, the site should not be classified somatic")
   }
-
 }
