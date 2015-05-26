@@ -19,7 +19,7 @@
 package org.bdgenomics.avocado.algorithms.mutect
 
 import org.bdgenomics.avocado.models.AlleleObservation
-import org.bdgenomics.adam.util.PhredUtils.phredToSuccessProbability
+import org.bdgenomics.adam.util.PhredUtils.phredToErrorProbability
 import scala.math._
 
 trait LikelihoodModel {
@@ -73,9 +73,7 @@ object MHModel extends LikelihoodModel {
 object MfmModel extends LikelihoodModel {
 
   def P_bi(obs: AlleleObservation, r: String, m: String, f: Double): Double = {
-    def e(q: Int): Double = pow(10.0, -0.1 * q.toDouble)
-    //val ei = phredToSuccessProbability(obs.phred)
-    val ei = e(obs.phred)
+    val ei = phredToErrorProbability(obs.phred)
 
     if (obs.allele == r) {
       f * (ei / 3.0) + (1.0 - f) * (1.0 - ei)
