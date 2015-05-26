@@ -29,6 +29,8 @@ class VariantCallingAnnotatorSuite extends FunSuite {
       30,
       Some(mapQ),
       strand,
+      true,
+      1,
       "mySample",
       1L)
   }

@@ -405,6 +405,8 @@ class BiallelicGenotyper(sd: SequenceDictionary,
             phred,
             sortedRo.head.mapq,
             sortedRo.head.onNegativeStrand,
+            sortedRo.head.firstOfPair,
+            sortedRo.head.offsetInRead,
             sortedRo.head.sample,
             sortedRo.head.readId)
         })
