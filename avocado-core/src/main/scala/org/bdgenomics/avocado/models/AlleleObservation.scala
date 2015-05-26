@@ -25,6 +25,8 @@ case class AlleleObservation(override val pos: ReferencePosition,
                              phred: Int,
                              mapq: Option[Int],
                              onNegativeStrand: Boolean,
+                             firstOfPair: Boolean,
+                             offsetInRead: Int,
                              sample: String,
                              readId: Long) extends Observation(pos, allele) {
 
