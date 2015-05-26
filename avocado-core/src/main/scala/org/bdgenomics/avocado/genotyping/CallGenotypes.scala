@@ -27,7 +27,8 @@ import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 object CallGenotypes {
 
   val genotypers: Seq[GenotyperCompanion] = Seq(BiallelicGenotyper,
-    ExternalGenotyper)
+    ExternalGenotyper,
+    MutectGenotyper)
 
   def apply(genotyperAlgorithm: String,
             genotyperName: String,
