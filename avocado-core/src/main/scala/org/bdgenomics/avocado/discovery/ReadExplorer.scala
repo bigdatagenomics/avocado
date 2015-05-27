@@ -60,6 +60,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     }
     val sequence: String = read.getSequence
 
+    val firstOfPair = read.getFirstOfPair
     // get cigar, md tag, and phred scores for bases
     val cigar: List[CigarElement] = richRead.samtoolsCigar.getCigarElements
     val quals = richRead.qualityScores
@@ -78,6 +79,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         quals(readPos),
         mapq,
         negativeStrand,
+        firstOfPair,
+        readPos,
         sample,
         readId) +: observations
       readPos += 1
@@ -96,6 +99,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           quals.drop(readPos).take(alleleLength).reduce(_ + _) / alleleLength,
           mapq,
           negativeStrand,
+          firstOfPair,
+          readPos,
           sample,
           readId).asInstanceOf[Observation] +: observations
 
@@ -113,6 +118,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           quals.drop(readPos).head,
           mapq,
           negativeStrand,
+          firstOfPair,
+          readPos,
           sample,
           readId).asInstanceOf[Observation] +: observations
 

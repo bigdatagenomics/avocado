@@ -32,6 +32,8 @@ class LikelihoodModelSuite extends FunSuite {
       phred = 30 + (read_id - 1), // 30 to 39
       mapq = Some(30),
       onNegativeStrand = read_id % 2 == 0,
+      firstOfPair = true,
+      offsetInRead = 1,
       sample = "shouldntmatter",
       readId = 1L)
   }
@@ -43,6 +45,8 @@ class LikelihoodModelSuite extends FunSuite {
       phred = 30 + (read_id - 1), // 30 to 39
       mapq = Some(30),
       onNegativeStrand = read_id % 2 == 0,
+      firstOfPair = true,
+      offsetInRead = 1,
       sample = "shouldntmatter",
       readId = 1L)
   }
