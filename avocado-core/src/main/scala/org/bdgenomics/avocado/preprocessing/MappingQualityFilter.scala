@@ -17,36 +17,17 @@
  */
 package org.bdgenomics.avocado.preprocessing
 
-import org.bdgenomics.formats.avro.AlignmentRecord
-import org.apache.commons.configuration.HierarchicalConfiguration
+import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
+import org.bdgenomics.formats.avro.AlignmentRecord
 
-object Preprocessor {
+object MappingQualityFilter extends PreprocessingStage {
+  override val stageName: String = "mapping_quality_filter"
 
-  private val stages = List(MarkDuplicates,
-    RecalibrateBaseQualities,
-    SortReads,
-    CoalesceReads,
-    RealignIndels,
-    BaseQualityFilter,
-    ClippingFilter,
-    DuplicateFilter,
-    MappingQualityFilter,
-    MateRescueFilter)
+  override def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
+    // what is the threshold to apply?
+    val mqThreshold = config.getInt("mapQualityThreshold", 0)
 
-  def apply(rdd: RDD[AlignmentRecord],
-            stageName: String,
-            stageAlgorithm: String,
-            config: HierarchicalConfiguration): RDD[AlignmentRecord] = {
-
-    // get configuration for this stage
-    val stageConfig = config.configurationAt(stageName)
-
-    // find and run stage
-    val stage = stages.find(_.stageName == stageAlgorithm)
-
-    assert(stage.isDefined, "Could not find stage with name: " + stageName)
-    stage.get.apply(rdd, stageConfig)
+    rdd.filter(rec => rec.getMapq >= mqThreshold)
   }
-
 }
