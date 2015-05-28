@@ -28,9 +28,9 @@ import org.bdgenomics.adam.models.{
   SequenceDictionary
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.ShuffleRegionJoin
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.algorithms.debrujin.KmerGraph
+import org.bdgenomics.avocado.algorithms.join.ShuffleMultiJoin
 import org.bdgenomics.avocado.algorithms.reference.ResizeAndFlankReferenceFragments
 import org.bdgenomics.avocado.models.{ Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -120,8 +120,8 @@ class ReassemblyExplorer(kmerLength: Int,
 
   val companion: ExplorerCompanion = ReassemblyExplorer
 
-  def discoverRegion(rr: (Iterable[AlignmentRecord], NucleotideContigFragment)): Iterable[Observation] = RegionDiscovery.time {
-    val (reads, reference) = rr
+  def discoverRegion(rr: (NucleotideContigFragment, Iterable[AlignmentRecord])): Iterable[Observation] = RegionDiscovery.time {
+    val (reference, reads) = rr
 
     // extract the coordinates and sequence from the reference
     val coordinates = ReferenceRegion(reference).get
@@ -215,41 +215,13 @@ class ReassemblyExplorer(kmerLength: Int,
         sd,
         targetRegionSize,
         targetFlankSize)
+      val refIds = flankedFragments.map(f => (ReferenceRegion(f).get, f))
 
-      // zip reference contig fragments with uuids, cache
-      val refIds = flankedFragments.zipWithUniqueId()
-        .map(vk => (ReferenceRegion(vk._1).get, (vk._2, vk._1)))
-        .cache()
+      // filter mapped reads, join with reference contigs
+      val joinRdd = ShuffleMultiJoin.partitionAndMultiJoin(refIds,
+        reads.filter(_.getReadMapped).keyBy(ReferenceRegion(_)))
 
-      // filter mapped reads, join with reference contigs, then extract contig ids
-      val joinWithId = ShuffleRegionJoin.partitionAndJoin(refIds,
-        reads.filter(_.getReadMapped).keyBy(ReferenceRegion(_)),
-        sd,
-        totalAssembledReferenceLength / reads.partitions.size)
-        .flatMap(kv => {
-          val ((fragmentId, fragment), read) = kv
-
-          val fStart = fragment.getFragmentStartPosition
-          val fEnd = fStart + fragment.getFragmentSequence.length
-
-          if (fStart <= read.getStart && fEnd >= read.getEnd) {
-            Some((kv._1._1, kv._2))
-          } else {
-            None
-          }
-        })
-
-      // merge together reads that are from the same contig fragment, then
-      // join against reference contigs, and throw away id
-      // ideally, we should optimize the partitioning; this is a to-do for later
-      val jrdd = joinWithId.groupByKey()
-        .join(refIds.map(kv => kv._2))
-        .map(kv => kv._2)
-
-      // we are done with the original reference contig rdd, so we can unpersist
-      refIds.unpersist()
-
-      jrdd
+      joinRdd
     }
 
     // we seem to lose the instrumentation on the joined RDD
