@@ -147,6 +147,8 @@ trait SiteGenotyper extends Genotyper {
             sortedRo.head.offsetInRead,
             sortedRo.head.distanceToNearestReadInsertion,
             sortedRo.head.distanceToNearestReadDeletion,
+            sortedRo.head.distanceFromBeginningClippedRegion,
+            sortedRo.head.distanceFromEndClippedRegion,
             sortedRo.head.clippedBasesReadStart,
             sortedRo.head.clippedBasesReadEnd,
             sortedRo.head.unclippedReadLen,
