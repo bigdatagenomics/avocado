@@ -72,7 +72,30 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     // position in the current read
     var readPos = 0
 
-    def processAlignmentMatch() {
+    val hasIndels = cigar.exists(ce => ce.getOperator match {
+      case CigarOperator.I | CigarOperator.D => true
+      case _                                 => false
+    })
+
+    def unclippedLenFromCigar(cigar: Cigar): Int = {
+      cigar.getCigarElements.map(ce => ce.getOperator match {
+        case CigarOperator.D | CigarOperator.N | CigarOperator.P => 0
+        case _ => ce.getLength
+      }).sum
+    }
+
+    def basesTrimmed(cigarElement: CigarElement): Int = {
+      cigarElement.getOperator match {
+        case CigarOperator.S | CigarOperator.H => cigarElement.getLength
+        case _                                 => 0
+      }
+    }
+
+    val readLen = unclippedLenFromCigar(richRead.samtoolsCigar)
+    val trimmedFromStart = basesTrimmed(cigar.head)
+    val trimmedFromEnd = basesTrimmed(cigar.last)
+
+    def processAlignmentMatch(idx: Int) {
       observations = AlleleObservation(ReferencePosition(contig, pos),
         1,
         sequence(readPos).toString,
@@ -81,6 +104,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         negativeStrand,
         firstOfPair,
         readPos,
+        None, None,
+        trimmedFromStart,
+        trimmedFromEnd,
+        readLen,
         sample,
         readId) +: observations
       readPos += 1
@@ -101,6 +128,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           negativeStrand,
           firstOfPair,
           readPos,
+          None, None,
+          trimmedFromStart,
+          trimmedFromEnd,
+          readLen,
           sample,
           readId).asInstanceOf[Observation] +: observations
 
@@ -120,6 +151,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           negativeStrand,
           firstOfPair,
           readPos,
+          None, None,
+          trimmedFromStart,
+          trimmedFromEnd,
+          readLen,
           sample,
           readId).asInstanceOf[Observation] +: observations
 
@@ -127,7 +162,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         readPos += 1
         pos += alleleLength
       } else {
-        processAlignmentMatch()
+        processAlignmentMatch(idx)
       }
     }
 
@@ -139,7 +174,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           // we must look ahead for an insert at the last base
           (0 until (cigar(i).getLength - 1)).foreach(j => {
             // process match
-            processAlignmentMatch()
+            processAlignmentMatch(i)
           })
 
           // look ahead for indel and process

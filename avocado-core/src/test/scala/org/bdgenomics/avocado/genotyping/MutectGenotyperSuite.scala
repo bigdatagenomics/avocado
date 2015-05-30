@@ -38,6 +38,8 @@ class MutectGenotyperSuite extends FunSuite {
       onNegativeStrand = read_id % 2 == 0,
       firstOfPair = true,
       offsetInRead = 1,
+      None, None,
+      0, 0, 1,
       sample = "tumor",
       readId = 1L)
   }
@@ -51,6 +53,8 @@ class MutectGenotyperSuite extends FunSuite {
       onNegativeStrand = read_id % 2 == 0,
       firstOfPair = true,
       offsetInRead = 1,
+      None, None,
+      0, 0, 1,
       sample = "tumor",
       readId = 1L)
   }
@@ -64,6 +68,8 @@ class MutectGenotyperSuite extends FunSuite {
       onNegativeStrand = read_id % 2 == 0,
       firstOfPair = true,
       offsetInRead = 1,
+      None, None,
+      0, 0, 1,
       sample = "normal",
       readId = 1L)
   }
@@ -76,6 +82,8 @@ class MutectGenotyperSuite extends FunSuite {
       onNegativeStrand = read_id % 2 == 0,
       firstOfPair = true,
       offsetInRead = 1,
+      None, None,
+      0, 0, 1,
       sample = "normal",
       readId = 1L)
   }
