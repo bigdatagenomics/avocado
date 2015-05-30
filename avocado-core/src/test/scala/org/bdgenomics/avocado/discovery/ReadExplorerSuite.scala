@@ -218,7 +218,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
         .setContigName("chr1")
         .build())
       .setMapq(40)
-      .setSequence("ACTGA")
+      .setSequence("GGGACTGAGGG")
       .setQual(":::::")
       .setCigar("3S5M3S")
       .setRecordGroupSample("sample1")
