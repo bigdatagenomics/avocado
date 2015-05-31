@@ -72,11 +72,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     // position in the current read
     var readPos = 0
 
-    val hasIndels = cigar.exists(ce => ce.getOperator match {
-      case CigarOperator.I | CigarOperator.D => true
-      case _                                 => false
-    })
-
+    // Helper function to get the unclipped read length (hard or soft) from CIGAR
     def unclippedLenFromCigar(cigar: Cigar): Int = {
       cigar.getCigarElements.map(ce => ce.getOperator match {
         case CigarOperator.D | CigarOperator.N | CigarOperator.P => 0
@@ -84,6 +80,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
       }).sum
     }
 
+    // Helper function to calculate the length of an element, if it is a clipping element
     def basesTrimmed(cigarElement: CigarElement): Int = {
       cigarElement.getOperator match {
         case CigarOperator.S | CigarOperator.H => cigarElement.getLength
@@ -91,11 +88,41 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
       }
     }
 
+    // Set up variables to help with tracking the distance from indels, and
+    // the distance from the current allele to the first and last trimmed base
+    // within this read.
     val readLen = unclippedLenFromCigar(richRead.samtoolsCigar)
     val trimmedFromStart = basesTrimmed(cigar.head)
     val trimmedFromEnd = basesTrimmed(cigar.last)
 
-    def processAlignmentMatch(idx: Int) {
+    var distanceFromBeginningClippedRegion: Option[Int] = if (trimmedFromStart > 0) Some(1) else None
+    var distanceFromEndClippedRegion: Option[Int] = if (trimmedFromEnd > 0) Some(readLen - trimmedFromStart - trimmedFromEnd) else None
+
+    var distanceToNearestReadInsertion: Option[Int] = None
+    var distanceToNearestReadDeletion: Option[Int] = None
+
+    val cigarLenOps = cigar.zipWithIndex.map({
+      case (ce: CigarElement, idx: Int) =>
+        (idx, (ce.getLength, ce.getOperator))
+    }).toMap
+
+    var insertions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.I })
+    var deletions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.D })
+
+    def makeNaieveDistanceVec(idx: Int, len: Int, del: Boolean): Vector[Int] = {
+      val lpre = (0 until idx).map(cigarLenOps(_)._1).sum
+      val lpost = ((idx + 1) until cigar.length).map(cigarLenOps(_)._1).sum
+      ((1 to lpre).reverse ++ (if (del) Vector.empty[Int] else Vector.fill(len)(0)) ++ (1 to lpost).map(-_)).toVector
+    }
+
+    val insertionDistVecs = insertions.map({ case (idx, (len, _)) => makeNaieveDistanceVec(idx, len, false) })
+    val deletionDistVecs = deletions.map({ case (idx, (len, _)) => makeNaieveDistanceVec(idx, len, true) })
+
+    val posToInsDist: Option[Vector[Int]] = if (insertionDistVecs.size > 0) Some(insertionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
+    val posToDelDist: Option[Vector[Int]] = if (deletionDistVecs.size > 0) Some(deletionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
+
+
+    def processAlignmentMatch() {
       observations = AlleleObservation(ReferencePosition(contig, pos),
         1,
         sequence(readPos).toString,
@@ -104,7 +131,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         negativeStrand,
         firstOfPair,
         readPos,
-        None, None, None, None,
+        posToInsDist.map(_(readPos)),
+        posToDelDist.map(_(readPos)),
+        distanceFromBeginningClippedRegion,
+        distanceFromEndClippedRegion,
         trimmedFromStart,
         trimmedFromEnd,
         readLen,
@@ -112,6 +142,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         readId) +: observations
       readPos += 1
       pos += 1
+      distanceFromBeginningClippedRegion = distanceFromBeginningClippedRegion.map(_ + 1)
+      distanceFromEndClippedRegion = distanceFromEndClippedRegion.map(_ - 1)
     }
 
     def processAlignmentMatchWithLookahead(idx: Int) {
@@ -128,7 +160,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           negativeStrand,
           firstOfPair,
           readPos,
-          None, None, None, None,
+          posToInsDist.map(_(readPos)),
+          posToDelDist.map(_(readPos)),
+          distanceFromBeginningClippedRegion,
+          distanceFromEndClippedRegion,
           trimmedFromStart,
           trimmedFromEnd,
           readLen,
@@ -138,6 +173,9 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         // increment read pointers
         readPos += alleleLength
         pos += 1
+        distanceFromBeginningClippedRegion = distanceFromBeginningClippedRegion.map(_ + alleleLength)
+        distanceFromEndClippedRegion = distanceFromEndClippedRegion.map(_ - alleleLength)
+
       } else if (idx + 1 < cigar.length && cigar(idx + 1).getOperator == CigarOperator.D) {
         // the allele includes the matching base
         val alleleLength = 1 + cigar(idx + 1).getLength
@@ -151,7 +189,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           negativeStrand,
           firstOfPair,
           readPos,
-          None, None, None, None,
+          posToInsDist.map(_(readPos)),
+          posToDelDist.map(_(readPos)),
+          distanceFromBeginningClippedRegion,
+          distanceFromEndClippedRegion,
           trimmedFromStart,
           trimmedFromEnd,
           readLen,
@@ -161,8 +202,10 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         // increment read pointers
         readPos += 1
         pos += alleleLength
+        distanceFromBeginningClippedRegion = distanceFromBeginningClippedRegion.map(_ + 1)
+        distanceFromEndClippedRegion = distanceFromEndClippedRegion.map(_ - 1)
       } else {
-        processAlignmentMatch(idx)
+        processAlignmentMatch()
       }
     }
 
@@ -174,7 +217,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           // we must look ahead for an insert at the last base
           (0 until (cigar(i).getLength - 1)).foreach(j => {
             // process match
-            processAlignmentMatch(i)
+            processAlignmentMatch()
           })
 
           // look ahead for indel and process
@@ -188,6 +231,11 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         }
         case CigarOperator.S => {
           readPos += cigar(i).getLength
+          if (i > 0 && i < cigar.length - 1) {
+            // soft clipping in the middle of the read? just in case..
+            distanceFromBeginningClippedRegion = distanceFromBeginningClippedRegion.map(_ + 1)
+            distanceFromEndClippedRegion = distanceFromEndClippedRegion.map(_ - 1)
+          }
         }
         case CigarOperator.H =>
         case _ => {
@@ -196,6 +244,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           }
           if (cigar(i).getOperator.consumesReadBases) {
             readPos += cigar(i).getLength
+            distanceFromBeginningClippedRegion = distanceFromBeginningClippedRegion.map(_ + 1)
+            distanceFromEndClippedRegion = distanceFromEndClippedRegion.map(_ - 1)
             log.warn("Unexpected cigar operator " + cigar(i) + " in: " + read)
           }
         }
