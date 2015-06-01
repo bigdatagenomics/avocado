@@ -122,12 +122,25 @@ class MutectGenotyper(normalId: String,
 
         val normalNotHet = somaticModel.logOdds(ref, alt, normals, None)
         val dbSNPsite = false //TODO figure out if this is a dbSNP position
+        val passSomatic: Boolean = (dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)
+        val nInsertions = tumors.map(ao => if (ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue) <= 5) 1 else 0).sum
+        val nDeletions = tumors.map(ao => if (ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue) <= 5) 1 else 0).sum
 
-        if ((dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)) {
+        //TODO check is it <= 3? or is it < 3?
+        val passIndel: Boolean = nInsertions <= 3 && nDeletions <= 3
+
+        val nOver30pClipped = tumors.map(ao =>
+          if ((ao.clippedBasesReadStart + ao.clippedBasesReadEnd) / ao.unclippedReadLen.toDouble >= 0.3) 1 else 0).sum
+
+        val pass30pClipped = nOver30pClipped / tumors.size.toDouble < 0.3
+
+        // Do all filters pass?
+        if (passSomatic && passIndel && pass30pClipped) {
           Option(constructVariant(region, ref, alt, alleleObservation))
         } else {
           None
         }
+
       } else {
         // either there are 0 passing variants, or there are > 1 passing variants
         None

@@ -121,7 +121,6 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     val posToInsDist: Option[Vector[Int]] = if (insertionDistVecs.size > 0) Some(insertionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
     val posToDelDist: Option[Vector[Int]] = if (deletionDistVecs.size > 0) Some(deletionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
 
-
     def processAlignmentMatch() {
       observations = AlleleObservation(ReferencePosition(contig, pos),
         1,
