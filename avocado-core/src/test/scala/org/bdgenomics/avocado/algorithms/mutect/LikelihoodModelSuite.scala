@@ -35,7 +35,7 @@ class LikelihoodModelSuite extends FunSuite {
       firstOfPair = true,
       offsetInRead = 1,
       None, None, None, None,
-      0, 0, 1,
+      0, 0, 1, 0,
       sample = "shouldntmatter",
       readId = 1L)
   }
@@ -50,7 +50,7 @@ class LikelihoodModelSuite extends FunSuite {
       firstOfPair = true,
       offsetInRead = 1,
       None, None, None, None,
-      0, 0, 1,
+      0, 0, 1, 0,
       sample = "shouldntmatter",
       readId = 1L)
   }

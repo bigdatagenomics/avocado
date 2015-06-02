@@ -72,6 +72,12 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     // position in the current read
     var readPos = 0
 
+    // get the sum of mismatching bases
+    // TODO this looks fishy, is it correct?
+    //val mismatchQScoreSum = read.getMismatchingPositions
+    //  .zip(read.qualityScores).filter(_._1 == 'D').map(_._2).sum
+    val mismatchQScoreSum = 0 // TODO implement me
+
     // Helper function to get the unclipped read length (hard or soft) from CIGAR
     def unclippedLenFromCigar(cigar: Cigar): Int = {
       cigar.getCigarElements.map(ce => ce.getOperator match {
@@ -98,16 +104,13 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     var distanceFromBeginningClippedRegion: Option[Int] = if (trimmedFromStart > 0) Some(1) else None
     var distanceFromEndClippedRegion: Option[Int] = if (trimmedFromEnd > 0) Some(readLen - trimmedFromStart - trimmedFromEnd) else None
 
-    var distanceToNearestReadInsertion: Option[Int] = None
-    var distanceToNearestReadDeletion: Option[Int] = None
-
     val cigarLenOps = cigar.zipWithIndex.map({
       case (ce: CigarElement, idx: Int) =>
         (idx, (ce.getLength, ce.getOperator))
     }).toMap
 
-    var insertions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.I })
-    var deletions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.D })
+    val insertions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.I })
+    val deletions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.D })
 
     def makeNaieveDistanceVec(idx: Int, len: Int, del: Boolean): Vector[Int] = {
       val lpre = (0 until idx).map(cigarLenOps(_)._1).sum
@@ -137,6 +140,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         trimmedFromStart,
         trimmedFromEnd,
         readLen,
+        mismatchQScoreSum,
         sample,
         readId) +: observations
       readPos += 1
@@ -166,6 +170,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           trimmedFromStart,
           trimmedFromEnd,
           readLen,
+          mismatchQScoreSum,
           sample,
           readId).asInstanceOf[Observation] +: observations
 
@@ -195,6 +200,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           trimmedFromStart,
           trimmedFromEnd,
           readLen,
+          mismatchQScoreSum,
           sample,
           readId).asInstanceOf[Observation] +: observations
 

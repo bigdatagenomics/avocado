@@ -44,6 +44,7 @@ object MutectGenotyper extends GenotyperCompanion {
       config.getDouble("threshold", 6.3),
       config.getDouble("somDbSnpThreshold", 5.5),
       config.getDouble("somNovelThreshold", 2.2),
+      config.getInt("maxGapEvents", 3),
       None)
   }
 }
@@ -62,6 +63,7 @@ class MutectGenotyper(normalId: String,
                       threshold: Double = 6.3,
                       somDbSnpThreshold: Double = 5.5,
                       somNovelThreshold: Double = 2.2,
+                      maxGapEventsThreshold: Int = 3,
                       f: Option[Double] = None) extends SiteGenotyper with Logging {
 
   val companion: GenotyperCompanion = MutectGenotyper
@@ -69,7 +71,6 @@ class MutectGenotyper(normalId: String,
   val model = MutectLogOdds
   // TODO: do we want to do somatic classification here?
   val somaticModel = MutectSomaticLogOdds
-  val alleles: Set[String] = Set("A", "T", "G", "C")
 
   // TODO make sure we only consider the tumor AlleleObservations for this calculation
   def constructVariant(region: ReferenceRegion,
@@ -101,10 +102,23 @@ class MutectGenotyper(normalId: String,
 
     val ref = referenceObservation.allele
 
+    // get all possible alleles for this mutation call
+    val alleles: Set[String] = Set(alleleObservation.map(_.allele).toSeq: _*)
+
     if (ref.size == 1) {
       //TODO do we want to split up normal/tumor here, or earlier in code?
-      val tumors = alleleObservation.filter(a => a.sample == somaticId)
+      val tumors_raw = alleleObservation.filter(a => a.sample == somaticId)
       val normals = alleleObservation.filter(a => a.sample == normalId)
+
+      // apply 3 stringent filters to the tumor alleles
+      val tumors = tumors_raw.filterNot(ao => {
+        val clippedFilter = (ao.clippedBasesReadStart + ao.clippedBasesReadEnd) / ao.unclippedReadLen.toDouble >= 0.3
+        val noisyFilter = ao.mismatchQScoreSum >= 100
+
+        // TODO add in mate-rescue filter
+        val mateRescueFilter = false
+        clippedFilter || noisyFilter || mateRescueFilter
+      })
 
       val rankedAlts: Seq[(Double, String)] =
         (alleles - ref).map { alt =>
@@ -126,16 +140,40 @@ class MutectGenotyper(normalId: String,
         val nInsertions = tumors.map(ao => if (ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue) <= 5) 1 else 0).sum
         val nDeletions = tumors.map(ao => if (ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue) <= 5) 1 else 0).sum
 
-        //TODO check is it <= 3? or is it < 3?
-        val passIndel: Boolean = nInsertions <= 3 && nDeletions <= 3
+        val passIndel: Boolean = nInsertions < maxGapEventsThreshold && nDeletions < maxGapEventsThreshold
 
-        val nOver30pClipped = tumors.map(ao =>
-          if ((ao.clippedBasesReadStart + ao.clippedBasesReadEnd) / ao.unclippedReadLen.toDouble >= 0.3) 1 else 0).sum
+        val passStringentFilters = tumors.size.toDouble / tumors_raw.size.toDouble > (1.0 - 0.3)
 
-        val pass30pClipped = nOver30pClipped / tumors.size.toDouble < 0.3
+        val passMapq0Filter = tumors_raw.filter(_.mapq.getOrElse(0) == 0).size.toDouble / tumors_raw.size.toDouble <= 0.5 &&
+          normals.filter(_.mapq.getOrElse(0) == 0).size.toDouble / normals.size.toDouble <= 0.5
+
+        val onlyTumorMut = tumors.filter(_.allele == alt)
+
+        val passMaxMapqAlt = if (onlyTumorMut.size > 0) onlyTumorMut.map(_.phred).max >= 20 else false
+
+        val passMaxNormalSupport = normals.filter(_.allele == alt).size.toDouble / normals.size.toDouble <= 0.015 ||
+          normals.filter(_.allele == alt).map(_.phred).sum < 20
+
+        // TODO implement power-based strand-bias detection
+        /* The power to detect a mutant is a function of depth, and the mutant allele fraction (unstranded).
+        Basically you assume that the probability of observing a base error is uniform and 0.001 (phred score of 30).
+        You see how many reads you require to pass the LOD threshold of 2.0, and then you calculate the binomial
+        probability of observing that many or more reads would be observed given the allele fraction and depth.
+        You also correct for the fact that the real result is somewhere between the minimum integer number to pass,
+        and the number below it, so you scale your probability at k by 1 - (2.0 - lod_(k-1) )/(lod_(k) - lod_(k-1)).
+         */
+        // TODO implement read-end mutation position clustering detection
+        /*
+          Median Absolute Deviation, and the raw median of the mutant allele location within reads cannot cluster
+          too close to either the beginning or end of each read. Basically you calculate the median of the allele
+          supporting reads, and the MAD of those. If the MAD is <= 3 and the median is <= 10, dump it. Similarly
+          recalculate these numbers, but using the distance of each allele from the last base of each read, and
+          apply the same filters. If either the forward-strand method, or reverse strand method gives you bad
+          results, it fails.
+         */
 
         // Do all filters pass?
-        if (passSomatic && passIndel && pass30pClipped) {
+        if (passSomatic && passIndel && passStringentFilters && passMapq0Filter && passMaxMapqAlt && passMaxNormalSupport) {
           Option(constructVariant(region, ref, alt, alleleObservation))
         } else {
           None

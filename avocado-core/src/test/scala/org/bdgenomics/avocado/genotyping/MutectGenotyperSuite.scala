@@ -39,7 +39,7 @@ class MutectGenotyperSuite extends FunSuite {
       firstOfPair = true,
       offsetInRead = 1,
       None, None, None, None,
-      0, 0, 1,
+      0, 0, 1, 0,
       sample = "tumor",
       readId = 1L)
   }
@@ -54,7 +54,7 @@ class MutectGenotyperSuite extends FunSuite {
       firstOfPair = true,
       offsetInRead = 1,
       None, None, None, None,
-      0, 0, 1,
+      0, 0, 1, 0,
       sample = "tumor",
       readId = 1L)
   }
@@ -69,7 +69,7 @@ class MutectGenotyperSuite extends FunSuite {
       firstOfPair = true,
       offsetInRead = 1,
       None, None, None, None,
-      0, 0, 1,
+      0, 0, 1, 0,
       sample = "normal",
       readId = 1L)
   }
@@ -83,7 +83,7 @@ class MutectGenotyperSuite extends FunSuite {
       firstOfPair = true,
       offsetInRead = 1,
       None, None, None, None,
-      0, 0, 1,
+      0, 0, 1, 0,
       sample = "normal",
       readId = 1L)
   }
