@@ -56,6 +56,7 @@ object MutectGenotyper extends GenotyperCompanion {
       config.getInt("maxNormalQscoreSumSupportingMutant", 20),
       config.getInt("minMedianDistanceFromReadEnd", 10),
       config.getInt("minMedianAbsoluteDeviationOfAlleleInRead", 3),
+      config.getBoolean("experimentalMutectIndelDetector", false),
       None)
   }
 }
@@ -85,15 +86,14 @@ class MutectGenotyper(normalId: String,
                       maxNormalQscoreSumSupportingMutant: Int = 20,
                       minMedianDistanceFromReadEnd: Int = 10,
                       minMedianAbsoluteDeviationOfAlleleInRead: Int = 3,
+                      experimentalMutectIndelDetector: Boolean = false,
                       f: Option[Double] = None) extends SiteGenotyper with Logging {
 
   val companion: GenotyperCompanion = MutectGenotyper
 
   val model = MutectLogOdds
-  // TODO: do we want to do somatic classification here?
   val somaticModel = MutectSomaticLogOdds
 
-  // TODO make sure we only consider the tumor AlleleObservations for this calculation
   def constructVariant(region: ReferenceRegion,
                        ref: String,
                        alt: String,
@@ -116,7 +116,6 @@ class MutectGenotyper(normalId: String,
     VariantContext(variant, genotypes, None)
   }
 
-  // TODO make sure we only consider the tumor AlleleObservations for this calculation
   protected[genotyping] def genotypeSite(region: ReferenceRegion,
                                          referenceObservation: Observation,
                                          alleleObservation: Iterable[AlleleObservation]): Option[VariantContext] = {
@@ -124,10 +123,14 @@ class MutectGenotyper(normalId: String,
     val ref = referenceObservation.allele
 
     // get all possible alleles for this mutation call
-    val alleles: Set[String] = Set(alleleObservation.map(_.allele).toSeq: _*)
+    val alleles: Set[String] = if (experimentalMutectIndelDetector)
+      Set(alleleObservation.map(_.allele).toSeq: _*)
+    else
+      Set(alleleObservation.map(_.allele).toSeq: _*).filter(_.length == 1) // only accept length 1 alleles
+    val pointMutation: Boolean = ref.size == 1 && alleles.exists(_.length == 1)
 
-    if (ref.size == 1) {
-      //TODO do we want to split up normal/tumor here, or earlier in code?
+    if (experimentalMutectIndelDetector || pointMutation) {
+
       val tumors_raw = alleleObservation.filter(a => a.sample == somaticId)
       val normals = alleleObservation.filter(a => a.sample == normalId)
 
@@ -136,9 +139,7 @@ class MutectGenotyper(normalId: String,
         val clippedFilter = (ao.clippedBasesReadStart + ao.clippedBasesReadEnd) /
           ao.unclippedReadLen.toDouble >= maxFractionBasesSoftClippedTumor
         val noisyFilter = ao.mismatchQScoreSum >= maxPhredSumMismatchingBases
-
-        // TODO add in mate-rescue filter
-        val mateRescueFilter = false
+        val mateRescueFilter = ao.mateRescue
         clippedFilter || noisyFilter || mateRescueFilter
       })
 
@@ -147,22 +148,20 @@ class MutectGenotyper(normalId: String,
           (model.logOdds(ref, alt, alleleObservation, f), alt)
         }.toSeq.sorted.reverse
 
-      //TODO here we should check/flag if there are multiple variants that pass the threshold, this is a
-      // downstream filtering criteria we have easy access to right here.
       val passingOddsAlts = rankedAlts.filter(oa => oa._1 >= threshold)
 
-      // TODO do we want to output any kind of info for sites where multiple passing variants are found
       if (passingOddsAlts.size == 1) {
         val alt = passingOddsAlts(0)._2
-        // TODO classify somatic status here? or as a downstream step?
 
         val normalNotHet = somaticModel.logOdds(ref, alt, normals, None)
+
         val dbSNPsite = false //TODO figure out if this is a dbSNP position
+
         val passSomatic: Boolean = (dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)
         val nInsertions = tumors.map(ao => if (math.abs(ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue)) <= indelNearnessThreshold) 1 else 0).sum
         val nDeletions = tumors.map(ao => if (math.abs(ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue)) <= indelNearnessThreshold) 1 else 0).sum
 
-        val passIndel: Boolean = nInsertions < maxGapEventsThreshold && nDeletions < maxGapEventsThreshold
+        val passIndel: Boolean = nInsertions < maxGapEventsThreshold && nDeletions < maxGapEventsThreshold && pointMutation
 
         val passStringentFilters = tumors.size.toDouble / tumors_raw.size.toDouble > (1.0 - minPassStringentFiltersTumor)
 

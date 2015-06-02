@@ -34,6 +34,7 @@ class VariantCallingAnnotatorSuite extends FunSuite {
       10,
       None, None,
       0, 0, 1, 0,
+      false,
       "mySample",
       1L)
   }

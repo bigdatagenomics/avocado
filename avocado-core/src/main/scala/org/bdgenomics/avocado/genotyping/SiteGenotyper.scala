@@ -152,6 +152,7 @@ trait SiteGenotyper extends Genotyper {
             sortedRo.head.clippedBasesReadEnd,
             sortedRo.head.unclippedReadLen,
             sortedRo.head.mismatchQScoreSum,
+            sortedRo.head.mateRescue,
             sortedRo.head.sample,
             sortedRo.head.readId)
         })

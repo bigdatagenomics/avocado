@@ -130,6 +130,17 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     val posToInsDist: Option[Vector[Int]] = if (insertionDistVecs.size > 0) Some(insertionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
     val posToDelDist: Option[Vector[Int]] = if (deletionDistVecs.size > 0) Some(deletionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
 
+    def getTags(read: RichAlignmentRecord): Option[Seq[org.bdgenomics.adam.models.Attribute]] = {
+      try {
+        Option(read.tags)
+      } catch {
+        case e: NullPointerException => None
+      }
+    }
+
+    val tags: Option[Seq[org.bdgenomics.adam.models.Attribute]] = getTags(richRead)
+    val mateRescue: Boolean = tags.getOrElse(Seq()).exists(a => a.tag == "XT" && a.value == "M")
+
     def processAlignmentMatch() {
       observations = AlleleObservation(ReferencePosition(contig, pos),
         1,
@@ -146,6 +157,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         trimmedFromEnd,
         readLen,
         mismatchQScoreSum,
+        mateRescue,
         sample,
         readId) +: observations
       readPos += 1
@@ -173,6 +185,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           trimmedFromEnd,
           readLen,
           mismatchQScoreSum,
+          mateRescue,
           sample,
           readId).asInstanceOf[Observation] +: observations
 
@@ -200,6 +213,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           trimmedFromEnd,
           readLen,
           mismatchQScoreSum,
+          mateRescue,
           sample,
           readId).asInstanceOf[Observation] +: observations
 

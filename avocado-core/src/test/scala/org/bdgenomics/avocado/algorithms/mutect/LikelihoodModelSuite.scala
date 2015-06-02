@@ -36,7 +36,7 @@ class LikelihoodModelSuite extends FunSuite {
       offsetInAlignment = 1,
       10,
       None, None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "shouldntmatter",
       readId = 1L)
   }
@@ -52,7 +52,7 @@ class LikelihoodModelSuite extends FunSuite {
       offsetInAlignment = 1,
       10,
       None, None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "shouldntmatter",
       readId = 1L)
   }

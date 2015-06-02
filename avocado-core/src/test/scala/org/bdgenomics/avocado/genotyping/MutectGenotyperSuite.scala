@@ -40,7 +40,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id * 10,
       100,
       None, None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "tumor",
       readId = 1L)
   }
@@ -56,7 +56,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id * 10,
       100,
       None, Some(-50),
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "tumor",
       readId = 1L)
   }
@@ -72,7 +72,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id,
       100,
       None, None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "tumor",
       readId = 1L)
   }
@@ -88,7 +88,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id,
       100,
       None, None,
-      20, 20, 100, 0,
+      20, 20, 100, 0, false,
       sample = "tumor",
       readId = 1L)
   }
@@ -104,7 +104,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id,
       100,
       None, None,
-      0, 0, 100, 101,
+      0, 0, 100, 101, false,
       sample = "tumor",
       readId = 1L)
   }
@@ -120,7 +120,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id,
       100,
       Some(3), None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "tumor",
       readId = 1L)
   }
@@ -136,7 +136,23 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id,
       100,
       None, Some(3),
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
+      sample = "tumor",
+      readId = 1L)
+  }
+
+  val some_muts_mate_rescue = for (read_id <- 1 to 10) yield {
+    AlleleObservation(pos = ReferencePosition("ctg", 0L),
+      length = 1,
+      allele = if (read_id <= 3) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
+      phred = 30 + (read_id - 1), // 30 to 39
+      mapq = Some(30),
+      onNegativeStrand = read_id % 2 == 0,
+      firstOfPair = true,
+      offsetInAlignment = read_id,
+      100,
+      None, Some(3),
+      0, 0, 1, 0, true,
       sample = "tumor",
       readId = 1L)
   }
@@ -152,7 +168,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = 100 - read_id,
       100,
       None, None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "tumor",
       readId = 1L)
   }
@@ -168,7 +184,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id * 10,
       100,
       None, None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "normal",
       readId = 1L)
   }
@@ -183,7 +199,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = read_id * 10,
       100,
       None, None,
-      0, 0, 1, 0,
+      0, 0, 1, 0, false,
       sample = "normal",
       readId = 1L)
   }
@@ -198,6 +214,7 @@ class MutectGenotyperSuite extends FunSuite {
   val mutNearInsertion = some_muts_near_insertion ++ normal_het
   val mutNearDeletion = some_muts_near_deletion ++ normal_het
   val mutNoisyReads = some_muts_noisy_reads ++ normal_het
+  val mutMateRescue = some_muts_mate_rescue ++ normal_het
 
   test("Sites with no mutations should not have any variants returned") {
     val resultClean = mt.genotypeSite(pos, ref, noMutClean)
@@ -251,6 +268,11 @@ class MutectGenotyperSuite extends FunSuite {
 
   test("Test near deletion filter") {
     val result = mt.genotypeSite(pos, ref, mutNearDeletion)
+    assert(result.isEmpty)
+  }
+
+  test("Test mate rescue filter") {
+    val result = mt.genotypeSite(pos, ref, mutMateRescue)
     assert(result.isEmpty)
   }
 

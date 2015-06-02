@@ -34,6 +34,7 @@ case class AlleleObservation(override val pos: ReferencePosition,
                              clippedBasesReadEnd: Int,
                              unclippedReadLen: Int,
                              mismatchQScoreSum: Int,
+                             mateRescue: Boolean,
                              sample: String,
                              readId: Long) extends Observation(pos, allele) {
 
