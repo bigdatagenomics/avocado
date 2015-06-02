@@ -173,6 +173,38 @@ class MutectGenotyperSuite extends FunSuite {
       readId = 1L)
   }
 
+  val some_muts_strand_bias_neg = for (read_id <- 1 to 10) yield {
+    AlleleObservation(pos = ReferencePosition("ctg", 0L),
+      length = 1,
+      allele = if (read_id <= 5) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
+      phred = 30 + (read_id - 1), // 30 to 39
+      mapq = Some(30),
+      onNegativeStrand = read_id <= 5,
+      firstOfPair = true,
+      offsetInAlignment = read_id * 10,
+      100,
+      None, Some(-50),
+      0, 0, 1, 0, false,
+      sample = "tumor",
+      readId = 1L)
+  }
+
+  val some_muts_strand_bias_pos = for (read_id <- 1 to 10) yield {
+    AlleleObservation(pos = ReferencePosition("ctg", 0L),
+      length = 1,
+      allele = if (read_id <= 5) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
+      phred = 30 + (read_id - 1), // 30 to 39
+      mapq = Some(30),
+      onNegativeStrand = read_id > 5,
+      firstOfPair = true,
+      offsetInAlignment = read_id * 10,
+      100,
+      None, Some(-50),
+      0, 0, 1, 0, false,
+      sample = "tumor",
+      readId = 1L)
+  }
+
   val normal_all_c = for (read_id <- 1 to 10) yield {
     AlleleObservation(pos = ReferencePosition("ctg", 0L),
       length = 1,
@@ -215,6 +247,8 @@ class MutectGenotyperSuite extends FunSuite {
   val mutNearDeletion = some_muts_near_deletion ++ normal_het
   val mutNoisyReads = some_muts_noisy_reads ++ normal_het
   val mutMateRescue = some_muts_mate_rescue ++ normal_het
+  val mutStrandBiasNeg = some_muts_strand_bias_neg ++ normal_het
+  val mutStrandBiasPos = some_muts_strand_bias_pos ++ normal_het
 
   test("Sites with no mutations should not have any variants returned") {
     val resultClean = mt.genotypeSite(pos, ref, noMutClean)
@@ -274,6 +308,13 @@ class MutectGenotyperSuite extends FunSuite {
   test("Test mate rescue filter") {
     val result = mt.genotypeSite(pos, ref, mutMateRescue)
     assert(result.isEmpty)
+  }
+
+  test("Test strand bais filter") {
+    val result_neg = mt.genotypeSite(pos, ref, mutStrandBiasNeg)
+    val result_pos = mt.genotypeSite(pos, ref, mutStrandBiasPos)
+    assert(result_neg.isEmpty, "Fails negative strand bias filter")
+    assert(result_pos.isEmpty, "Fails positive strand bias filter")
   }
 
 }

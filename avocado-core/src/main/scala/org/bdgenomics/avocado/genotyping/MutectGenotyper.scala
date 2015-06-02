@@ -24,7 +24,7 @@ import org.bdgenomics.avocado.algorithms.mutect._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
-import Numeric._
+import org.bdgenomics.avocado.algorithms.math.LogBinomial
 
 object MutectGenotyper extends GenotyperCompanion {
 
@@ -57,6 +57,8 @@ object MutectGenotyper extends GenotyperCompanion {
       config.getInt("minMedianDistanceFromReadEnd", 10),
       config.getInt("minMedianAbsoluteDeviationOfAlleleInRead", 3),
       config.getBoolean("experimentalMutectIndelDetector", false),
+      config.getDouble("errorForPowerCalculations", 0.001),
+      config.getInt("minThetaForPowerCalc", 20),
       None)
   }
 }
@@ -87,6 +89,8 @@ class MutectGenotyper(normalId: String,
                       minMedianDistanceFromReadEnd: Int = 10,
                       minMedianAbsoluteDeviationOfAlleleInRead: Int = 3,
                       experimentalMutectIndelDetector: Boolean = false,
+                      errorForPowerCalculations: Double = 0.001,
+                      minThetaForPowerCalc: Int = 20,
                       f: Option[Double] = None) extends SiteGenotyper with Logging {
 
   val companion: GenotyperCompanion = MutectGenotyper
@@ -175,14 +179,26 @@ class MutectGenotyper(normalId: String,
         val passMaxNormalSupport = normals.filter(_.allele == alt).size.toDouble / normals.size.toDouble <= maxNormalSupportingFracToTriggerQscoreCheck ||
           normals.filter(_.allele == alt).map(_.phred).sum < maxNormalQscoreSumSupportingMutant
 
-        // TODO implement power-based strand-bias detection
-        /* The power to detect a mutant is a function of depth, and the mutant allele fraction (unstranded).
-        Basically you assume that the probability of observing a base error is uniform and 0.001 (phred score of 30).
-        You see how many reads you require to pass the LOD threshold of 2.0, and then you calculate the binomial
-        probability of observing that many or more reads would be observed given the allele fraction and depth.
-        You also correct for the fact that the real result is somewhere between the minimum integer number to pass,
-        and the number below it, so you scale your probability at k by 1 - (2.0 - lod_(k-1) )/(lod_(k) - lod_(k-1)).
-         */
+        val tumor_pos = tumors.filterNot(_.onNegativeStrand)
+        val tumor_pos_alt = tumor_pos.filter(_.allele == alt)
+        val tumor_neg = tumors.filter(_.onNegativeStrand)
+        val tumor_neg_alt = tumor_neg.filter(_.allele == alt)
+
+        val alleleFrac = onlyTumorMut.size.toDouble / tumors.size.toDouble
+
+        val tumor_pos_depth = tumor_pos.size
+        val tumor_neg_depth = tumor_neg.size
+        val t_pos_frac = if (tumor_pos_depth > 0) tumor_pos_alt.size.toDouble / tumor_pos_depth.toDouble else 0.0
+        val t_neg_frac = if (tumor_neg_depth > 0) tumor_neg_alt.size.toDouble / tumor_neg_depth.toDouble else 0.0
+
+        val lod_pos = model.logOdds(ref, alt, tumor_pos, Some(t_pos_frac))
+        val lod_neg = model.logOdds(ref, alt, tumor_neg, Some(t_neg_frac))
+
+        val power_pos = calculateStrandPower(tumor_pos_depth, alleleFrac)
+        val power_neg = calculateStrandPower(tumor_neg_depth, alleleFrac)
+
+        val passingStrandBias = (power_pos < 0.9 || lod_pos >= minThetaForPowerCalc) &&
+          (power_neg < 0.9 || lod_neg >= minThetaForPowerCalc)
 
         // Only pass mutations that do not cluster at the ends of reads
         val passEndClustering = if (onlyTumorMut.size > 0) {
@@ -202,7 +218,7 @@ class MutectGenotyper(normalId: String,
 
         // Do all filters pass?
         if (passSomatic && passIndel && passStringentFilters && passMapq0Filter &&
-          passMaxMapqAlt && passMaxNormalSupport && passEndClustering) {
+          passMaxMapqAlt && passMaxNormalSupport && passEndClustering && passingStrandBias) {
           Option(constructVariant(region, ref, alt, alleleObservation))
         } else {
           None
@@ -216,6 +232,47 @@ class MutectGenotyper(normalId: String,
       log.info("Dropping site %s, as reference allele is an insertion or complex variant.".format(referenceObservation.pos))
       None
     }
+  }
+
+  def calculateStrandPower(depth: Int, f: Double): Double = {
+    /* The power to detect a mutant is a function of depth, and the mutant allele fraction (unstranded).
+        Basically you assume that the probability of observing a base error is uniform and 0.001 (phred score of 30).
+        You see how many reads you require to pass the LOD threshold of 2.0, and then you calculate the binomial
+        probability of observing that many or more reads would be observed given the allele fraction and depth.
+        You also correct for the fact that the real result is somewhere between the minimum integer number to pass,
+        and the number below it, so you scale your probability at k by 1 - (2.0 - lod_(k-1) )/(lod_(k) - lod_(k-1)).
+         */
+    if (depth < 1 || f <= 0.0000001) {
+      0.0
+    } else {
+
+      val k_lods: Seq[(Int, Double)] = for {
+        k <- 1 to depth
+        nref = depth - k
+        tf = k / depth.toDouble
+        prefk = nref.toDouble * math.log10(tf * errorForPowerCalculations + (1.0 - tf) * (1.0 - errorForPowerCalculations))
+        paltk = k.toDouble * math.log10(tf * (1.0 - errorForPowerCalculations) + (1.0 - tf) * errorForPowerCalculations)
+        pkm = prefk + paltk
+        pref0 = nref.toDouble * math.log10(1.0 - errorForPowerCalculations)
+        palt0 = k.toDouble * math.log10(errorForPowerCalculations)
+        p0 = pref0 + palt0
+      } yield (k, pkm - p0)
+
+      val passing_lods = k_lods.filter({ case (k, lod) => lod >= minThetaForPowerCalc })
+      val k_lods_map = k_lods.toMap
+      if (passing_lods.size > 0) {
+        val passing_k: Int = passing_lods.head._1
+        val probabilities: Array[Double] = LogBinomial.calculateLogProbabilities(math.log(f), depth).map(math.exp(_))
+        val binomials = passing_lods.map({ case (k, lod) => probabilities(k) })
+        binomials.sum + probabilities(passing_k - 1) *
+          (1.0 - (minThetaForPowerCalc - k_lods_map(passing_k - 1) / (k_lods_map(passing_k) - k_lods_map(passing_k - 1))))
+
+      } else {
+        0.0
+      }
+
+    }
+
   }
 
   def median(s: Seq[Double]): Double =
