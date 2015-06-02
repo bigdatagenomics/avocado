@@ -45,7 +45,7 @@ class MutectGenotyperSuite extends FunSuite {
       readId = 1L)
   }
 
-  val some_muts = for (read_id <- 1 to 10) yield {
+  val some_muts = for (read_id <- 1 to 20) yield {
     AlleleObservation(pos = ReferencePosition("ctg", 0L),
       length = 1,
       allele = if (read_id <= 3) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
@@ -53,9 +53,25 @@ class MutectGenotyperSuite extends FunSuite {
       mapq = Some(30),
       onNegativeStrand = read_id % 2 == 0,
       firstOfPair = true,
-      offsetInAlignment = read_id * 10,
+      offsetInAlignment = read_id * 10 % 100,
       100,
       None, Some(-50),
+      0, 0, 1, 0, false,
+      sample = "tumor",
+      readId = 1L)
+  }
+
+  val all_muts = for (read_id <- 1 to 10) yield {
+    AlleleObservation(pos = ReferencePosition("ctg", 0L),
+      length = 1,
+      allele = "A", //Mutants = A x 3 w/ scores (30,31,32)
+      phred = 30 + (read_id - 1), // 30 to 39
+      mapq = Some(30),
+      onNegativeStrand = read_id % 2 == 0,
+      firstOfPair = true,
+      offsetInAlignment = read_id * 10,
+      100,
+      None, None,
       0, 0, 1, 0, false,
       sample = "tumor",
       readId = 1L)
@@ -173,15 +189,15 @@ class MutectGenotyperSuite extends FunSuite {
       readId = 1L)
   }
 
-  val some_muts_strand_bias_neg = for (read_id <- 1 to 10) yield {
+  val some_muts_strand_bias_neg = for (read_id <- 1 to 50) yield {
     AlleleObservation(pos = ReferencePosition("ctg", 0L),
       length = 1,
-      allele = if (read_id <= 5) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
+      allele = if (read_id <= 25) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
       phred = 30 + (read_id - 1), // 30 to 39
       mapq = Some(30),
-      onNegativeStrand = read_id <= 5,
+      onNegativeStrand = read_id <= 25,
       firstOfPair = true,
-      offsetInAlignment = read_id * 10,
+      offsetInAlignment = read_id * 10 % 100,
       100,
       None, Some(-50),
       0, 0, 1, 0, false,
@@ -189,15 +205,15 @@ class MutectGenotyperSuite extends FunSuite {
       readId = 1L)
   }
 
-  val some_muts_strand_bias_pos = for (read_id <- 1 to 10) yield {
+  val some_muts_strand_bias_pos = for (read_id <- 1 to 50) yield {
     AlleleObservation(pos = ReferencePosition("ctg", 0L),
       length = 1,
-      allele = if (read_id <= 5) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
+      allele = if (read_id <= 25) "A" else "C", //Mutants = A x 3 w/ scores (30,31,32)
       phred = 30 + (read_id - 1), // 30 to 39
       mapq = Some(30),
-      onNegativeStrand = read_id > 5,
+      onNegativeStrand = read_id > 25,
       firstOfPair = true,
-      offsetInAlignment = read_id * 10,
+      offsetInAlignment = read_id * 10 % 100,
       100,
       None, Some(-50),
       0, 0, 1, 0, false,
@@ -240,15 +256,16 @@ class MutectGenotyperSuite extends FunSuite {
   val noMutHet = all_c ++ normal_het
   val mutClean = some_muts ++ normal_all_c
   val mutHet = some_muts ++ normal_het
-  val mutEndClusterBeginning = some_muts_end_clustered_beginning ++ normal_het
-  val mutEndClusterEnd = some_muts_end_clustered_end ++ normal_het
-  val mutHeavilyClipped = some_muts_soft_clipped ++ normal_het
-  val mutNearInsertion = some_muts_near_insertion ++ normal_het
-  val mutNearDeletion = some_muts_near_deletion ++ normal_het
-  val mutNoisyReads = some_muts_noisy_reads ++ normal_het
-  val mutMateRescue = some_muts_mate_rescue ++ normal_het
-  val mutStrandBiasNeg = some_muts_strand_bias_neg ++ normal_het
-  val mutStrandBiasPos = some_muts_strand_bias_pos ++ normal_het
+  val mutEndClusterBeginning = some_muts_end_clustered_beginning ++ normal_all_c
+  val mutEndClusterEnd = some_muts_end_clustered_end ++ normal_all_c
+  val mutHeavilyClipped = some_muts_soft_clipped ++ normal_all_c
+  val mutNearInsertion = some_muts_near_insertion ++ normal_all_c
+  val mutNearDeletion = some_muts_near_deletion ++ normal_all_c
+  val mutNoisyReads = some_muts_noisy_reads ++ normal_all_c
+  val mutMateRescue = some_muts_mate_rescue ++ normal_all_c
+  val mutStrandBiasNeg = some_muts_strand_bias_neg ++ normal_all_c
+  val mutStrandBiasPos = some_muts_strand_bias_pos ++ normal_all_c
+  val mutAllMutants = all_muts ++ normal_all_c
 
   test("Sites with no mutations should not have any variants returned") {
     val resultClean = mt.genotypeSite(pos, ref, noMutClean)
@@ -315,6 +332,11 @@ class MutectGenotyperSuite extends FunSuite {
     val result_pos = mt.genotypeSite(pos, ref, mutStrandBiasPos)
     assert(result_neg.isEmpty, "Fails negative strand bias filter")
     assert(result_pos.isEmpty, "Fails positive strand bias filter")
+  }
+
+  test("Works even when all alleles are mutant") {
+    val result = mt.genotypeSite(pos, ref, mutAllMutants)
+    assert(result.isDefined)
   }
 
 }

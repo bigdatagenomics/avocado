@@ -258,14 +258,14 @@ class MutectGenotyper(normalId: String,
         p0 = pref0 + palt0
       } yield (k, pkm - p0)
 
-      val passing_lods = k_lods.filter({ case (k, lod) => lod >= minThetaForPowerCalc })
+      val passing_lods = k_lods.dropWhile({ case (k, lod) => lod < minThetaForPowerCalc })
       val k_lods_map = k_lods.toMap
       if (passing_lods.size > 0) {
         val passing_k: Int = passing_lods.head._1
         val probabilities: Array[Double] = LogBinomial.calculateLogProbabilities(math.log(f), depth).map(math.exp(_))
         val binomials = passing_lods.map({ case (k, lod) => probabilities(k) })
         binomials.sum + probabilities(passing_k - 1) *
-          (1.0 - (minThetaForPowerCalc - k_lods_map(passing_k - 1) / (k_lods_map(passing_k) - k_lods_map(passing_k - 1))))
+          (1.0 - (minThetaForPowerCalc - k_lods_map(passing_k - 1)) / (k_lods_map(passing_k) - k_lods_map(passing_k - 1)))
 
       } else {
         0.0
