@@ -24,6 +24,7 @@ import org.bdgenomics.avocado.algorithms.mutect._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
+import Numeric._
 
 object MutectGenotyper extends GenotyperCompanion {
 
@@ -53,6 +54,8 @@ object MutectGenotyper extends GenotyperCompanion {
       config.getDouble("maxFractionBasesSoftClippedTumor", 0.3),
       config.getDouble("maxNormalSupportingFracToTriggerQscoreCheck", 0.015),
       config.getInt("maxNormalQscoreSumSupportingMutant", 20),
+      config.getInt("minMedianDistanceFromReadEnd", 10),
+      config.getInt("minMedianAbsoluteDeviationOfAlleleInRead", 3),
       None)
   }
 }
@@ -80,6 +83,8 @@ class MutectGenotyper(normalId: String,
                       maxFractionBasesSoftClippedTumor: Double = 0.3,
                       maxNormalSupportingFracToTriggerQscoreCheck: Double = 0.015,
                       maxNormalQscoreSumSupportingMutant: Int = 20,
+                      minMedianDistanceFromReadEnd: Int = 10,
+                      minMedianAbsoluteDeviationOfAlleleInRead: Int = 3,
                       f: Option[Double] = None) extends SiteGenotyper with Logging {
 
   val companion: GenotyperCompanion = MutectGenotyper
@@ -179,18 +184,28 @@ class MutectGenotyper(normalId: String,
         You also correct for the fact that the real result is somewhere between the minimum integer number to pass,
         and the number below it, so you scale your probability at k by 1 - (2.0 - lod_(k-1) )/(lod_(k) - lod_(k-1)).
          */
-        // TODO implement read-end mutation position clustering detection
-        /*
-          Median Absolute Deviation, and the raw median of the mutant allele location within reads cannot cluster
-          too close to either the beginning or end of each read. Basically you calculate the median of the allele
-          supporting reads, and the MAD of those. If the MAD is <= 3 and the median is <= 10, dump it. Similarly
-          recalculate these numbers, but using the distance of each allele from the last base of each read, and
-          apply the same filters. If either the forward-strand method, or reverse strand method gives you bad
-          results, it fails.
-         */
+
+
+        // Only pass mutations that do not cluster at the ends of reads
+        val passEndClustering = if (onlyTumorMut.size > 0) {
+          val forward_positions: Seq[Double] = onlyTumorMut.map(_.offsetInRead.toDouble).toSeq
+          val reverse_positions: Seq[Double] = onlyTumorMut.map(ao =>
+            (ao.unclippedReadLen - ao.clippedBasesReadStart - ao.clippedBasesReadEnd) - ao.offsetInRead.toDouble).toSeq
+
+          val forward_median = median(forward_positions)
+          val reverse_median = median(reverse_positions)
+
+          val forward_mad = mad(forward_positions, forward_median)
+          val reverse_mad = mad(reverse_positions, reverse_median)
+
+          (forward_mad > minMedianAbsoluteDeviationOfAlleleInRead || forward_median > minMedianAbsoluteDeviationOfAlleleInRead) &&
+            (reverse_mad > minMedianAbsoluteDeviationOfAlleleInRead || reverse_median > minMedianAbsoluteDeviationOfAlleleInRead)
+
+        } else false
 
         // Do all filters pass?
-        if (passSomatic && passIndel && passStringentFilters && passMapq0Filter && passMaxMapqAlt && passMaxNormalSupport) {
+        if (passSomatic && passIndel && passStringentFilters && passMapq0Filter &&
+          passMaxMapqAlt && passMaxNormalSupport && passEndClustering) {
           Option(constructVariant(region, ref, alt, alleleObservation))
         } else {
           None
@@ -204,6 +219,16 @@ class MutectGenotyper(normalId: String,
       log.info("Dropping site %s, as reference allele is an insertion or complex variant.".format(referenceObservation.pos))
       None
     }
+  }
+
+  def median(s: Seq[Double]): Double =
+    {
+      val (lower, upper) = s.sortWith(_ < _).splitAt(s.size / 2)
+      if (s.size % 2 == 0) (lower.last + upper.head) / 2.0 else upper.head
+    }
+
+  def mad(s: Seq[Double], m: Double): Double = {
+    median(s.map(i => math.abs(i - m)))
   }
 
 }
