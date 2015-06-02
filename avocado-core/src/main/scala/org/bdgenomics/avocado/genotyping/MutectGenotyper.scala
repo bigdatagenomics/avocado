@@ -159,8 +159,8 @@ class MutectGenotyper(normalId: String,
         val normalNotHet = somaticModel.logOdds(ref, alt, normals, None)
         val dbSNPsite = false //TODO figure out if this is a dbSNP position
         val passSomatic: Boolean = (dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)
-        val nInsertions = tumors.map(ao => if (ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue) <= indelNearnessThreshold) 1 else 0).sum
-        val nDeletions = tumors.map(ao => if (ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue) <= indelNearnessThreshold) 1 else 0).sum
+        val nInsertions = tumors.map(ao => if (math.abs(ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue)) <= indelNearnessThreshold) 1 else 0).sum
+        val nDeletions = tumors.map(ao => if (math.abs(ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue)) <= indelNearnessThreshold) 1 else 0).sum
 
         val passIndel: Boolean = nInsertions < maxGapEventsThreshold && nDeletions < maxGapEventsThreshold
 
