@@ -185,12 +185,10 @@ class MutectGenotyper(normalId: String,
         and the number below it, so you scale your probability at k by 1 - (2.0 - lod_(k-1) )/(lod_(k) - lod_(k-1)).
          */
 
-
         // Only pass mutations that do not cluster at the ends of reads
         val passEndClustering = if (onlyTumorMut.size > 0) {
-          val forward_positions: Seq[Double] = onlyTumorMut.map(_.offsetInRead.toDouble).toSeq
-          val reverse_positions: Seq[Double] = onlyTumorMut.map(ao =>
-            (ao.unclippedReadLen - ao.clippedBasesReadStart - ao.clippedBasesReadEnd) - ao.offsetInRead.toDouble).toSeq
+          val forward_positions: Seq[Double] = onlyTumorMut.map(_.offsetInAlignment.toDouble).toSeq
+          val reverse_positions: Seq[Double] = onlyTumorMut.map(ao => ao.alignedReadLen - ao.offsetInAlignment.toDouble - 1.0).toSeq
 
           val forward_median = median(forward_positions)
           val reverse_median = median(reverse_positions)
