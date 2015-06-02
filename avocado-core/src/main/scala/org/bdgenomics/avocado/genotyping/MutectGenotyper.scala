@@ -45,6 +45,14 @@ object MutectGenotyper extends GenotyperCompanion {
       config.getDouble("somDbSnpThreshold", 5.5),
       config.getDouble("somNovelThreshold", 2.2),
       config.getInt("maxGapEvents", 3),
+      config.getDouble("minPassStringentFiltersTumor", 0.3),
+      config.getDouble("maxMapq0Fraction", 0.5),
+      config.getInt("minPhredSupportingMutant", 20),
+      config.getInt("indelNearnessThreshold", 5),
+      config.getInt("maxPhredSumMismatchingBases", 100),
+      config.getDouble("maxFractionBasesSoftClippedTumor", 0.3),
+      config.getDouble("maxNormalSupportingFracToTriggerQscoreCheck", 0.015),
+      config.getInt("maxNormalQscoreSumSupportingMutant", 20),
       None)
   }
 }
@@ -64,6 +72,14 @@ class MutectGenotyper(normalId: String,
                       somDbSnpThreshold: Double = 5.5,
                       somNovelThreshold: Double = 2.2,
                       maxGapEventsThreshold: Int = 3,
+                      minPassStringentFiltersTumor: Double = 0.3,
+                      maxMapq0Fraction: Double = 0.5,
+                      minPhredSupportingMutant: Int = 20,
+                      indelNearnessThreshold: Int = 5,
+                      maxPhredSumMismatchingBases: Int = 100,
+                      maxFractionBasesSoftClippedTumor: Double = 0.3,
+                      maxNormalSupportingFracToTriggerQscoreCheck: Double = 0.015,
+                      maxNormalQscoreSumSupportingMutant: Int = 20,
                       f: Option[Double] = None) extends SiteGenotyper with Logging {
 
   val companion: GenotyperCompanion = MutectGenotyper
@@ -112,8 +128,9 @@ class MutectGenotyper(normalId: String,
 
       // apply 3 stringent filters to the tumor alleles
       val tumors = tumors_raw.filterNot(ao => {
-        val clippedFilter = (ao.clippedBasesReadStart + ao.clippedBasesReadEnd) / ao.unclippedReadLen.toDouble >= 0.3
-        val noisyFilter = ao.mismatchQScoreSum >= 100
+        val clippedFilter = (ao.clippedBasesReadStart + ao.clippedBasesReadEnd) /
+          ao.unclippedReadLen.toDouble >= maxFractionBasesSoftClippedTumor
+        val noisyFilter = ao.mismatchQScoreSum >= maxPhredSumMismatchingBases
 
         // TODO add in mate-rescue filter
         val mateRescueFilter = false
@@ -137,22 +154,22 @@ class MutectGenotyper(normalId: String,
         val normalNotHet = somaticModel.logOdds(ref, alt, normals, None)
         val dbSNPsite = false //TODO figure out if this is a dbSNP position
         val passSomatic: Boolean = (dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)
-        val nInsertions = tumors.map(ao => if (ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue) <= 5) 1 else 0).sum
-        val nDeletions = tumors.map(ao => if (ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue) <= 5) 1 else 0).sum
+        val nInsertions = tumors.map(ao => if (ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue) <= indelNearnessThreshold) 1 else 0).sum
+        val nDeletions = tumors.map(ao => if (ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue) <= indelNearnessThreshold) 1 else 0).sum
 
         val passIndel: Boolean = nInsertions < maxGapEventsThreshold && nDeletions < maxGapEventsThreshold
 
-        val passStringentFilters = tumors.size.toDouble / tumors_raw.size.toDouble > (1.0 - 0.3)
+        val passStringentFilters = tumors.size.toDouble / tumors_raw.size.toDouble > (1.0 - minPassStringentFiltersTumor)
 
-        val passMapq0Filter = tumors_raw.filter(_.mapq.getOrElse(0) == 0).size.toDouble / tumors_raw.size.toDouble <= 0.5 &&
-          normals.filter(_.mapq.getOrElse(0) == 0).size.toDouble / normals.size.toDouble <= 0.5
+        val passMapq0Filter = tumors_raw.filter(_.mapq.getOrElse(0) == 0).size.toDouble / tumors_raw.size.toDouble <= maxMapq0Fraction &&
+          normals.filter(_.mapq.getOrElse(0) == 0).size.toDouble / normals.size.toDouble <= maxMapq0Fraction
 
         val onlyTumorMut = tumors.filter(_.allele == alt)
 
-        val passMaxMapqAlt = if (onlyTumorMut.size > 0) onlyTumorMut.map(_.phred).max >= 20 else false
+        val passMaxMapqAlt = if (onlyTumorMut.size > 0) onlyTumorMut.map(_.phred).max >= minPhredSupportingMutant else false
 
-        val passMaxNormalSupport = normals.filter(_.allele == alt).size.toDouble / normals.size.toDouble <= 0.015 ||
-          normals.filter(_.allele == alt).map(_.phred).sum < 20
+        val passMaxNormalSupport = normals.filter(_.allele == alt).size.toDouble / normals.size.toDouble <= maxNormalSupportingFracToTriggerQscoreCheck ||
+          normals.filter(_.allele == alt).map(_.phred).sum < maxNormalQscoreSumSupportingMutant
 
         // TODO implement power-based strand-bias detection
         /* The power to detect a mutant is a function of depth, and the mutant allele fraction (unstranded).
