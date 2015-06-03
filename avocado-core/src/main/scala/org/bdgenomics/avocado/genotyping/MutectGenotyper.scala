@@ -135,11 +135,11 @@ class MutectGenotyper(normalId: String,
 
     if (experimentalMutectIndelDetector || pointMutation) {
 
-      val tumors_raw = alleleObservation.filter(a => a.sample == somaticId)
+      val tumorsRaw = alleleObservation.filter(a => a.sample == somaticId)
       val normals = alleleObservation.filter(a => a.sample == normalId)
 
       // apply 3 stringent filters to the tumor alleles
-      val tumors = tumors_raw.filterNot(ao => {
+      val tumors = tumorsRaw.filterNot(ao => {
         val clippedFilter = (ao.clippedBasesReadStart + ao.clippedBasesReadEnd) /
           ao.unclippedReadLen.toDouble >= maxFractionBasesSoftClippedTumor
         val noisyFilter = ao.mismatchQScoreSum >= maxPhredSumMismatchingBases
@@ -167,9 +167,9 @@ class MutectGenotyper(normalId: String,
 
         val passIndel: Boolean = nInsertions < maxGapEventsThreshold && nDeletions < maxGapEventsThreshold && pointMutation
 
-        val passStringentFilters = tumors.size.toDouble / tumors_raw.size.toDouble > (1.0 - minPassStringentFiltersTumor)
+        val passStringentFilters = tumors.size.toDouble / tumorsRaw.size.toDouble > (1.0 - minPassStringentFiltersTumor)
 
-        val passMapq0Filter = tumors_raw.filter(_.mapq.getOrElse(0) == 0).size.toDouble / tumors_raw.size.toDouble <= maxMapq0Fraction &&
+        val passMapq0Filter = tumorsRaw.filter(_.mapq.getOrElse(0) == 0).size.toDouble / tumorsRaw.size.toDouble <= maxMapq0Fraction &&
           normals.filter(_.mapq.getOrElse(0) == 0).size.toDouble / normals.size.toDouble <= maxMapq0Fraction
 
         val onlyTumorMut = tumors.filter(_.allele == alt)
@@ -179,40 +179,40 @@ class MutectGenotyper(normalId: String,
         val passMaxNormalSupport = normals.filter(_.allele == alt).size.toDouble / normals.size.toDouble <= maxNormalSupportingFracToTriggerQscoreCheck ||
           normals.filter(_.allele == alt).map(_.phred).sum < maxNormalQscoreSumSupportingMutant
 
-        val tumor_pos = tumors.filterNot(_.onNegativeStrand)
-        val tumor_pos_alt = tumor_pos.filter(_.allele == alt)
-        val tumor_neg = tumors.filter(_.onNegativeStrand)
-        val tumor_neg_alt = tumor_neg.filter(_.allele == alt)
+        val tumorPos = tumors.filterNot(_.onNegativeStrand)
+        val tumorPosAlt = tumorPos.filter(_.allele == alt)
+        val tumorNeg = tumors.filter(_.onNegativeStrand)
+        val tumorNegAlt = tumorNeg.filter(_.allele == alt)
 
         val alleleFrac = onlyTumorMut.size.toDouble / tumors.size.toDouble
 
-        val tumor_pos_depth = tumor_pos.size
-        val tumor_neg_depth = tumor_neg.size
-        val t_pos_frac = if (tumor_pos_depth > 0) tumor_pos_alt.size.toDouble / tumor_pos_depth.toDouble else 0.0
-        val t_neg_frac = if (tumor_neg_depth > 0) tumor_neg_alt.size.toDouble / tumor_neg_depth.toDouble else 0.0
+        val tumorPosDepth = tumorPos.size
+        val tumorNegDepth = tumorNeg.size
+        val tPosFrac = if (tumorPosDepth > 0) tumorPosAlt.size.toDouble / tumorPosDepth.toDouble else 0.0
+        val tNegFrac = if (tumorNegDepth > 0) tumorNegAlt.size.toDouble / tumorNegDepth.toDouble else 0.0
 
-        val lod_pos = model.logOdds(ref, alt, tumor_pos, Some(t_pos_frac))
-        val lod_neg = model.logOdds(ref, alt, tumor_neg, Some(t_neg_frac))
+        val lodPos = model.logOdds(ref, alt, tumorPos, Some(tPosFrac))
+        val lodNeg = model.logOdds(ref, alt, tumorNeg, Some(tNegFrac))
 
-        val power_pos = calculateStrandPower(tumor_pos_depth, alleleFrac)
-        val power_neg = calculateStrandPower(tumor_neg_depth, alleleFrac)
+        val powerPos = calculateStrandPower(tumorPosDepth, alleleFrac)
+        val powerNeg = calculateStrandPower(tumorNegDepth, alleleFrac)
 
-        val passingStrandBias = (power_pos < 0.9 || lod_pos >= minThetaForPowerCalc) &&
-          (power_neg < 0.9 || lod_neg >= minThetaForPowerCalc)
+        val passingStrandBias = (powerPos < 0.9 || lodPos >= minThetaForPowerCalc) &&
+          (powerNeg < 0.9 || lodNeg >= minThetaForPowerCalc)
 
         // Only pass mutations that do not cluster at the ends of reads
         val passEndClustering = if (onlyTumorMut.size > 0) {
-          val forward_positions: Seq[Double] = onlyTumorMut.map(_.offsetInAlignment.toDouble).toSeq
-          val reverse_positions: Seq[Double] = onlyTumorMut.map(ao => ao.alignedReadLen - ao.offsetInAlignment.toDouble - 1.0).toSeq
+          val forwardPositions: Seq[Double] = onlyTumorMut.map(_.offsetInAlignment.toDouble).toSeq
+          val reversePositions: Seq[Double] = onlyTumorMut.map(ao => ao.alignedReadLen - ao.offsetInAlignment.toDouble - 1.0).toSeq
 
-          val forward_median = median(forward_positions)
-          val reverse_median = median(reverse_positions)
+          val forwardMedian = median(forwardPositions)
+          val reverseMedian = median(reversePositions)
 
-          val forward_mad = mad(forward_positions, forward_median)
-          val reverse_mad = mad(reverse_positions, reverse_median)
+          val forwardMad = mad(forwardPositions, forwardMedian)
+          val reverseMad = mad(reversePositions, reverseMedian)
 
-          (forward_mad > minMedianAbsoluteDeviationOfAlleleInRead || forward_median > minMedianAbsoluteDeviationOfAlleleInRead) &&
-            (reverse_mad > minMedianAbsoluteDeviationOfAlleleInRead || reverse_median > minMedianAbsoluteDeviationOfAlleleInRead)
+          (forwardMad > minMedianAbsoluteDeviationOfAlleleInRead || forwardMedian > minMedianAbsoluteDeviationOfAlleleInRead) &&
+            (reverseMad > minMedianAbsoluteDeviationOfAlleleInRead || reverseMedian > minMedianAbsoluteDeviationOfAlleleInRead)
 
         } else false
 
@@ -258,14 +258,14 @@ class MutectGenotyper(normalId: String,
         p0 = pref0 + palt0
       } yield (k, pkm - p0)
 
-      val passing_lods = k_lods.dropWhile({ case (k, lod) => lod < minThetaForPowerCalc })
-      val k_lods_map = k_lods.toMap
-      if (passing_lods.size > 0) {
-        val passing_k: Int = passing_lods.head._1
+      val passingLods = k_lods.dropWhile({ case (k, lod) => lod < minThetaForPowerCalc })
+      val kLodsMap = k_lods.toMap
+      if (passingLods.size > 0) {
+        val passingK: Int = passingLods.head._1
         val probabilities: Array[Double] = LogBinomial.calculateLogProbabilities(math.log(f), depth).map(math.exp(_))
-        val binomials = passing_lods.map({ case (k, lod) => probabilities(k) })
-        binomials.sum + probabilities(passing_k - 1) *
-          (1.0 - (minThetaForPowerCalc - k_lods_map(passing_k - 1)) / (k_lods_map(passing_k) - k_lods_map(passing_k - 1)))
+        val binomials = passingLods.map({ case (k, lod) => probabilities(k) })
+        binomials.sum + probabilities(passingK - 1) *
+          (1.0 - (minThetaForPowerCalc - kLodsMap(passingK - 1)) / (kLodsMap(passingK) - kLodsMap(passingK - 1)))
 
       } else {
         0.0
