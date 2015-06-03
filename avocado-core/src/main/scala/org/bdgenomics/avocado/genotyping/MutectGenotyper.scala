@@ -24,7 +24,9 @@ import org.bdgenomics.avocado.algorithms.mutect._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
-import org.bdgenomics.avocado.algorithms.math.LogBinomial
+import org.bdgenomics.avocado.algorithms.math.{ LogUtils, LogBinomial }
+
+import scala.annotation.tailrec
 
 object MutectGenotyper extends GenotyperCompanion {
 
@@ -246,31 +248,47 @@ class MutectGenotyper(normalId: String,
       0.0
     } else {
 
-      val k_lods: Seq[(Int, Double)] = for {
-        k <- 1 to depth
-        nref = depth - k
-        tf = k / depth.toDouble
-        prefk = nref.toDouble * math.log10(tf * errorForPowerCalculations + (1.0 - tf) * (1.0 - errorForPowerCalculations))
-        paltk = k.toDouble * math.log10(tf * (1.0 - errorForPowerCalculations) + (1.0 - tf) * errorForPowerCalculations)
-        pkm = prefk + paltk
-        pref0 = nref.toDouble * math.log10(1.0 - errorForPowerCalculations)
-        palt0 = k.toDouble * math.log10(errorForPowerCalculations)
-        p0 = pref0 + palt0
-      } yield (k, pkm - p0)
+      def getLod(k: Int): Double = {
+        val nref = depth - k
+        val tf = k / depth.toDouble
+        val prefk = nref.toDouble * math.log10(tf * errorForPowerCalculations + (1.0 - tf) * (1.0 - errorForPowerCalculations))
+        val paltk = k.toDouble * math.log10(tf * (1.0 - errorForPowerCalculations) + (1.0 - tf) * errorForPowerCalculations)
+        val pkm = prefk + paltk
+        val pref0 = nref.toDouble * math.log10(1.0 - errorForPowerCalculations)
+        val palt0 = k.toDouble * math.log10(errorForPowerCalculations)
+        val p0 = pref0 + palt0
+        pkm - p0
+      }
 
-      val passingLods = k_lods.dropWhile({ case (k, lod) => lod < minThetaForPowerCalc })
-      val kLodsMap = k_lods.toMap
-      if (passingLods.size > 0) {
-        val passingK: Int = passingLods.head._1
-        val probabilities: Array[Double] = LogBinomial.calculateLogProbabilities(math.log(f), depth).map(math.exp(_))
-        val binomials = passingLods.map({ case (k, lod) => probabilities(k) })
-        binomials.sum + probabilities(passingK - 1) *
-          (1.0 - (minThetaForPowerCalc - kLodsMap(passingK - 1)) / (kLodsMap(passingK) - kLodsMap(passingK - 1)))
+      @tailrec
+      def findMinPassingK(begin: Int, end: Int, passingK: Option[(Int, Double)]): Option[(Int, Double)] = {
+        if (begin >= end) passingK
+        else {
+          val mid = (begin + end) / 2
+          val lod = getLod(mid)
+          val passingKupdate = if (lod >= minThetaForPowerCalc) Some((mid, lod)) else passingK
+          if (lod >= minThetaForPowerCalc && begin < end - 1) findMinPassingK(begin, mid, passingKupdate)
+          else if (begin < end - 1) findMinPassingK(mid, end, passingKupdate)
+          else passingKupdate
+        }
+      }
+
+      val kLodOpt = findMinPassingK(1, depth + 1, None)
+
+      if (kLodOpt.isDefined) {
+        val (k, lod) = kLodOpt.get
+        val probabilities: Array[Double] = LogBinomial.calculateLogProbabilities(math.log(f), depth)
+        val binomials = probabilities.drop(k)
+
+        val lodM1 = getLod(k - 1)
+
+        math.exp(LogUtils.sumLogProbabilities(Array(probabilities(k - 1) +
+          math.log(1.0 - (minThetaForPowerCalc - lodM1) / (lod - lodM1)),
+          binomials: _*)))
 
       } else {
         0.0
       }
-
     }
 
   }
