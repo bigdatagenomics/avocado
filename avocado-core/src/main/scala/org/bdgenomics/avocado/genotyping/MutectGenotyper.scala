@@ -282,9 +282,9 @@ class MutectGenotyper(normalId: String,
 
         val lodM1 = getLod(k - 1)
 
-        math.exp(LogUtils.sumLogProbabilities(Array(probabilities(k - 1) +
-          math.log(1.0 - (minThetaForPowerCalc - lodM1) / (lod - lodM1)),
-          binomials: _*)))
+        val adjustedPk: Double = (probabilities(k - 1) + math.log(1.0 - (minThetaForPowerCalc - lodM1) / (lod - lodM1)))
+
+        math.exp(LogUtils.sumLogProbabilities(adjustedPk +: binomials))
 
       } else {
         0.0
@@ -293,11 +293,10 @@ class MutectGenotyper(normalId: String,
 
   }
 
-  def median(s: Seq[Double]): Double =
-    {
-      val (lower, upper) = s.sortWith(_ < _).splitAt(s.size / 2)
-      if (s.size % 2 == 0) (lower.last + upper.head) / 2.0 else upper.head
-    }
+  def median(s: Seq[Double]): Double = {
+    val (lower, upper) = s.sortWith(_ < _).splitAt(s.size / 2)
+    if (s.size % 2 == 0) (lower.last + upper.head) / 2.0 else upper.head
+  }
 
   def mad(s: Seq[Double], m: Double): Double = {
     median(s.map(i => math.abs(i - m)))
