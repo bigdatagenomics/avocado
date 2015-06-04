@@ -282,9 +282,9 @@ class MutectGenotyper(normalId: String,
 
         val lodM1 = getLod(k - 1)
 
-        val adjustedPk: Double = (probabilities(k - 1) + math.log(1.0 - (minThetaForPowerCalc - lodM1) / (lod - lodM1)))
+        val partialLogPkM1: Double = probabilities(k - 1) + math.log(1.0 - (minThetaForPowerCalc - lodM1) / (lod - lodM1))
 
-        math.exp(LogUtils.sumLogProbabilities(adjustedPk +: binomials))
+        math.exp(LogUtils.sumLogProbabilities(partialLogPkM1 +: binomials))
 
       } else {
         0.0
