@@ -126,6 +126,9 @@ class MutectGenotyper(normalId: String,
                                          referenceObservation: Observation,
                                          alleleObservation: Iterable[AlleleObservation]): Option[VariantContext] = {
 
+    require(alleleObservation.forall(_.mismatchQScoreSum.isDefined),
+      "MD tags must be set in reads for MuTect to function properly. See `samtools calmd` for example.")
+
     val ref = referenceObservation.allele
 
     // get all possible alleles for this mutation call
@@ -144,7 +147,7 @@ class MutectGenotyper(normalId: String,
       val tumors = tumorsRaw.filterNot(ao => {
         val clippedFilter = (ao.clippedBasesReadStart + ao.clippedBasesReadEnd) /
           ao.unclippedReadLen.toDouble >= maxFractionBasesSoftClippedTumor
-        val noisyFilter = ao.mismatchQScoreSum >= maxPhredSumMismatchingBases
+        val noisyFilter = ao.mismatchQScoreSum.get >= maxPhredSumMismatchingBases
         val mateRescueFilter = ao.mateRescue
         clippedFilter || noisyFilter || mateRescueFilter
       })

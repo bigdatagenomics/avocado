@@ -40,7 +40,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID * 10,
       100,
       None, None,
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -56,7 +56,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID * 10 % 100,
       100,
       None, Some(-50),
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -72,7 +72,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID * 10,
       100,
       None, None,
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -88,7 +88,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID,
       100,
       None, None,
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -104,7 +104,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID,
       100,
       None, None,
-      20, 20, 100, 0, false,
+      20, 20, 100, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -120,7 +120,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID,
       100,
       None, None,
-      0, 0, 100, 101, false,
+      0, 0, 100, Some(101), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -136,7 +136,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID,
       100,
       Some(3), None,
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -152,7 +152,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID,
       100,
       None, Some(3),
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -168,7 +168,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID,
       100,
       None, Some(3),
-      0, 0, 1, 0, true,
+      0, 0, 1, Some(0), true,
       sample = "tumor",
       readId = 1L)
   }
@@ -184,7 +184,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = 100 - readID,
       100,
       None, None,
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -200,7 +200,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID * 10 % 100,
       100,
       None, Some(-50),
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -216,7 +216,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID * 10 % 100,
       100,
       None, Some(-50),
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "tumor",
       readId = 1L)
   }
@@ -232,7 +232,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID * 10,
       100,
       None, None,
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "normal",
       readId = 1L)
   }
@@ -247,7 +247,7 @@ class MutectGenotyperSuite extends FunSuite {
       offsetInAlignment = readID * 10,
       100,
       None, None,
-      0, 0, 1, 0, false,
+      0, 0, 1, Some(0), false,
       sample = "normal",
       readId = 1L)
   }

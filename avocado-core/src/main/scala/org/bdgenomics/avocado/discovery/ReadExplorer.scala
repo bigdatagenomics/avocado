@@ -23,7 +23,8 @@ import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferencePosition
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rich.RichAlignmentRecord
+import org.bdgenomics.adam.rich.{ DecadentRead, RichAlignmentRecord }
+import org.bdgenomics.adam.util.MdTag
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
@@ -43,10 +44,19 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
 
   val companion: ExplorerCompanion = ReadExplorer
 
+  def mdTagToMismatchPositions(mdTag: MdTag): Seq[Int] = {
+    val deletions = mdTag.deletions
+    val oriPositions = mdTag.mismatches.keys
+    var mismatchPositions = oriPositions.zip(oriPositions)
+    for ((dPos, _) <- deletions) {
+      mismatchPositions = mismatchPositions.map({ case (p, i) => if (i > dPos) (p - 1, i) else (p, i) })
+    }
+    mismatchPositions.map({ case (p, i) => p.toInt }).toSeq
+  }
+
   def readToObservations(r: (AlignmentRecord, Long)): Seq[Observation] = ExploringRead.time {
     val (read, readId) = r
     val richRead: RichAlignmentRecord = RichAlignmentRecord(read)
-
     // get read start, contig, strand, sample, mapq, and sequence
     var pos: Long = read.getStart
     val contig: String = read.getContig.getContigName
@@ -64,7 +74,11 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     // get cigar, md tag, and phred scores for bases
     val cigar: List[CigarElement] = richRead.samtoolsCigar.getCigarElements
     val quals = richRead.qualityScores
-    val mdTag = richRead.mdTag
+    val mdString = read.getMismatchingPositions
+    val mismatchPositions: Option[Seq[Int]] = if (mdString != null && mdString != "")
+      Some(mdTagToMismatchPositions(MdTag(read.getMismatchingPositions,
+        if (cigar.head.getOperator == CigarOperator.S) cigar.head.getLength else 0)))
+    else None
 
     // observations
     var observations = Seq[Observation]()
@@ -73,10 +87,9 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     var readPos = 0
 
     // get the sum of mismatching bases
-    // TODO this looks fishy, is it correct?
-    //val mismatchQScoreSum = read.getMismatchingPositions
-    //  .zip(read.qualityScores).filter(_._1 == 'D').map(_._2).sum
-    val mismatchQScoreSum = 0 // TODO implement me
+    val qscores: Option[Seq[Int]] = mismatchPositions.map(l => l.map(p => quals(p)))
+
+    val mismatchQScoreSum = qscores.map(_.sum)
 
     // Helper function to get the unclipped read length (hard or soft) from CIGAR
     def unclippedLenFromCigar(cigar: Cigar): Int = {
