@@ -188,3 +188,17 @@ average genome coverage.
 
 At most, one of the `absoluteDepth` or `relativeDepth` options can be specified. If neither are
 specified, we default to `relativeDepth = 0.75`.
+
+### Filter Known Sites
+
+This filter can be configured to either only keep variant calls that occur at known sites,
+or to discard variant calls that occur at known sites.
+
+For configuration, the filter is named `filterKnownSites`. It has the following options:
+
+* `knownSiteFile`: The path to a VCF that describes the known sites.
+* `datasetName`: This field is optional. If provided, it is used to describe where
+the known sites are from (e.g., 1000G, dbSNP).
+* `keepKnowns`: This field is optional and defaults to false. If true, we will keep all
+sites that overlap a known variant. If false, we discard all sites that overlap a known
+variant.
