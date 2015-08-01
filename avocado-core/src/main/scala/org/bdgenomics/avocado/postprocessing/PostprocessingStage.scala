@@ -21,9 +21,10 @@ import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.formats.avro.{ Genotype, VariantCallingAnnotations }
 import org.bdgenomics.adam.models.VariantContext
+import org.bdgenomics.adam.rich.RichVariant
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 
-private[postprocessing] trait PostprocessingStage {
+private[postprocessing] trait PostprocessingStage extends Serializable {
 
   val stageName: String
 
@@ -31,6 +32,46 @@ private[postprocessing] trait PostprocessingStage {
             stats: AvocadoConfigAndStats,
             config: SubnodeConfiguration): RDD[VariantContext]
 
+}
+
+private[postprocessing] trait VariantAttributeFilter extends Serializable {
+  val filterName: String
+
+  def filterFn(variant: RichVariant): Boolean
+
+  def filter(rdd: RDD[VariantContext]): RDD[VariantContext] = {
+    rdd.map(vc => {
+      val passed = filterFn(vc.variant)
+
+      val newGts = vc.genotypes.map(g => {
+        val stats = Option(g.getVariantCallingAnnotations)
+          .getOrElse(VariantCallingAnnotations.newBuilder().build())
+        val variantIsPassing = Option(stats.getVariantIsPassing)
+
+        // we only "apply" the filter if the variant call is currently passing
+        if (variantIsPassing.fold(true)(v => v)) {
+
+          // add to filter list
+          val filterList = stats.getVariantFilters
+          filterList.add(filterName)
+
+          // if we failed, update flag
+          if (!passed || variantIsPassing.isEmpty) {
+            stats.setVariantIsPassing(passed)
+          }
+
+          g.setVariantCallingAnnotations(stats)
+        }
+
+        g
+      })
+
+      new VariantContext(vc.position,
+        vc.variant,
+        newGts,
+        vc.databases)
+    })
+  }
 }
 
 private[postprocessing] trait GenotypeAttributeFilter[T] extends GenotypeFilter {
@@ -48,7 +89,7 @@ private[postprocessing] trait GenotypeAttributeFilter[T] extends GenotypeFilter 
     val genotypesWithStats: Seq[Genotype] = keyed.filter(t => t._1.isDefined)
       .map(kv => {
         val stats = Option(kv._2.getVariantCallingAnnotations)
-          .fold(VariantCallingAnnotations.newBuilder().build())(v => v)
+          .getOrElse(VariantCallingAnnotations.newBuilder().build())
         val variantIsPassing = Option(stats.getVariantIsPassing)
 
         // we only apply the filter if the variant call is currently passing
