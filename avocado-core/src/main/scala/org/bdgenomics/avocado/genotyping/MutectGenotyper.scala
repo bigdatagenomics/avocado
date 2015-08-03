@@ -17,14 +17,16 @@
  */
 package org.bdgenomics.avocado.genotyping
 
+import java.io.File
 import org.apache.commons.configuration.{ HierarchicalConfiguration, SubnodeConfiguration }
 import org.apache.spark.Logging
+import org.apache.spark.broadcast.Broadcast
 import org.bdgenomics.adam.models._
 import org.bdgenomics.avocado.algorithms.mutect._
+import org.bdgenomics.avocado.algorithms.math.{ LogUtils, LogBinomial }
 import org.bdgenomics.avocado.models.{ AlleleObservation, Observation }
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{ Contig, Genotype, Variant }
-import org.bdgenomics.avocado.algorithms.math.{ LogUtils, LogBinomial }
 
 import scala.annotation.tailrec
 
@@ -39,6 +41,13 @@ object MutectGenotyper extends GenotyperCompanion {
       "Normal sample ID is not defined in configuration file.")
     require(config.containsKey("somaticId"),
       "Somatic sample ID is not defined in configuration file.")
+
+    // load snp table
+    val snpTable = if (config.containsKey("dbSNPFile")) {
+      Some(stats.sc.broadcast(SnpTable(new File(config.getString("dbSNPFile")))))
+    } else {
+      None
+    }
 
     // pull out algorithm parameters and return genotyper
     new MutectGenotyper(config.getString("normalId"),
@@ -61,7 +70,8 @@ object MutectGenotyper extends GenotyperCompanion {
       config.getBoolean("experimentalMutectIndelDetector", false),
       config.getDouble("errorForPowerCalculations", 0.001),
       config.getInt("minThetaForPowerCalc", 20),
-      None)
+      None,
+      snpTable)
   }
 }
 
@@ -93,7 +103,8 @@ class MutectGenotyper(normalId: String,
                       experimentalMutectIndelDetector: Boolean = false,
                       errorForPowerCalculations: Double = 0.001,
                       minThetaForPowerCalc: Int = 20,
-                      f: Option[Double] = None) extends SiteGenotyper with Logging {
+                      f: Option[Double] = None,
+                      snpTable: Option[Broadcast[SnpTable]] = None) extends SiteGenotyper with Logging {
 
   val companion: GenotyperCompanion = MutectGenotyper
 
@@ -164,7 +175,10 @@ class MutectGenotyper(normalId: String,
 
         val normalNotHet = somaticModel.logOdds(ref, alt, normals, None)
 
-        val dbSNPsite = false //TODO figure out if this is a dbSNP position
+        // is this a known site?
+        val dbSNPsite = snpTable.fold(false)(t => {
+          t.value.contains(ReferencePosition(region.referenceName, region.start))
+        })
 
         val passSomatic: Boolean = (dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)
         val nInsertions = tumors.map(ao => if (math.abs(ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue)) <= indelNearnessThreshold) 1 else 0).sum

@@ -44,10 +44,29 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
 
   val companion: ExplorerCompanion = ReadExplorer
 
-  def mdTagToMismatchPositions(mdTag: MdTag): Seq[Int] = {
+  def mdTagToMismatchPositions(mdTag: MdTag, cigar: List[CigarElement]): Seq[Int] = {
+    var idx = 0
+    val insertions = cigar.map(c => {
+      (c, c.getLength)
+    }).map(kv => {
+      val r = (kv._1, idx)
+      idx += kv._2
+      r
+    }).flatMap(kv => {
+      val (ce, i) = kv
+      if (ce.getOperator == CigarOperator.I) {
+        (0 until ce.getLength).map(_ + i)
+      } else {
+        Seq.empty
+      }
+    })
+
     val deletions = mdTag.deletions
     val oriPositions = mdTag.mismatches.keys
     var mismatchPositions = oriPositions.zip(oriPositions)
+    for (iPos <- insertions) {
+      mismatchPositions = mismatchPositions.map({ case (p, i) => if (i <= iPos) (p + 1, i) else (p, i) })
+    }
     for ((dPos, _) <- deletions) {
       mismatchPositions = mismatchPositions.map({ case (p, i) => if (i > dPos) (p - 1, i) else (p, i) })
     }
@@ -77,7 +96,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     val mdString = read.getMismatchingPositions
     val mismatchPositions: Option[Seq[Int]] = if (mdString != null && mdString != "")
       Some(mdTagToMismatchPositions(MdTag(read.getMismatchingPositions,
-        if (cigar.head.getOperator == CigarOperator.S) cigar.head.getLength else 0)))
+        if (cigar.head.getOperator == CigarOperator.S) cigar.head.getLength else 0,
+        richRead.samtoolsCigar), cigar))
     else None
 
     // observations
@@ -87,7 +107,11 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     var readPos = 0
 
     // get the sum of mismatching bases
-    val qscores: Option[Seq[Int]] = mismatchPositions.map(l => l.map(p => quals(p)))
+    val qscores: Option[Seq[Int]] = mismatchPositions.map(l => {
+      l.map(p => {
+        quals(p)
+      })
+    })
 
     val mismatchQScoreSum = qscores.map(_.sum)
 

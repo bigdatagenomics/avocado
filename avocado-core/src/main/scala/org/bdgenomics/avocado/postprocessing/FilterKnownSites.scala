@@ -19,6 +19,7 @@ package org.bdgenomics.avocado.postprocessing
 
 import java.io.File
 import org.apache.commons.configuration.SubnodeConfiguration
+import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.{
   ReferencePosition,
@@ -48,14 +49,15 @@ object FilterKnownSites extends PostprocessingStage {
     val keepKnowns = config.getBoolean("keepKnowns", false)
 
     // build and apply filter
-    val filter = new FilterKnownSites(datasetName, snpTable, keepKnowns)
+    val filter = new FilterKnownSites(datasetName, snpTable, keepKnowns, Some(stats.sc))
     filter.filter(rdd)
   }
 }
 
 class FilterKnownSites(dataset: Option[String],
                        siteTable: SnpTable,
-                       keepKnowns: Boolean) extends VariantAttributeFilter {
+                       keepKnowns: Boolean,
+                       sc: Option[SparkContext] = None) extends VariantAttributeFilter {
 
   val filterName = if (keepKnowns) {
     dataset.fold("KNOWN_SITE")(d => "SITE_IN_%s".format(d))
@@ -63,8 +65,10 @@ class FilterKnownSites(dataset: Option[String],
     dataset.fold("UNKNOWN_SITE")(d => "SITE_NOT_IN_%s".format(d))
   }
 
+  private val table = sc.fold(siteTable)(c => c.broadcast(siteTable).value)
+
   def filterFn(v: RichVariant): Boolean = {
-    val in = siteTable.contains(ReferencePosition(v.variant.getContig.getContigName,
+    val in = table.contains(ReferencePosition(v.variant.getContig.getContigName,
       v.variant.getStart))
     if (keepKnowns) {
       in
