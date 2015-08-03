@@ -140,7 +140,7 @@ class ReadExplorerSuite extends AvocadoFunSuite {
       .setSequence("ACTGA")
       .setQual(":::?:")
       .setCigar("1M2I2M")
-      .setMismatchingPositions("3C1")
+      .setMismatchingPositions("1C1")
       .setRecordGroupSample("sample1")
       .build()
 
