@@ -17,28 +17,47 @@
 # limitations under the License.
 #
 
+set -e
+
+# Split args into Spark and ADAM args
+DD=False  # DD is "double dash"
+PRE_DD=()
+POST_DD=()
+for ARG in "$@"; do
+  shift
+  if [[ $ARG == "--" ]]; then
+    DD=True
+    POST_DD=( "$@" )
+    break
+  fi
+  PRE_DD+=("$ARG")
+done
+
+if [[ $DD == True ]]; then
+  SPARK_ARGS="${PRE_DD[@]}"
+  AVOCADO_ARGS=("${POST_DD[@]}")
+else
+  SPARK_ARGS=()
+  AVOCADO_ARGS=(${PRE_DD[@]})
+fi
+
+# does the user have AVOCADO_OPTS set? if yes, then warn
+if [[ $DD == False && -n "$AVOCADO_OPTS" ]]; then
+    echo "WARNING: Passing Spark arguments via AVOCADO_OPTS was recently removed."
+    echo "Run avocado-submit instead as avocado-submit <spark-args> -- <avocado-args>"
+fi
+
 # Figure out where AVOCADO is installed
 AVOCADO_REPO="$(cd `dirname $0`/..; pwd)"
 
 CLASSPATH=$("$AVOCADO_REPO"/bin/compute-avocado-classpath.sh)
 AVOCADO_JARS=$("$AVOCADO_REPO"/bin/compute-avocado-jars.sh)
 
-# Find the AVOCADO CLI jar
-num_versions=$(ls "$AVOCADO_REPO"/avocado-cli/target/appassembler/repo/org/bdgenomics/avocado/avocado-cli | wc -l)
-if [ "$num_versions" -eq "0" ]; then
-  echo "Failed to find avocado-cli jar in $AVOCADO_REPO/avocado-cli/target/appassembler/repo/org/bdgenomics/avocado/avocado-cli"
-  echo "You need to build avocado before running this program."
-  exit 1
-fi
-if [ "$num_versions" -gt "1" ]; then
-  versions_list=$(ls "$AVOCADO_REPO"/avocado-cli/target/appassembler/repo/org/bdgenomics/avocado/avocado-cli)
-  echo "Found multiple avocado CLI versions in $AVOCADO_REPO/avocado-cli/target/appassembler/repo/org/bdgenomics/avocado/avocado-cli:"
-  echo "$versions_list"
-  echo "Please remove all but one."
-  exit 1
-fi
-AVOCADO_CLI_JAR=$(ls "$AVOCADO_REPO"/avocado-cli/target/appassembler/repo/org/bdgenomics/avocado/avocado-cli/*/avocado-cli-*.jar)
+# Split out the CLI jar, since it will be passed to Spark as the "primary resource".
+AVOCADO_CLI_JAR=${AVOCADO_JARS##*,}
+AVOCADO_JARS=$(echo "$AVOCADO_JARS" | rev | cut -d',' -f2- | rev)
 
+# Find spark-submit script
 if [ -z "$SPARK_HOME" ]; then
   echo "Attempting to use 'spark-submit' on default path; you might need to set SPARK_HOME"
   SPARK_SUBMIT=spark-submit
@@ -51,11 +70,7 @@ fi
   --class org.bdgenomics.avocado.cli.Avocado \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.kryo.registrator=org.bdgenomics.adam.serialization.ADAMKryoRegistrator \
-  --conf spark.kryoserializer.buffer.mb=4 \
-  --conf spark.kryo.referenceTracking=true \
-  --conf spark.executor.memory=${AVOCADO_EXECUTOR_MEMORY:-4g} \
-  ${AVOCADO_OPTS:- } \
-  --driver-memory ${AVOCADO_DRIVER_MEMORY:-4g} \
-  --jars "$AVOCADO_JARS" \
-  "$AVOCADO_CLI_JAR" \
-  "$@"
+  $SPARK_ARGS \
+  --jars $AVOCADO_JARS \
+  $AVOCADO_CLI_JAR \
+  ${AVOCADO_ARGS[@]}
