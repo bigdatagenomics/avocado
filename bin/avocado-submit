@@ -57,13 +57,37 @@ AVOCADO_JARS=$("$AVOCADO_REPO"/bin/compute-avocado-jars.sh)
 AVOCADO_CLI_JAR=${AVOCADO_JARS##*,}
 AVOCADO_JARS=$(echo "$AVOCADO_JARS" | rev | cut -d',' -f2- | rev)
 
+# do we have >= 4 arguments? if so, magic!!!!!!!
+if [ ${#AVOCADO_ARGS[@]} -ge 4 ]; then
+    # make a temp directory
+    TEMP_DIR=$(mktemp -d -t "avocado.properties.XXXXXXXX")
+    DIR_ID=${TEMP_DIR##*.}
+
+    # copy property file over
+    cp ${AVOCADO_ARGS[3]} "${TEMP_DIR}/${DIR_ID}.properties"
+
+    # make jar
+    jar cf "${TEMP_DIR}/${DIR_ID}.jar" -C ${TEMP_DIR} ${DIR_ID}.properties
+    cp "${TEMP_DIR}/${DIR_ID}.jar" .
+
+    # add jar to classpath
+    AVOCADO_JARS="${AVOCADO_JARS},${TEMP_DIR}/${DIR_ID}.jar"
+
+    # modify arguments
+    AVOCADO_ARGS[3]="${DIR_ID}.properties"
+fi
+
 # Find spark-submit script
 if [ -z "$SPARK_HOME" ]; then
-  echo "Attempting to use 'spark-submit' on default path; you might need to set SPARK_HOME"
-  SPARK_SUBMIT=spark-submit
+  SPARK_SUBMIT=$(which spark-submit)
 else
   SPARK_SUBMIT="$SPARK_HOME"/bin/spark-submit
 fi
+if [ -z "$SPARK_SUBMIT" ]; then
+  echo "SPARK_HOME not set and spark-submit not on PATH; Aborting."
+  exit 1
+fi
+echo "Using SPARK_SUBMIT=$SPARK_SUBMIT"
 
 # submit the job to Spark
 "$SPARK_SUBMIT" \
