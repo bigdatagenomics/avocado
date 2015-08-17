@@ -24,6 +24,6 @@ CLASSPATH=$("$AVOCADO_REPO"/bin/compute-avocado-classpath.sh)
 
 # list of jars to ship with spark; trim off the first and last from the CLASSPATH
 # TODO: brittle? assumes appassembler always puts the $BASE/etc first and the CLI jar last
-AVOCADO_JARS=$(echo "$CLASSPATH" | tr ":" "," | cut -d "," -f 2- | rev | cut -d "," -f 2- | rev)
+AVOCADO_JARS=$(echo "$CLASSPATH" | tr ":" "," | cut -d "," -f 2-)
 
 echo "$AVOCADO_JARS"

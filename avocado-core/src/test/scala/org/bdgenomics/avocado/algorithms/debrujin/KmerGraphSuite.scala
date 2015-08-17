@@ -29,9 +29,7 @@ import scala.collection.mutable.ArrayBuffer
 class KmerGraphSuite extends AvocadoFunSuite {
 
   override val properties = Map(("spark.serializer", "org.apache.spark.serializer.KryoSerializer"),
-    ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"),
-    ("spark.kryoserializer.buffer.mb", "128"),
-    ("spark.kryo.referenceTracking", "true"))
+    ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"))
 
   // shamelessly borrowed from the indel realigner while we are refactoring...
   def getReferenceFromReads(reads: Seq[RichAlignmentRecord]): String = {

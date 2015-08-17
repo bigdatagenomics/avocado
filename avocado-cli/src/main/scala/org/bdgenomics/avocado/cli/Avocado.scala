@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.cli
 
+import java.nio.file.Files
 import org.apache.commons.configuration.HierarchicalConfiguration
 import org.apache.commons.configuration.plist.PropertyListConfiguration
 import org.apache.hadoop.mapreduce.Job
@@ -83,8 +84,14 @@ class Avocado(protected val args: AvocadoArgs) extends BDGSparkCommand[AvocadoAr
   // companion object to this class - needed for BDGCommand framework
   val companion = Avocado
 
-  // get config
-  val config: HierarchicalConfiguration = new PropertyListConfiguration(args.configFile)
+  // get config off classpath and load into a temp file...
+  val stream = Thread.currentThread.getContextClassLoader.getResourceAsStream(args.configFile)
+  val tempPath = Files.createTempDirectory("config")
+  val tempFilePath = tempPath.resolve("temp.properties")
+  Files.copy(stream, tempFilePath)
+
+  // load config
+  val config: HierarchicalConfiguration = new PropertyListConfiguration(tempFilePath.toFile)
 
   val preprocessorNames = getStringArrayFromConfig("preprocessorNames")
   val preprocessorAlgorithms = getStringArrayFromConfig("preprocessorAlgorithms")
