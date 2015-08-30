@@ -49,6 +49,19 @@ object MutectGenotyper extends GenotyperCompanion {
       None
     }
 
+    // load known mutations (like cosmic) file
+    val recurrentMutationsTable = if (config.containsKey("recurrentMutationsFile")) {
+      Some(stats.sc.broadcast(SnpTable(new File(config.getString("recurrentMutationsFile")))))
+    } else {
+      None
+    }
+
+    val noisyMutationsTable = if (config.containsKey("noisyMutationsFile")) {
+      Some(stats.sc.broadcast(SnpTable(new File(config.getString("noisyMutationsFile")))))
+    } else {
+      None
+    }
+
     // pull out algorithm parameters and return genotyper
     new MutectGenotyper(config.getString("normalId"),
       config.getString("somaticId"),
@@ -71,7 +84,9 @@ object MutectGenotyper extends GenotyperCompanion {
       config.getDouble("errorForPowerCalculations", 0.001),
       config.getInt("minThetaForPowerCalc", 20),
       None,
-      snpTable)
+      snpTable,
+      recurrentMutationsTable,
+      noisyMutationsTable)
   }
 }
 
@@ -104,7 +119,9 @@ class MutectGenotyper(normalId: String,
                       errorForPowerCalculations: Double = 0.001,
                       minThetaForPowerCalc: Int = 20,
                       f: Option[Double] = None,
-                      snpTable: Option[Broadcast[SnpTable]] = None) extends SiteGenotyper with Logging {
+                      snpTable: Option[Broadcast[SnpTable]] = None,
+                      recurrentMutationsTable: Option[Broadcast[SnpTable]] = None,
+                      noisyMutationsTable: Option[Broadcast[SnpTable]] = None) extends SiteGenotyper with Logging {
 
   val companion: GenotyperCompanion = MutectGenotyper
 
@@ -180,7 +197,20 @@ class MutectGenotyper(normalId: String,
           t.value.contains(ReferencePosition(region.referenceName, region.start))
         })
 
+        // is this a recurrent site, for example cosmic?
+        val recurrentMutSite = recurrentMutationsTable.fold(false)(t => {
+          t.value.contains(ReferencePosition(region.referenceName, region.start))
+        })
+
+        // is this a noisy mutation site, for example one called previously using only a Panel of Normals (PON)?
+        val noisyMutSite = noisyMutationsTable.fold(false)(t => {
+          t.value.contains(ReferencePosition(region.referenceName, region.start))
+        })
+
         val passSomatic: Boolean = (dbSNPsite && normalNotHet >= somDbSnpThreshold) || (!dbSNPsite && normalNotHet >= somNovelThreshold)
+
+        val passNoiseFilter: Boolean = (recurrentMutSite || !noisyMutSite)
+
         val nInsertions = tumors.map(ao => if (math.abs(ao.distanceToNearestReadInsertion.getOrElse(Int.MaxValue)) <= indelNearnessThreshold) 1 else 0).sum
         val nDeletions = tumors.map(ao => if (math.abs(ao.distanceToNearestReadDeletion.getOrElse(Int.MaxValue)) <= indelNearnessThreshold) 1 else 0).sum
 
@@ -237,7 +267,8 @@ class MutectGenotyper(normalId: String,
 
         // Do all filters pass?
         if (passSomatic && passIndel && passStringentFilters && passMapq0Filter &&
-          passMaxMapqAlt && passMaxNormalSupport && passEndClustering && passingStrandBias) {
+          passMaxMapqAlt && passMaxNormalSupport && passEndClustering &&
+          passingStrandBias && passNoiseFilter) {
           Option(constructVariant(region, ref, alt, alleleObservation))
         } else {
           None
