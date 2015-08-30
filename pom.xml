@@ -15,12 +15,12 @@
   <name>avocado: A Variant Caller, Distributed</name>
   
   <properties>
-    <adam.version>0.17.1-SNAPSHOT</adam.version>
+    <adam.version>0.17.1</adam.version>
     <avro.version>1.7.6</avro.version>
     <java.version>1.7</java.version>
     <scala.version>2.10.3</scala.version>
     <scala.version.prefix>2.10</scala.version.prefix>
-    <spark.version>1.2.0</spark.version>
+    <spark.version>1.4.1</spark.version>
     <!-- Edit the following line to configure the Hadoop (HDFS) version. -->
     <hadoop.version>2.2.0</hadoop.version>
     <utils.version>0.2.2</utils.version>
@@ -303,6 +303,11 @@
         <groupId>commons-configuration</groupId>
         <artifactId>commons-configuration</artifactId>
         <version>1.10</version>
+      </dependency>
+      <dependency>
+        <groupId>commons-io</groupId>
+        <artifactId>commons-io</artifactId>
+        <version>1.3.2</version>
       </dependency>
       <dependency>
         <groupId>args4j</groupId>
