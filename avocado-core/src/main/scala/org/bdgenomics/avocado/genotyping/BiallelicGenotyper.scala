@@ -255,8 +255,14 @@ class BiallelicGenotyper(sd: SequenceDictionary,
         .setSampleId(sampleId)
         .setReadDepth(observations.size)
         .setAlleles(calls.toList)
-        .setGenotypeLikelihoods(likelihoods.map(v => log2phred(v).toInt).toList)
-        .setNonReferenceLikelihoods(anyAltLikelihoods.map(v => log2phred(v).toInt).toList)
+        .setGenotypeLikelihoods(likelihoods.map(d => {
+          val f: java.lang.Float = d.toFloat
+          f
+        }).toList)
+        .setNonReferenceLikelihoods(anyAltLikelihoods.map(d => {
+          val f: java.lang.Float = d.toFloat
+          f
+        }).toList)
         .setGenotypeQuality(log2phred(genotypeProbability).toInt)
         .setReferenceReadDepth(observations.filter(_.allele == ref).size)
         .setAlternateReadDepth(observations.filter(_.allele == alt).size)
