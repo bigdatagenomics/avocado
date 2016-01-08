@@ -39,25 +39,6 @@ class VariantCallingAnnotatorSuite extends FunSuite {
       1L)
   }
 
-  test("annotate variant quality by depth") {
-    val observed = Iterable(createAllele(ref, 20, true),
-      createAllele(ref, 30, true),
-      createAllele(alt, 40, true))
-
-    val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
-    val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
-    MathTestUtils.assertAlmostEqual(annotator.variantQualityByDepth(), variantQuality)
-  }
-
-  test("annotate read depth") {
-    val observed = Iterable(createAllele(ref, 20, true),
-      createAllele(ref, 30, true),
-      createAllele(alt, 40, true))
-    val likelihoods = ba.scoreGenotypeLikelihoods(ref, alt, observed)._2
-    val annotator = VariantCallingAnnotator(variant, observed, variantQuality, likelihoods)
-    assert(annotator.readDepth() == 3)
-  }
-
   test("annotate map quality rank sum") {
     val refBaseQ = List(20, 25, 26, 30, 32, 40, 47, 50, 53, 60)
     val altBaseQ = List(0, 7, 10, 17, 20, 21, 30, 34, 40, 45)

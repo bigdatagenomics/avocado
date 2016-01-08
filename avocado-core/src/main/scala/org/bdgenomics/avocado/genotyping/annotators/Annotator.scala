@@ -47,19 +47,10 @@ class VariantCallingAnnotator(variant: Variant, observations: Iterable[AlleleObs
     mapQRankSum().foreach(annotationBuilder.setMqRankSum(_))
 
     // other values are not optional
-    annotationBuilder.setVariantQualityByDepth(variantQualityByDepth())
-      .setReadDepth(readDepth())
+    annotationBuilder
       .setFisherStrandBiasPValue(fisherStrandBiasValue())
       .setRmsMapQ(rmsMapQ())
       .build()
-  }
-
-  def variantQualityByDepth(): Float = {
-    (variantQuality / numAlt).toFloat
-  }
-
-  def readDepth(): Integer = {
-    numAlt + numRef
   }
 
   // Calculate RankSum as according to https://www.broadinstitute.org/gatk/guide/article?id=473

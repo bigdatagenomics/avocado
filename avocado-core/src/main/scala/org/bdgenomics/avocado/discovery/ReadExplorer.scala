@@ -89,7 +89,7 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     }
     val sequence: String = read.getSequence
 
-    val firstOfPair = read.getFirstOfPair
+    val firstOfPair = read.getReadNum == 0
     // get cigar, md tag, and phred scores for bases
     val cigar: List[CigarElement] = richRead.samtoolsCigar.getCigarElements
     val quals = richRead.qualityScores
