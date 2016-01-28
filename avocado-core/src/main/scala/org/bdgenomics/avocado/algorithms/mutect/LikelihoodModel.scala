@@ -22,7 +22,7 @@ import org.bdgenomics.avocado.models.AlleleObservation
 import org.bdgenomics.adam.util.PhredUtils.phredToErrorProbability
 import scala.math._
 
-trait LikelihoodModel {
+trait LikelihoodModel extends Serializable {
   def logLikelihood(ref: String,
                     alt: String,
                     obs: Iterable[AlleleObservation],

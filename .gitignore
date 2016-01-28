@@ -6,6 +6,7 @@
 *.vcf*
 target
 *.log
+*.jar
 
 # Intellij
 .idea/

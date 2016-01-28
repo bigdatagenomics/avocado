@@ -19,13 +19,12 @@ package org.bdgenomics.avocado.input
 
 import org.bdgenomics.formats.avro.{ AlignmentRecord, NucleotideContigFragment }
 import org.apache.commons.configuration.HierarchicalConfiguration
-import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-
+import org.apache.spark.{ SparkContext }
 object Input {
 
   // all our input stages
-  val stages = List(AlignedReadsInputStage)
+  val stages = List(AlignedReadsInputStage, KeyedReadsInputStage)
 
   /**
    * Builds the input stage that corresponds to the given stage name, and returns the read data
@@ -44,9 +43,7 @@ object Input {
             config: HierarchicalConfiguration): RDD[AlignmentRecord] = {
     // get input stage to use; if none is specified, default to input being aligned reads
     val stageName: String = config.getString("inputStage", "AlignedReads")
-
     val stage = stages.find(_.stageName == stageName)
-
     stage match {
       case Some(s: InputStage) => {
         val stageConfig = config.configurationAt(stageName)

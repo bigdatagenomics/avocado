@@ -21,7 +21,7 @@ import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.formats.avro.AlignmentRecord
 
-trait ReadFilter[T] extends PreprocessingStage {
+trait ReadFilter[T] extends PreprocessingStage with Serializable {
 
   final def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
     val threshold = getThreshold(config)

@@ -265,6 +265,53 @@ class ReadExplorerSuite extends AvocadoFunSuite {
     assert(observations.filter(_.pos.pos == 14L).head.allele === "A")
   }
 
+  sparkTest("observe a read with soft clipping and insertion") {
+    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
+
+    val read = AlignmentRecord.newBuilder()
+      .setStart(10L)
+      .setEnd(15L)
+      .setContig(Contig.newBuilder()
+        .setContigName("chr1")
+        .build())
+      .setMapq(40)
+      .setSequence("GGGACTGAGG")
+      .setQual(":::?:::::::")
+      .setCigar("3S1M2I2M2S")
+      .setMismatchingPositions("0A4")
+      .setRecordGroupSample("sample1")
+      .build()
+
+    val observations = re.readToObservations((read, 0L))
+      .flatMap(o => o match {
+        case ao: AlleleObservation => Some(ao)
+        case _                     => None
+      })
+
+    assert(observations.length === 3)
+    assert(observations.filter(_.pos.pos != 10L).forall(_.phred == 25))
+    assert(observations.forall(_.mapq == Some(40)))
+    assert(observations.forall(_.pos.referenceName == "chr1"))
+    assert(observations.forall(_.sample == "sample1"))
+    assert(observations.forall(!_.onNegativeStrand))
+    assert(observations.forall(_.distanceToNearestReadDeletion.isEmpty))
+    assert(observations.exists(_.distanceToNearestReadInsertion.isDefined))
+    //changed
+    assert(observations.head.mismatchQScoreSum === Some(25))
+    assert(observations.forall(_.alignedReadLen == 5))
+    assert(observations.filter(_.pos.pos == 10L).length === 1)
+    assert(observations.filter(_.pos.pos == 10L).head.distanceToNearestReadInsertion === Some(1))
+    assert(observations.filter(_.pos.pos == 10L).head.allele === "ACT")
+    assert(observations.filter(_.pos.pos == 11L).length === 1)
+    assert(observations.filter(_.pos.pos == 11L).head.distanceToNearestReadInsertion === Some(-1))
+    assert(observations.filter(_.pos.pos == 11L).head.allele === "G")
+    // changed
+    assert(observations.filter(_.pos.pos == 11L).head.phred === 25)
+    assert(observations.filter(_.pos.pos == 12L).length === 1)
+    assert(observations.filter(_.pos.pos == 12L).head.distanceToNearestReadInsertion === Some(-2))
+    assert(observations.filter(_.pos.pos == 12L).head.allele === "A")
+  }
+
   sparkTest("observe a read with hard clipping") {
     val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
 

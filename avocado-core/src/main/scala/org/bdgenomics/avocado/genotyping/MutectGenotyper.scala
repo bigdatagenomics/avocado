@@ -36,6 +36,15 @@ object MutectGenotyper extends GenotyperCompanion {
 
   protected def apply(stats: AvocadoConfigAndStats,
                       config: SubnodeConfiguration): Genotyper = {
+    println("\n")
+    println("\n")
+    println("\n")
+    println("\n")
+    println("\n")
+    println("\n")
+    println("\n")
+    println("\n")
+    println("Mutect")
 
     require(config.containsKey("normalId"),
       "Normal sample ID is not defined in configuration file.")
@@ -158,8 +167,8 @@ class MutectGenotyper(normalId: String,
       "MD tags must be set in reads for MuTect to function properly. See `samtools calmd` for example.")
 
     val ref = referenceObservation.allele
-
     // get all possible alleles for this mutation call
+    // ref.size and ref.length always seem to be 1
     val alleles: Set[String] = if (experimentalMutectIndelDetector)
       Set(alleleObservation.map(_.allele).toSeq: _*)
     else
@@ -279,6 +288,8 @@ class MutectGenotyper(normalId: String,
         None
       }
     } else {
+      log.info("length:  " + ref.length)
+      log.info("size: " + ref.size)
       log.info("Dropping site %s, as reference allele is an insertion or complex variant.".format(referenceObservation.pos))
       None
     }

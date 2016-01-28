@@ -124,10 +124,14 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     }
 
     def alignedLenFromCigar(cigar: Cigar): Int = {
-      cigar.getCigarElements.map(ce => ce.getOperator match {
+      cigar.getCigarElements.map(alignedElementLength).sum
+    }
+
+    def alignedElementLength(ce: CigarElement): Int = {
+      ce.getOperator match {
         case CigarOperator.D | CigarOperator.N | CigarOperator.P | CigarOperator.H | CigarOperator.S => 0
         case _ => ce.getLength
-      }).sum
+      }
     }
 
     // Helper function to calculate the length of an element, if it is a clipping element
@@ -152,17 +156,37 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         (idx, (ce.getLength, ce.getOperator))
     }).toMap
 
+    val alignedLenFromCigars = cigar.map(alignedElementLength)
+
+    // List of changes that are only insertions along with their lengths and pos (pos, (len, CigarOperator.I))
     val insertions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.I })
+    // List of changes that are only deletions along with their lengths and pos (pos, (len, CigarOperator.D))
     val deletions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.D })
 
-    def makeNaieveDistanceVec(idx: Int, len: Int, del: Boolean): Vector[Int] = {
-      val lpre = (0 until idx).map(cigarLenOps(_)._1).sum
-      val lpost = ((idx + 1) until cigar.length).map(cigarLenOps(_)._1).sum
-      ((1 to lpre).reverse ++ (if (del) Vector.empty[Int] else Vector.fill(len)(0)) ++ (1 to lpost).map(-_)).toVector
+    /**
+     *
+     * @param idx position of the insertion in the Cigar list
+     * @param len lenght of the insertion from the Cigar list
+     * @param del whether it is deletion or insertion
+     * @return
+     */
+    def makeNaiveDistanceVec(idx: Int, len: Int, del: Boolean): Vector[Int] = {
+      // Finds the distance (num of bases in the read) before the event
+      val lpre = (0 until idx).map(alignedLenFromCigars(_)).sum
+
+      // Finds the num of bases in the read after the event (at idx)
+      val lpost = ((idx + 1) until cigar.length).map(alignedLenFromCigars(_)).sum
+
+      // Makes a list for every base pair in the read based on how far it is from this particular event
+      // eg. if it is an insertion, lpre = 5, lpost = 6, insertion len = 3, read length = 14
+      // (5, 4, 3, 2, 1, 0, 0, 0, 1, 2, 3, 4, 5, 6)
+      val distanceVec = ((1 to lpre).reverse ++ (if (del) Vector.empty[Int] else Vector.fill(len)(0)) ++ (1 to lpost).map(-_)).toVector
+      assert(distanceVec.length == alignedLen)
+      distanceVec
     }
 
-    val insertionDistVecs = insertions.map({ case (idx, (len, _)) => makeNaieveDistanceVec(idx, len, false) })
-    val deletionDistVecs = deletions.map({ case (idx, (len, _)) => makeNaieveDistanceVec(idx, len, true) })
+    val insertionDistVecs = insertions.map({ case (idx, (len, _)) => makeNaiveDistanceVec(idx, len, false) })
+    val deletionDistVecs = deletions.map({ case (idx, (len, _)) => makeNaiveDistanceVec(idx, len, true) })
 
     val posToInsDist: Option[Vector[Int]] = if (insertionDistVecs.size > 0) Some(insertionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
     val posToDelDist: Option[Vector[Int]] = if (deletionDistVecs.size > 0) Some(deletionDistVecs.transpose.map(l => l.minBy(Math.abs(_))).toVector) else None
@@ -188,8 +212,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
         firstOfPair,
         readPos - softclippedBases,
         alignedLen,
-        posToInsDist.map(_(readPos)),
-        posToDelDist.map(_(readPos)),
+        posToInsDist.flatMap((lst: Vector[Int]) => Some(lst(readPos - softclippedBases))),
+        posToDelDist.flatMap((lst: Vector[Int]) => Some(lst(readPos - softclippedBases))),
         trimmedFromStart,
         trimmedFromEnd,
         readLen,
@@ -216,8 +240,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           firstOfPair,
           readPos - softclippedBases,
           alignedLen,
-          posToInsDist.map(_(readPos)),
-          posToDelDist.map(_(readPos)),
+          posToInsDist.flatMap((lst: Vector[Int]) => Some(lst(readPos - softclippedBases))),
+          posToDelDist.flatMap((lst: Vector[Int]) => Some(lst(readPos - softclippedBases))),
           trimmedFromStart,
           trimmedFromEnd,
           readLen,
@@ -244,8 +268,8 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
           firstOfPair,
           readPos - softclippedBases,
           alignedLen,
-          posToInsDist.map(_(readPos)),
-          posToDelDist.map(_(readPos)),
+          posToInsDist.flatMap((lst: Vector[Int]) => Some(lst(readPos - softclippedBases))),
+          posToDelDist.flatMap((lst: Vector[Int]) => Some(lst(readPos - softclippedBases))),
           trimmedFromStart,
           trimmedFromEnd,
           readLen,
