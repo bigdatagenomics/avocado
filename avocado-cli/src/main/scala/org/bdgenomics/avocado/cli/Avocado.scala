@@ -1,20 +1,20 @@
 /**
- * Licensed to Big Data Genomics (BDG) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The BDG licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to Big Data Genomics (BDG) under one
+  * or more contributor license agreements.  See the NOTICE file
+  * distributed with this work for additional information
+  * regarding copyright ownership.  The BDG licenses this file
+  * to you under the Apache License, Version 2.0 (the
+  * "License"); you may not use this file except in compliance
+  * with the License.  You may obtain a copy of the License at
+  *
+  *     http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 package org.bdgenomics.avocado.cli
 
 import java.nio.file.Files
@@ -35,17 +35,17 @@ import org.bdgenomics.avocado.preprocessing.Preprocessor
 import org.bdgenomics.avocado.postprocessing.Postprocessor
 import org.bdgenomics.avocado.stats.AvocadoConfigAndStats
 import org.bdgenomics.formats.avro.{
-  Variant,
-  AlignmentRecord,
-  NucleotideContigFragment,
-  Genotype
+Variant,
+AlignmentRecord,
+NucleotideContigFragment,
+Genotype
 }
 import org.bdgenomics.utils.cli.{
-  BDGSparkCommand,
-  BDGCommandCompanion,
-  ParquetArgs,
-  Args4j,
-  Args4jBase
+BDGSparkCommand,
+BDGCommandCompanion,
+ParquetArgs,
+Args4j,
+Args4jBase
 }
 import org.bdgenomics.utils.instrumentation._
 
@@ -121,12 +121,12 @@ class Avocado(protected val args: AvocadoArgs) extends BDGSparkCommand[AvocadoAr
   }
 
   /**
-   * Applies several pre-processing steps to the read pipeline. Currently, these are the default
-   * steps in the ADAM processing pipeline.
-   *
-   * @param reads RDD of reads to process.
-   * @return RDD containing reads that have been sorted and deduped.
-   */
+    * Applies several pre-processing steps to the read pipeline. Currently, these are the default
+    * steps in the ADAM processing pipeline.
+    *
+    * @param reads RDD of reads to process.
+    * @return RDD containing reads that have been sorted and deduped.
+    */
   def preProcessReads(reads: RDD[AlignmentRecord]): RDD[AlignmentRecord] = PreprocessReads.time {
     var processedReads = reads //.cache
 
@@ -149,12 +149,12 @@ class Avocado(protected val args: AvocadoArgs) extends BDGSparkCommand[AvocadoAr
   }
 
   /**
-   * Applies variant calling algorithms to reads and pileups. Reduces down and returns called variants.
-   *
-   * @param reads
-   * @param stats
-   * @return Joined output of variant calling algorithms.
-   */
+    * Applies variant calling algorithms to reads and pileups. Reduces down and returns called variants.
+    *
+    * @param reads
+    * @param stats
+    * @return Joined output of variant calling algorithms.
+    */
   def callVariants(reads: RDD[AlignmentRecord], stats: AvocadoConfigAndStats): RDD[VariantContext] = CallVariants.time {
     val discoveries: RDD[Observation] = Explore(explorerAlgorithm,
       explorerName,
@@ -169,13 +169,13 @@ class Avocado(protected val args: AvocadoArgs) extends BDGSparkCommand[AvocadoAr
   }
 
   /**
-   * Applies variant post-processing methods to called variants. Post-processing can
-   * include methods which modify the information in variant calls, or alternatively,
-   * methods that filter out spurious variant calls.
-   *
-   * @param variants RDD of variants to process.
-   * @return Post-processed variants.
-   */
+    * Applies variant post-processing methods to called variants. Post-processing can
+    * include methods which modify the information in variant calls, or alternatively,
+    * methods that filter out spurious variant calls.
+    *
+    * @param variants RDD of variants to process.
+    * @return Post-processed variants.
+    */
   def postProcessVariants(variants: RDD[VariantContext], stats: AvocadoConfigAndStats): RDD[VariantContext] = PostprocessVariants.time {
     var rdd = variants
 
@@ -190,12 +190,12 @@ class Avocado(protected val args: AvocadoArgs) extends BDGSparkCommand[AvocadoAr
   }
 
   /**
-   * Main method. Implements body of variant caller. SparkContext and Hadoop Job are provided
-   * by the ADAMSparkCommand shell.
-   *
-   * @param sc SparkContext for RDDs.
-   * @param job Hadoop Job container for file I/O.
-   */
+    * Main method. Implements body of variant caller. SparkContext and Hadoop Job are provided
+    * by the ADAMSparkCommand shell.
+    *
+    * @param sc SparkContext for RDDs.
+    * @param job Hadoop Job container for file I/O.
+    */
   def run(sc: SparkContext) {
 
     log.info("Starting avocado...")
