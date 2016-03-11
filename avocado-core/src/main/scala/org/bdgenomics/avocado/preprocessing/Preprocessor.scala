@@ -30,7 +30,9 @@ object Preprocessor {
     RealignIndels,
     BaseQualityFilter,
     ClippingFilter,
-    DuplicateFilter)
+    DuplicateFilter,
+    MappingQualityFilter,
+    MateRescueFilter)
 
   def apply(rdd: RDD[AlignmentRecord],
             stageName: String,
@@ -41,7 +43,14 @@ object Preprocessor {
     val stageConfig = config.configurationAt(stageName)
 
     // find and run stage
-    val stage = stages.find(_.stageName == stageAlgorithm)
+    val stage = stages.find(_.stageName == stageName)
+    println("STAGE")
+    println("\n")
+    println("\n")
+    println("\n")
+    println("\n")
+    println("\n")
+    println(stage)
 
     assert(stage.isDefined, "Could not find stage with name: " + stageName)
     stage.get.apply(rdd, stageConfig)

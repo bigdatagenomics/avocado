@@ -21,23 +21,13 @@ import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.formats.avro.AlignmentRecord
 
-trait ReadFilter[T] extends PreprocessingStage with Serializable {
+object MappingQualityFilter extends PreprocessingStage {
+  override val stageName: String = "mapping_quality_filter"
 
-  final def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
-    val threshold = getThreshold(config)
+  override def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
+    // what is the threshold to apply?
+    val mqThreshold = config.getInt("mapQualityThreshold", 0)
 
-    rdd.filter(filterRead(_, threshold))
+    rdd.filter(rec => rec.getMapq >= mqThreshold)
   }
-
-  def getThreshold(config: SubnodeConfiguration): T
-
-  private[preprocessing] def filterRead(r: AlignmentRecord, threshold: T): Boolean
-}
-
-trait PreprocessingStage {
-
-  val stageName: String
-
-  def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord]
-
 }

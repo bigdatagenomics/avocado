@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to Big Data Genomics (BDG) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,24 +20,14 @@ package org.bdgenomics.avocado.preprocessing
 import org.apache.commons.configuration.SubnodeConfiguration
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.adam.rich.RichAlignmentRecord._
 
-trait ReadFilter[T] extends PreprocessingStage with Serializable {
+object MateRescueFilter extends PreprocessingStage {
+  override val stageName: String = "mate_rescue_filter"
 
-  final def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] = {
-    val threshold = getThreshold(config)
-
-    rdd.filter(filterRead(_, threshold))
-  }
-
-  def getThreshold(config: SubnodeConfiguration): T
-
-  private[preprocessing] def filterRead(r: AlignmentRecord, threshold: T): Boolean
-}
-
-trait PreprocessingStage {
-
-  val stageName: String
-
-  def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord]
-
+  override def apply(rdd: RDD[AlignmentRecord], config: SubnodeConfiguration): RDD[AlignmentRecord] =
+    rdd.filter {
+      case record =>
+        !record.tags.exists(a => a.tag == "XT" && a.value == "M")
+    }
 }

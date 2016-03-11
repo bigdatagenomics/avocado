@@ -72,6 +72,9 @@ class AvocadoArgs extends Args4jBase with ParquetArgs {
   @Argument(metaVar = "CONFIG", required = true, usage = "avocado configuration file", index = 3)
   var configFile: String = _
 
+  @Argument(metaVar = "NORMAL", required = false, usage = "ADAM normal data", index = 4)
+  var normalInput: String = _
+
   @option(name = "-debug", usage = "If set, prints a higher level of debug output.")
   var debug = false
 
@@ -204,8 +207,16 @@ class Avocado(protected val args: AvocadoArgs) extends BDGSparkCommand[AvocadoAr
 
     log.info("Loading reads in from " + args.readInput)
     // load in reads from ADAM file
-    val reads: RDD[AlignmentRecord] = LoadReads.time {
+    var reads: RDD[AlignmentRecord] = LoadReads.time {
       Input(sc, args.readInput, reference, config)
+    }
+
+    // load in reads from normal ADAM file if there is one
+    var normal: RDD[AlignmentRecord] = null
+
+    if (args.normalInput != null) {
+      normal = Input(sc, args.normalInput, reference, config)
+      reads = sc.union(reads, normal)
     }
 
     // create stats/config item
