@@ -1,20 +1,20 @@
 /**
-  * Licensed to Big Data Genomics (BDG) under one
-  * or more contributor license agreements.  See the NOTICE file
-  * distributed with this work for additional information
-  * regarding copyright ownership.  The BDG licenses this file
-  * to you under the Apache License, Version 2.0 (the
-  * "License"); you may not use this file except in compliance
-  * with the License.  You may obtain a copy of the License at
-  *
-  *     http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to Big Data Genomics (BDG) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The BDG licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.bdgenomics.avocado.discovery
 
 import htsjdk.samtools.{ Cigar, CigarElement, CigarOperator }
@@ -164,12 +164,12 @@ class ReadExplorer(referenceObservations: RDD[Observation]) extends Explorer wit
     val deletions = cigarLenOps.filter({ case (idx, (len, op)) => op == CigarOperator.D })
 
     /**
-      *
-      * @param idx position of the insertion in the Cigar list
-      * @param len lenght of the insertion from the Cigar list
-      * @param del whether it is deletion or insertion
-      * @return
-      */
+     *
+     * @param idx position of the insertion in the Cigar list
+     * @param len lenght of the insertion from the Cigar list
+     * @param del whether it is deletion or insertion
+     * @return
+     */
     def makeNaiveDistanceVec(idx: Int, len: Int, del: Boolean): Vector[Int] = {
       // Finds the distance (num of bases in the read) before the event
       val lpre = (0 until idx).map(alignedLenFromCigars(_)).sum

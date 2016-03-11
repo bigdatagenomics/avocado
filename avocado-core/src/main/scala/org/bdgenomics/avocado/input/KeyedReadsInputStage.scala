@@ -16,13 +16,13 @@ private[input] object KeyedReadsInputStage extends InputStage {
   val stageName = "KeyedReads"
 
   /**
-    * Sets up and loads data using this input stage.
-    *
-    * @param inputPath Path to input files.
-    * @param config Configuration for this input stage.
-    * @param reference RDD containing reference information.
-    * @return Returns an RDD of ADAM reads.
-    */
+   * Sets up and loads data using this input stage.
+   *
+   * @param inputPath Path to input files.
+   * @param config Configuration for this input stage.
+   * @param reference RDD containing reference information.
+   * @return Returns an RDD of ADAM reads.
+   */
   def apply(sc: SparkContext,
             inputPath: String,
             config: SubnodeConfiguration,
