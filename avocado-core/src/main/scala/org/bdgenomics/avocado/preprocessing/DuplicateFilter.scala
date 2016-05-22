@@ -29,6 +29,7 @@ object DuplicateFilter extends ReadFilter[Boolean] {
   def getThreshold(config: SubnodeConfiguration): Boolean = true
 
   private[preprocessing] def filterRead(r: AlignmentRecord, ignored: Boolean): Boolean = {
-    Option(r.getDuplicateRead).fold(true)(!_)
+    // Option(r.getDuplicateRead).fold(true)(!_)
+    Option(r.getDuplicateRead).fold(true)(each => !( each== ignored) )
   }
 }
