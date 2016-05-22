@@ -181,4 +181,68 @@ class ReadExplorerSuite extends AvocadoFunSuite {
     assert(observations.filter(_.pos.pos == 14L).length === 1)
     assert(observations.filter(_.pos.pos == 14L).head.allele === "A")
   }
+  
+   sparkTest("test discover function from single RDD[AlignmentRecord] ") {
+    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
+
+    val read = AlignmentRecord.newBuilder()
+      .setStart(10L)
+      .setEnd(15L)
+      .setContig(Contig.newBuilder()
+        .setContigName("chr1")
+        .build())
+      .setReadMapped(true)
+      .setMapq(40)
+      .setSequence("ACTGA")
+      .setQual(":::::")
+      .setCigar("5M")
+      .setRecordGroupSample("sample1")
+      .build()
+
+    val rdd = sc.parallelize(Seq(read))
+    //test discover function
+    val observations = re.discover(rdd)
+    //    println(observations.count())
+    //    observations.foreach(println)
+    assert(observations.count() === 5)
+  }
+  
+  sparkTest("test discover function from two AlignmentRecord RDD ") {
+    val re = new ReadExplorer(sc.parallelize(Seq[Observation]()))
+
+    val read1 = AlignmentRecord.newBuilder()
+      .setStart(10L)
+      .setEnd(15L)
+      .setContig(Contig.newBuilder()
+        .setContigName("chr1")
+        .build())
+      .setReadMapped(true)
+      .setMapq(40)
+      .setSequence("ACTGA")
+      .setQual(":::::")
+      .setCigar("5M")
+      .setRecordGroupSample("sample1")
+      .build()
+
+    val read2 = AlignmentRecord.newBuilder()
+      .setStart(11L)
+      .setEnd(16L)
+      .setContig(Contig.newBuilder()
+        .setContigName("chr1")
+        .build())
+      .setReadMapped(true)
+      .setMapq(40)
+      .setSequence("ACTGA")
+      .setQual(":::::")
+      .setCigar("5M")
+      .setRecordGroupSample("sample1")
+      .build()
+
+    val rdd = sc.parallelize(Seq(read1, read2))
+    //test discover function
+    val observations = re.discover(rdd)
+    //    println(observations.count())
+    //    observations.foreach(println)
+    assert(observations.count() === 10)
+  }
 }
