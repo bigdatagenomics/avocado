@@ -25,7 +25,7 @@ Where the variables are defined as follows:
 
 * $g$: genotype state, which is equal to the number of _reference alleles_ at this location
 * $k$: The number of reads at this site.
-* $i$: The number of reads at this site that match the reference allele.
+* $l$: The number of reads at this site that match the reference allele.
 * $j$: The number of reads at this site that match the alt allele.
 * $\epsilon_i$: the error probability of the observation from read $i$, which is equal to
 $1 - \sqrt{\text{mapQ} * \text{baseQ}}$
