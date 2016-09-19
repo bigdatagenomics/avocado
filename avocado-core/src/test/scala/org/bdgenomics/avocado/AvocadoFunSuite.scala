@@ -23,6 +23,8 @@ trait AvocadoFunSuite extends SparkFunSuite {
 
   override val appName: String = "avocado"
   override val properties: Map[String, String] = Map(("spark.serializer", "org.apache.spark.serializer.KryoSerializer"),
-    ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"))
+    ("spark.kryo.registrator", "org.bdgenomics.adam.serialization.ADAMKryoRegistrator"),
+    ("spark.kryoserializer.buffer", "4M"),
+    ("spark.kryo.referenceTracking", "true"))
 }
 
