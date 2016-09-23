@@ -17,9 +17,11 @@
 # limitations under the License.
 #
 
+# usage: avocado-submit [<spark-args> --] <avocado-args>
+
 set -e
 
-# Split args into Spark and ADAM args
+# Split args into Spark and AVOCADO args
 DD=False  # DD is "double dash"
 PRE_DD=()
 POST_DD=()
@@ -34,52 +36,45 @@ for ARG in "$@"; do
 done
 
 if [[ $DD == True ]]; then
-  SPARK_ARGS="${PRE_DD[@]}"
+  SPARK_ARGS=("${PRE_DD[@]}")
   AVOCADO_ARGS=("${POST_DD[@]}")
 else
   SPARK_ARGS=()
-  AVOCADO_ARGS=(${PRE_DD[@]})
-fi
-
-# does the user have AVOCADO_OPTS set? if yes, then warn
-if [[ $DD == False && -n "$AVOCADO_OPTS" ]]; then
-    echo "WARNING: Passing Spark arguments via AVOCADO_OPTS was recently removed."
-    echo "Run avocado-submit instead as avocado-submit <spark-args> -- <avocado-args>"
+  AVOCADO_ARGS=("${PRE_DD[@]}")
 fi
 
 # Figure out where AVOCADO is installed
-AVOCADO_REPO="$(cd `dirname $0`/..; pwd)"
+SCRIPT_DIR="$(cd `dirname $0`/..; pwd)"
 
-CLASSPATH=$("$AVOCADO_REPO"/bin/compute-avocado-classpath.sh)
-AVOCADO_JARS=$("$AVOCADO_REPO"/bin/compute-avocado-jars.sh)
-
-# Split out the CLI jar, since it will be passed to Spark as the "primary resource".
-AVOCADO_CLI_JAR=${AVOCADO_JARS##*,}
-AVOCADO_JARS=$(echo "$AVOCADO_JARS" | rev | cut -d',' -f2- | rev)
-
-# do we have >= 4 arguments? if so, magic!!!!!!!
-if [ ${#AVOCADO_ARGS[@]} -ge 4 ]; then
-    # make a temp directory
-    TEMP_DIR=$(mktemp -d -t "avocado.properties.XXXXXXXX")
-    DIR_ID=${TEMP_DIR##*.}
-
-    # copy property file over
-    cp ${AVOCADO_ARGS[3]} "${TEMP_DIR}/${DIR_ID}.properties"
-
-    # make jar
-    jar cf "${TEMP_DIR}/${DIR_ID}.jar" -C ${TEMP_DIR} ${DIR_ID}.properties
-    cp "${TEMP_DIR}/${DIR_ID}.jar" .
-
-    # add jar to classpath
-    AVOCADO_JARS="${AVOCADO_JARS},${TEMP_DIR}/${DIR_ID}.jar"
-
-    # modify arguments
-    AVOCADO_ARGS[3]="${DIR_ID}.properties"
+# Find AVOCADO cli assembly jar
+AVOCADO_CLI_JAR=
+if [ -d "$SCRIPT_DIR/repo" ]; then
+  ASSEMBLY_DIR="$SCRIPT_DIR/repo"
+else
+  ASSEMBLY_DIR="$SCRIPT_DIR/avocado-cli/target"
 fi
+
+num_jars="$(ls -1 "$ASSEMBLY_DIR" | grep "^avocado-cli-[0-9A-Za-z\.-]*\.jar$" | grep -v javadoc | wc -l)"
+if [ "$num_jars" -eq "0" ]; then
+  echo "Failed to find AVOCADO cli assembly in $ASSEMBLY_DIR." 1>&2
+  echo "You need to build AVOCADO before running this program." 1>&2
+  exit 1
+fi
+
+ASSEMBLY_JARS="$(ls -1 "$ASSEMBLY_DIR" | grep "^avocado-cli-[0-9A-Za-z\.-]*\.jar$" | grep -v javadoc || true)"
+if [ "$num_jars" -gt "1" ]; then
+  echo "Found multiple AVOCADO cli assembly jars in $ASSEMBLY_DIR:" 1>&2
+  echo "$ASSEMBLY_JARS" 1>&2
+  echo "Please remove all but one jar." 1>&2
+  exit 1
+fi
+
+AVOCADO_CLI_JAR="${ASSEMBLY_DIR}/${ASSEMBLY_JARS}"
+AVOCADO_MAIN="org.bdgenomics.avocado.cli.AvocadoMain"
 
 # Find spark-submit script
 if [ -z "$SPARK_HOME" ]; then
-  SPARK_SUBMIT=$(which spark-submit)
+  SPARK_SUBMIT=$(which spark-submit || echo)
 else
   SPARK_SUBMIT="$SPARK_HOME"/bin/spark-submit
 fi
@@ -91,10 +86,9 @@ echo "Using SPARK_SUBMIT=$SPARK_SUBMIT"
 
 # submit the job to Spark
 "$SPARK_SUBMIT" \
-  --class org.bdgenomics.avocado.cli.Avocado \
+  --class $AVOCADO_MAIN \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.kryo.registrator=org.bdgenomics.adam.serialization.ADAMKryoRegistrator \
-  $SPARK_ARGS \
-  --jars $AVOCADO_JARS \
-  $AVOCADO_CLI_JAR \
-  ${AVOCADO_ARGS[@]}
+  "${SPARK_ARGS[@]}" \
+  "$AVOCADO_CLI_JAR" \
+  "${AVOCADO_ARGS[@]}"
