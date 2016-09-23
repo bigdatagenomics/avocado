@@ -17,7 +17,12 @@
  */
 package org.bdgenomics.avocado.models
 
+import htsjdk.samtools.{ CigarOperator, TextCigarCodec }
+import org.bdgenomics.adam.util.MdTag
+import org.bdgenomics.avocado.Timers._
+import org.bdgenomics.formats.avro.AlignmentRecord
 import scala.annotation.tailrec
+import scala.collection.JavaConversions._
 import scala.collection.mutable.StringBuilder
 
 /**
@@ -27,6 +32,143 @@ import scala.collection.mutable.StringBuilder
  * ObservationOperators.
  */
 object ObservationOperator {
+
+  /**
+   * Given the CIGAR and MD tag for a read, extracts the alignment blocks.
+   *
+   * @param read Read to extract alignment blocks for.
+   * @return The alignment blocks extracted from the read.
+   */
+  private[avocado] def extractAlignmentOperators(
+    read: AlignmentRecord): Iterable[ObservationOperator] = ExtractingAlignment.time {
+
+    assert(read.getReadMapped)
+
+    if (Option(read.getCigar).fold(true)(c => c == "*") ||
+      Option(read.getMismatchingPositions).isEmpty) {
+      Iterable.empty
+    } else {
+
+      // parse out the Cigar and the MD tag
+      val cigar = TextCigarCodec.decode(read.getCigar)
+      val mdTag = MdTag(read.getMismatchingPositions,
+        0L, // we're using pos as the index into the read
+        cigar)
+
+      // flatmap and parse out
+      var idx = 0L
+      cigar.getCigarElements().flatMap(elem => {
+        val length = elem.getLength
+        elem.getOperator match {
+          case CigarOperator.M => {
+            @tailrec def breakUpOp(opIdx: Int = 0,
+                                   operators: List[ObservationOperator] = List.empty,
+                                   refRun: Int = 0,
+                                   ref: StringBuilder = new StringBuilder()): Iterable[ObservationOperator] = {
+
+              def makeMismatch: List[ObservationOperator] = {
+                Match(ref.length, Some(ref.toString)) :: operators
+              }
+
+              def makeMatch: List[ObservationOperator] = {
+                Match(refRun) :: operators
+              }
+
+              // have we made it to the end of the operator?
+              if (opIdx == length) {
+
+                // we either end in a match or mismatch
+                val finalOperators = if (refRun > 0) {
+                  assert(ref.isEmpty)
+                  makeMatch
+                } else {
+                  assert(ref.nonEmpty)
+                  makeMismatch
+                }
+
+                finalOperators.reverse
+                  .toIterable
+              } else {
+                // what have we here? specifically, is this base a match or mismatch?
+                val base = mdTag.mismatchedBase(idx + opIdx)
+
+                // update for next step
+                val (newRun, newRef, newOperators) = base.fold({
+
+                  // are we at the end of a run of sequence mismatches?
+                  if (ref.nonEmpty) {
+                    (1, new StringBuilder(), makeMismatch)
+                  } else {
+                    (refRun + 1, ref, operators)
+                  }
+                })(b => {
+
+                  // are we at the end of a run of sequence matches?
+                  val ops = if (refRun > 0) {
+                    assert(ref.isEmpty)
+                    makeMatch
+                  } else {
+                    operators
+                  }
+
+                  (0, ref.append(b), ops)
+                })
+
+                // recurse
+                breakUpOp(opIdx + 1, newOperators, newRun, newRef)
+              }
+            }
+
+            // break up operators before adding to the index
+            val matchOperators = breakUpOp()
+            idx += length
+
+            matchOperators
+          }
+          case CigarOperator.EQ => {
+            idx += length
+            Iterable(Match(length))
+          }
+          case CigarOperator.X => {
+            val newOp = Iterable(Match(length,
+              Some((idx until idx + length).flatMap(i => {
+                val optBase = mdTag.mismatchedBase(i)
+                require(optBase.isDefined,
+                  "Invalid CIGAR/MD tag combo (%s/%s). Index %d is X, but has no mismatching base in MD tag.".format(
+                    read.getCigar, read.getMismatchingPositions, i))
+                optBase
+              }).mkString)))
+            idx += length
+            newOp
+          }
+          case CigarOperator.I => {
+            Iterable(Insertion(length))
+          }
+          case CigarOperator.D => {
+            val newOp = Iterable(Deletion((idx until idx + length).flatMap(i => {
+              val optBase = mdTag.deletedBase(i)
+              require(optBase.isDefined,
+                "Invalid CIGAR/MD tag combo (%s/%s). Index %d is D, but has no deleted base in MD tag.".format(
+                  read.getCigar, read.getMismatchingPositions, i))
+              optBase
+            }).mkString))
+            idx += length
+            newOp
+          }
+          case CigarOperator.S => {
+            Iterable(Clipped(length))
+          }
+          case CigarOperator.H => {
+            Iterable(Clipped(length, soft = false))
+          }
+          case _ => {
+            throw new IllegalArgumentException("Unsupported CIGAR element %s in tag %s.".format(elem,
+              read.getCigar))
+          }
+        }
+      })
+    }
+  }
 
   /**
    * Collapses down a collection of ObservationOperators.
@@ -88,8 +230,9 @@ object ObservationOperator {
    * @param ops The alignment operators to use for extracting the reference.
    * @return The reference sequence covering these blocks.
    */
-  private[avocado] def extractReference(read: String,
-                                        ops: Iterable[ObservationOperator]): String = {
+  private[avocado] def extractReference(
+    read: String,
+    ops: Iterable[ObservationOperator]): String = ExtractingReference.time {
 
     def errMsg: String = {
       "%s, %s".format(ops.mkString(","), read)

@@ -26,6 +26,14 @@ import org.scalatest.FunSuite
 
 class AlignerSuite extends FunSuite {
 
+  test("aligning a repetative sequence will fire an assert") {
+    intercept[AssertionError] {
+      Aligner.align("TGCAAAAGCT",
+        "TGCT",
+        3)
+    }
+  }
+
   test("align a minimally flanked sequence with a snp") {
 
     // k = 10
@@ -407,6 +415,12 @@ class AlignerSuite extends FunSuite {
     assert(indices.size === 2)
     assert(indices(0) === (0, 5))
     assert(indices(1) === (5, 0))
+  }
+
+  test("fire assert when cutting up repeatitive reads") {
+    intercept[AssertionError] {
+      Aligner.toKmers("AAAA", 3)
+    }
   }
 
   test("fire assert when checking negative index pair") {

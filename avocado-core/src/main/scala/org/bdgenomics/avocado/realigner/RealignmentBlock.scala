@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.realigner
 
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{
   Clipped,
   Deletion,
@@ -119,7 +120,7 @@ private[realigner] object RealignmentBlock {
    */
   def apply(read: String,
             alignment: Iterable[ObservationOperator],
-            kmerLength: Int): Iterable[RealignmentBlock] = {
+            kmerLength: Int): Iterable[RealignmentBlock] = ExtractingRealignmentBlocks.time {
 
     @tailrec def split(iter: Iterator[ObservationOperator],
                        readBases: String,
@@ -327,7 +328,14 @@ private[realigner] object RealignmentBlock {
               blks)
           }
           case Insertion(length) => {
-            if (!lastBlockWasRealignable) {
+            if (lastBlockWasClipped) {
+              (newReadBases,
+                new StringBuilder(readBases.take(length)),
+                true,
+                false,
+                List(lastOp),
+                processClip :: blocks)
+            } else if (!lastBlockWasRealignable) {
               startRealignableBlock(lastOp,
                 readBases.drop(length),
                 new StringBuilder(readBases.take(length)).reverse)
@@ -341,7 +349,14 @@ private[realigner] object RealignmentBlock {
             }
           }
           case Deletion(_) => {
-            if (!lastBlockWasRealignable) {
+            if (lastBlockWasClipped) {
+              (readBases,
+                new StringBuilder(),
+                true,
+                false,
+                List(lastOp),
+                processClip :: blocks)
+            } else if (!lastBlockWasRealignable) {
               startRealignableBlock(lastOp,
                 readBases,
                 new StringBuilder())
