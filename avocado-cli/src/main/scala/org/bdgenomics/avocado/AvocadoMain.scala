@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.bdgenomics.adam.cli
+package org.bdgenomics.avocado.cli
 
 import org.bdgenomics.utils.cli._
 import org.bdgenomics.utils.misc.Logging
