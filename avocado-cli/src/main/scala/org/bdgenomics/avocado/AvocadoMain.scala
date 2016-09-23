@@ -29,7 +29,10 @@ private object AvocadoMain {
 
 private class AvocadoMain(args: Array[String]) extends Logging {
 
-  private val commands: List[BDGCommandCompanion] = List.empty
+  private val commands: List[BDGCommandCompanion] = List(
+    DiscoverVariants,
+    ExternalGenotyper,
+    Reassemble)
 
   private def printVersion() {
     val about = new About()

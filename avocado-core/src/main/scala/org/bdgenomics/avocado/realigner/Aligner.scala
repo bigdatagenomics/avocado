@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.realigner
 
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{
   Deletion,
   Insertion,
@@ -163,7 +164,7 @@ object Aligner {
    */
   def align(ref: String,
             alt: String,
-            kmerLength: Int): Seq[ObservationOperator] = {
+            kmerLength: Int): Seq[ObservationOperator] = AligningSequences.time {
 
     // trim ref and alt
     // drop the first and last matching bases from the sequences

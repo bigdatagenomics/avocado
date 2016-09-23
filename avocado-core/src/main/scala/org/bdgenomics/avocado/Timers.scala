@@ -20,74 +20,23 @@ package org.bdgenomics.avocado
 import org.bdgenomics.utils.instrumentation.Metrics
 
 /**
- * Contains [[Timers]] that are used to instrument ADAM.
+ * Contains [[Timers]] that are used to instrument Avocado.
  */
 private[avocado] object Timers extends Metrics {
 
-  // File Loading
-  val LoadReads = timer("Load Reads")
-  val LoadContigs = timer("Load Reference Contigs")
+  // org.bdgenomics.avocado.models.ObservationOperator
+  val ExtractingReference = timer("Extracting reference sequence")
+  val ExtractingAlignment = timer("Parsing alignment (CIGAR/MD tag)")
 
-  // Pipeline Stages
-  val PreprocessReads = timer("Preprocessing Reads")
-  val CallVariants = timer("Call Variants")
-  val DiscoverObservations = timer("Discover Observations")
-  val GenotypeObservations = timer("Genotype Observations")
-  val PostprocessVariants = timer("Postprocess Variants")
+  // org.bdgenomics.avocado.realigner.Aligner
+  val AligningSequences = timer("Aliging read against reference")
 
-  // Biallelic Genotyping Model
-  val GenotypingSite = timer("Scoring Genotypes at a Site")
-  val ScoringLikelihoods = timer("Scoring Likelihoods")
-  val EmittingCall = timer("Assembling Genotype Call and Statistics")
+  // org.bdgenomics.avocado.realigner.Realigner
+  val ProcessingReadForRealignment = timer("Processing a single read for realignment")
+  val RealigningRead = timer("Realigning candidate read")
+  val FinalizingRealignment = timer("Finalizing realignment")
 
-  // Simple Read Explorer
-  val ExploringReads = timer("Extracting Read Observations")
-  val ExploringRead = timer("Observing a Read")
+  // org.bdgenomics.avocado.realigner.RealignmentBlock
+  val ExtractingRealignmentBlocks = timer("Checking for non-canonical alignment blocks")
 
-  // Reassembly Explorer
-  val JoiningReads = timer("Joining Reads and References Together")
-  val ProcessingRegions = timer("Processing Regions")
-  val RegionDiscovery = timer("Observing Region")
-  val CheckActivity = timer("Calculating Region Activity Statistics")
-  val ReassemblingRegion = timer("Reassembling Region")
-  val BuildingGraph = timer("Building Indexed de Bruijn Graph")
-  val ObservingGraph = timer("Crawling Indexed de Bruijn Graph")
-  val InactiveReads = timer("Extracting Read Observations from Inactive Regions")
-
-  // K-mer Graph
-  val BuildingReferenceGraph = timer("Initializing de Bruijn Graph from Reference")
-  val AddingReadsToGraph = timer("Adding Reads to Initialized de Bruijn Graph")
-  val ConstructingGraph = timer("Finalizing Construction of Graph")
-  val ReadObservations = timer("Building Read Observations")
-  val ReferenceObservations = timer("Building Reference Observations")
-  val Stepping = timer("Taking One Step Through Graph")
-  val CrawlAllele = timer("Crawling an Allele")
-  val ClosingAllele = timer("Closing Out an Allele")
-  val CrawlReference = timer("Crawling the Reference")
-  val CheckingIfHaveSeen = timer("Checking to See if Site Was Seen Before")
-  val SiteSeenBefore = timer("Moving To Next Site")
-  val ProcessingUnseenSite = timer("Processing an Unseen Reference Site")
-  val RebuildingSet = timer("Rebuilding Position Set")
-  val PickingBranch = timer("Picking Next Branch")
-  val BuildingBranchInfo = timer("Building Branch")
-  val BuildingObservationSeq = timer("Building Seq of Observations")
-  val EvaluatingSet = timer("Evaluating Reference Set")
-  val ProcessingObservations = timer("Processing Observations")
-  val UpdatingObservations = timer("Inserting New Observations")
-  val ExtendingArray = timer("Copying and Extending Observation Array")
-  val AddingNewKmer = timer("Adding a New Read k-mer")
-  val UpdatingExistingKmer = timer("Updating an Existing k-mer")
-  val CheckValidity = timer("Checking k-mer Validity")
-  val FallBack = timer("Falling Back After Failure")
-
-  // Statistics
-  val ComputingCoverage = timer("Computing Coverage")
-  val ReferenceLengths = timer("Computing Contig Lengths")
-  val CollectingReference = timer("Collecting Reference Sequence")
-  val ExtractingSequenceDictionary = timer("Extracting Sequence Dictionary")
-  val CollectingSamples = timer("Collecting Sample Names")
-  val ExploringReference = timer("Extracting Reference Observations")
-
-  // File Saving
-  val SaveVariants = timer("Save Variants")
 }

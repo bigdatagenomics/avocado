@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.models
 
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.scalatest.FunSuite
 
 class ObservationOperatorSuite extends FunSuite {
@@ -287,5 +288,124 @@ class ObservationOperatorSuite extends FunSuite {
         Insertion(3),
         Match(2)))
     assert(ref === "ACAGT")
+  }
+
+  test("read must be mapped to extract alignment operators") {
+    intercept[AssertionError] {
+      ObservationOperator.extractAlignmentOperators(AlignmentRecord.newBuilder()
+        .build())
+    }
+  }
+
+  test("extracting alignment operators will fail if cigar is unset") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(21L)
+      .setSequence("ACACACACAC")
+      .build()
+
+    assert(ObservationOperator.extractAlignmentOperators(read).isEmpty)
+  }
+
+  test("extracting alignment operators will fail if cigar is *") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(21L)
+      .setSequence("ACACACACAC")
+      .setCigar("*")
+      .build()
+
+    assert(ObservationOperator.extractAlignmentOperators(read).isEmpty)
+  }
+
+  test("extracting alignment operators will fail if MD tag is unset") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(21L)
+      .setSequence("ACACACACAC")
+      .setCigar("10M")
+      .build()
+
+    assert(ObservationOperator.extractAlignmentOperators(read).isEmpty)
+  }
+
+  test("extract alignment operators from a perfect read") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(21L)
+      .setSequence("ACACACACAC")
+      .setCigar("10M")
+      .setMismatchingPositions("10")
+      .build()
+
+    val ops = ObservationOperator.extractAlignmentOperators(read).toSeq
+
+    assert(ops.size === 1)
+    assert(ops(0) === Match(10))
+  }
+
+  test("extract alignment operators from a read with a single mismatch") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(21L)
+      .setSequence("ACACACACAC")
+      .setCigar("10M")
+      .setMismatchingPositions("5C4")
+      .build()
+
+    val ops = ObservationOperator.extractAlignmentOperators(read).toSeq
+
+    assert(ops.size === 3)
+    assert(ops(0) === Match(5))
+    assert(ops(1) === Match(1, Some("C")))
+    assert(ops(2) === Match(4))
+  }
+
+  test("extract alignment operators from a read with a single deletion") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(21L)
+      .setSequence("ACACACACAC")
+      .setCigar("5M1D5M")
+      .setMismatchingPositions("5^C5")
+      .build()
+
+    val ops = ObservationOperator.extractAlignmentOperators(read).toSeq
+
+    assert(ops.size === 3)
+    assert(ops(0) === Match(5))
+    assert(ops(1) === Deletion("C"))
+    assert(ops(2) === Match(5))
+  }
+
+  test("extract alignment operators from a read with a single insertion") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(21L)
+      .setSequence("ACACACACAC")
+      .setCigar("4M2I4M")
+      .setMismatchingPositions("8")
+      .build()
+
+    val ops = ObservationOperator.extractAlignmentOperators(read).toSeq
+
+    assert(ops.size === 3)
+    assert(ops(0) === Match(4))
+    assert(ops(1) === Insertion(2))
+    assert(ops(2) === Match(4))
   }
 }

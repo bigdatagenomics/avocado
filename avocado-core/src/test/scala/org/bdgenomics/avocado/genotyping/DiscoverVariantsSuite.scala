@@ -1,0 +1,201 @@
+/**
+ * Licensed to Big Data Genomics (BDG) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The BDG licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.bdgenomics.avocado.genotyping
+
+import org.bdgenomics.adam.models.{
+  RecordGroupDictionary,
+  SequenceDictionary,
+  SequenceRecord
+}
+import org.bdgenomics.adam.rdd.read.AlignedReadRDD
+import org.bdgenomics.avocado.AvocadoFunSuite
+import org.bdgenomics.formats.avro.{ AlignmentRecord, Variant }
+
+class DiscoverVariantsSuite extends AvocadoFunSuite {
+
+  val unalignedRead = AlignmentRecord.newBuilder()
+    .setReadMapped(false)
+    .setSequence("ACACATGA")
+    .build
+
+  val perfectReadMCigar = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("1")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("ACACATGA")
+    .setCigar("8M")
+    .setMismatchingPositions("8")
+    .build
+
+  val perfectReadEqCigar = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("1")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("ACACATGA")
+    .setCigar("8=")
+    .setMismatchingPositions("8")
+    .build
+
+  val snpReadMCigar = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("1")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("ACACATGA")
+    .setCigar("8M")
+    .setMismatchingPositions("4C3")
+    .build
+
+  val snpReadEqCigar = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("1")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("ACACATGA")
+    .setCigar("4=1X3=")
+    .setMismatchingPositions("4C3")
+    .build
+
+  val insertRead = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("2")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("ACACTTATGA")
+    .setCigar("4M2I4M")
+    .setMismatchingPositions("8")
+    .build
+
+  val deleteRead = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("3")
+    .setStart(10L)
+    .setEnd(20L)
+    .setSequence("ACACATGA")
+    .setCigar("4M2D4M")
+    .setMismatchingPositions("4^TT4")
+    .build
+
+  test("no variants in unaligned read") {
+    assert(DiscoverVariants.variantsInRead(unalignedRead).isEmpty)
+  }
+
+  sparkTest("no variants in rdd with unaligned read") {
+    val unalignedRdd = sc.parallelize(Seq(unalignedRead))
+    assert(DiscoverVariants.variantsInRdd(unalignedRdd).count === 0)
+  }
+
+  test("no variants in read that is a perfect sequence match") {
+    assert(DiscoverVariants.variantsInRead(perfectReadMCigar).isEmpty)
+    assert(DiscoverVariants.variantsInRead(perfectReadEqCigar).isEmpty)
+  }
+
+  sparkTest("no variants in rdd with sequence match reads") {
+    val matchRdd = sc.parallelize(Seq(perfectReadMCigar, perfectReadEqCigar))
+    assert(DiscoverVariants.variantsInRdd(matchRdd).count === 0)
+  }
+
+  def validateSnp(snp: Variant) {
+    assert(snp.getContigName() === "1")
+    assert(snp.getStart() === 14L)
+    assert(snp.getEnd() === 15L)
+    assert(snp.getReferenceAllele === "C")
+    assert(snp.getAlternateAllele === "A")
+  }
+
+  test("find snp in read with a 1bp sequence mismatch") {
+    def testSnp(read: AlignmentRecord) {
+      val variants = DiscoverVariants.variantsInRead(read)
+      assert(variants.size === 1)
+      validateSnp(variants.head)
+    }
+    testSnp(snpReadMCigar)
+    testSnp(snpReadEqCigar)
+  }
+
+  sparkTest("find one snp in reads with 1bp sequence mismatch") {
+    val snpRdd = sc.parallelize(Seq(snpReadMCigar, snpReadEqCigar))
+    val variants = DiscoverVariants.variantsInRdd(snpRdd).collect
+    assert(variants.size === 1)
+    validateSnp(variants.head)
+  }
+
+  def validateInsertion(ins: Variant) {
+    assert(ins.getContigName() === "2")
+    assert(ins.getStart() === 13L)
+    assert(ins.getEnd() === 14L)
+    assert(ins.getReferenceAllele() === "C")
+    assert(ins.getAlternateAllele() === "CTT")
+  }
+
+  test("find insertion in read") {
+    val variants = DiscoverVariants.variantsInRead(insertRead)
+    assert(variants.size === 1)
+    validateInsertion(variants.head)
+  }
+
+  sparkTest("find insertion in reads") {
+    val insRdd = sc.parallelize(Seq(insertRead, insertRead, insertRead))
+    val variants = DiscoverVariants.variantsInRdd(insRdd).collect
+    assert(variants.size === 1)
+    validateInsertion(variants.head)
+  }
+
+  def validateDeletion(del: Variant) {
+    assert(del.getContigName() === "3")
+    assert(del.getStart() === 13L)
+    assert(del.getEnd() === 16L)
+    assert(del.getReferenceAllele() === "CTT")
+    assert(del.getAlternateAllele() === "C")
+  }
+
+  test("find deletion in read") {
+    val variants = DiscoverVariants.variantsInRead(deleteRead)
+    assert(variants.size === 1)
+    validateDeletion(variants.head)
+  }
+
+  sparkTest("find deletion in reads") {
+    val delRdd = sc.parallelize(Seq(deleteRead, deleteRead, deleteRead))
+    val variants = DiscoverVariants.variantsInRdd(delRdd).collect
+    assert(variants.size === 1)
+    validateDeletion(variants.head)
+  }
+
+  sparkTest("find variants in alignment record rdd") {
+    val rdd = sc.parallelize(Seq(
+      unalignedRead,
+      perfectReadMCigar, perfectReadEqCigar,
+      snpReadMCigar, snpReadEqCigar,
+      insertRead,
+      deleteRead))
+    val readRdd = AlignedReadRDD(rdd,
+      SequenceDictionary(
+        SequenceRecord("1", 50L),
+        SequenceRecord("2", 40L),
+        SequenceRecord("3", 30L)),
+      RecordGroupDictionary.empty)
+
+    val variantRdd = DiscoverVariants(readRdd)
+
+    assert(variantRdd.rdd.count === 3)
+    assert(variantRdd.sequences.records.size === 3)
+  }
+}

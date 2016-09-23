@@ -292,6 +292,13 @@
         <version>${project.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.bdgenomics.avocado</groupId>
+        <artifactId>avocado-core</artifactId>
+        <version>${project.version}</version>
+        <type>test-jar</type>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
         <groupId>org.bdgenomics.utils</groupId>
         <artifactId>utils-misc_2.10</artifactId>
         <version>${utils.version}</version>

@@ -24,6 +24,7 @@ import org.bdgenomics.avocado.models.{
   Insertion,
   ObservationOperator
 }
+import org.bdgenomics.formats.avro.AlignmentRecord
 import org.scalatest.FunSuite
 
 object RealignmentBlockSuite {
@@ -290,6 +291,51 @@ class RealignmentBlockSuite extends FunSuite {
     blocks(3) match {
       case CanonicalBlock(alignments) => {
         zipAndCheckAlignments(alignments, ops4)
+      }
+      case _ => assert(false)
+    }
+  }
+
+  test("properly handle a read that starts with a long soft clip") {
+    val cigar = "95S5I150M"
+    val md = "36G19G43T31G17"
+    val readSeq = ("CTAGTGTGTACAGCAGATACGACTCCATACCATGCCATGCGGTCTACTTCCATTCCA" +
+      "TTTCATTCCACTCCTTTCCATTCCTCTTCATTCCCTTTCATTCCATTCCATTCCATT" +
+      "CCATTCCATTCCATTCCATTCCCTTCCGTTCCGTTCCGTTCCATTCCATTCCATTCC" +
+      "ATTCCATTCCATTCCATTCCATTCCGTTCCGTTCCATTCCATTCCATTCCATTCTAT" +
+      "TCGGTTTAATTCCATTCCATTC")
+
+    val read = AlignmentRecord.newBuilder()
+      .setReadMapped(true)
+      .setCigar(cigar)
+      .setMismatchingPositions(md)
+      .build()
+
+    val alignment = ObservationOperator.extractAlignmentOperators(read)
+
+    val blocks = RealignmentBlock(readSeq,
+      alignment,
+      20).toSeq
+
+    assert(blocks.length === 3)
+    blocks(0) match {
+      case ClippedBlock(length, true) => {
+        assert(length === 95)
+      }
+      case _ => assert(false)
+    }
+    blocks(1) match {
+      case RealignableBlock(sequence, ops) => {
+        assert(sequence === readSeq.drop(95).take(25))
+        assert(ops.head === Insertion(5))
+        assert(ops.drop(1).head === Match(20))
+      }
+      case _ => assert(false)
+    }
+    blocks(2) match {
+      case CanonicalBlock(ops) => {
+        assert(ops.head === Match(16))
+        ops.tail.zip(alignment.takeRight(8)).foreach(p => assert(p._1 === p._2))
       }
       case _ => assert(false)
     }

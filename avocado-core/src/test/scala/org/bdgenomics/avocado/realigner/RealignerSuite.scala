@@ -23,13 +23,15 @@ import org.bdgenomics.adam.models.{
   RecordGroup,
   RecordGroupDictionary
 }
+import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.read.{ AlignedReadRDD, AlignmentRecordRDD }
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.models.{
   Clipped,
   Deletion,
   Insertion,
-  Match
+  Match,
+  ObservationOperator
 }
 import org.bdgenomics.formats.avro.AlignmentRecord
 
@@ -60,129 +62,10 @@ class RealignerSuite extends AvocadoFunSuite {
         Match(2))))))
   }
 
-  test("read must be mapped to extract alignment operators") {
-    intercept[AssertionError] {
-      Realigner.extractAlignmentOperators(AlignmentRecord.newBuilder()
-        .build())
-    }
-  }
-
-  test("extracting alignment operators will fail if cigar is unset") {
-    val read = AlignmentRecord.newBuilder()
-      .setReadName("A_READ")
-      .setReadMapped(true)
-      .setStart(10L)
-      .setEnd(21L)
-      .setSequence("ACACACACAC")
-      .build()
-
-    assert(Realigner.extractAlignmentOperators(read).isEmpty)
-  }
-
-  test("extracting alignment operators will fail if cigar is *") {
-    val read = AlignmentRecord.newBuilder()
-      .setReadName("A_READ")
-      .setReadMapped(true)
-      .setStart(10L)
-      .setEnd(21L)
-      .setSequence("ACACACACAC")
-      .setCigar("*")
-      .build()
-
-    assert(Realigner.extractAlignmentOperators(read).isEmpty)
-  }
-
-  test("extracting alignment operators will fail if MD tag is unset") {
-    val read = AlignmentRecord.newBuilder()
-      .setReadName("A_READ")
-      .setReadMapped(true)
-      .setStart(10L)
-      .setEnd(21L)
-      .setSequence("ACACACACAC")
-      .setCigar("10M")
-      .build()
-
-    assert(Realigner.extractAlignmentOperators(read).isEmpty)
-  }
-
-  test("extract alignment operators from a perfect read") {
-    val read = AlignmentRecord.newBuilder()
-      .setReadName("A_READ")
-      .setReadMapped(true)
-      .setStart(10L)
-      .setEnd(21L)
-      .setSequence("ACACACACAC")
-      .setCigar("10M")
-      .setMismatchingPositions("10")
-      .build()
-
-    val ops = Realigner.extractAlignmentOperators(read).toSeq
-
-    assert(ops.size === 1)
-    assert(ops(0) === Match(10))
-  }
-
-  test("extract alignment operators from a read with a single mismatch") {
-    val read = AlignmentRecord.newBuilder()
-      .setReadName("A_READ")
-      .setReadMapped(true)
-      .setStart(10L)
-      .setEnd(21L)
-      .setSequence("ACACACACAC")
-      .setCigar("10M")
-      .setMismatchingPositions("5C4")
-      .build()
-
-    val ops = Realigner.extractAlignmentOperators(read).toSeq
-
-    assert(ops.size === 3)
-    assert(ops(0) === Match(5))
-    assert(ops(1) === Match(1, Some("C")))
-    assert(ops(2) === Match(4))
-  }
-
-  test("extract alignment operators from a read with a single deletion") {
-    val read = AlignmentRecord.newBuilder()
-      .setReadName("A_READ")
-      .setReadMapped(true)
-      .setStart(10L)
-      .setEnd(21L)
-      .setSequence("ACACACACAC")
-      .setCigar("5M1D5M")
-      .setMismatchingPositions("5^C5")
-      .build()
-
-    val ops = Realigner.extractAlignmentOperators(read).toSeq
-
-    assert(ops.size === 3)
-    assert(ops(0) === Match(5))
-    assert(ops(1) === Deletion("C"))
-    assert(ops(2) === Match(5))
-  }
-
-  test("extract alignment operators from a read with a single insertion") {
-    val read = AlignmentRecord.newBuilder()
-      .setReadName("A_READ")
-      .setReadMapped(true)
-      .setStart(10L)
-      .setEnd(21L)
-      .setSequence("ACACACACAC")
-      .setCigar("4M2I4M")
-      .setMismatchingPositions("8")
-      .build()
-
-    val ops = Realigner.extractAlignmentOperators(read).toSeq
-
-    assert(ops.size === 3)
-    assert(ops(0) === Match(4))
-    assert(ops(1) === Insertion(2))
-    assert(ops(2) === Match(4))
-  }
-
   def realign(read: AlignmentRecord,
               kmerLength: Int): AlignmentRecord = {
 
-    val alignment = Realigner.extractAlignmentOperators(read)
+    val alignment = ObservationOperator.extractAlignmentOperators(read)
 
     val ops = RealignmentBlock(read.getSequence,
       alignment,
@@ -291,6 +174,22 @@ class RealignerSuite extends AvocadoFunSuite {
     assert(newAlignment.getMismatchingPositions === "10A10^A11")
   }
 
+  test("realigning a repetative read will fire an assert") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(17L)
+      .setSequence("TCAAAAAAGG")
+      .setCigar("3M4I3M")
+      .setMismatchingPositions("6")
+      .build()
+
+    intercept[AssertionError] {
+      realign(read, 3)
+    }
+  }
+
   def makeAndRealignRdd(reads: Seq[AlignmentRecord],
                         kmerLength: Int): Array[AlignmentRecord] = {
     val gRdd = AlignedReadRDD(sc.parallelize(reads),
@@ -388,5 +287,47 @@ class RealignerSuite extends AvocadoFunSuite {
       assert(r.getCigar === "%d=2D%d=".format(basesBeforeDelete, basesAfterDelete))
       assert(r.getMismatchingPositions === "%d^AC%d".format(basesBeforeDelete, basesAfterDelete))
     })
+  }
+
+  sparkTest("realigning a read with a repeat will return the original read") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadName("A_READ")
+      .setReadMapped(true)
+      .setStart(10L)
+      .setEnd(17L)
+      .setSequence("TCAAAAAAGG")
+      .setCigar("3M4I3M")
+      .setMismatchingPositions("6")
+      .build()
+
+    // make into a genomic rdd
+    val newReads = makeAndRealignRdd(Seq(read), 3)
+
+    // should have one read
+    assert(newReads.size === 1)
+    assert(newReads.head === read)
+  }
+
+  sparkTest("one sample read should fail due to a repeat, all others should realign") {
+    val readFile = ClassLoader.getSystemClassLoader
+      .getResource("NA12878_reads.sam")
+      .getFile()
+    val reads = sc.loadAlignments(readFile)
+      .rdd
+      .collect
+      .toSeq
+
+    var asserts = 0
+    reads.foreach(r => {
+      try {
+        realign(r, 20)
+      } catch {
+        case ae: AssertionError => {
+          asserts += 1
+        }
+      }
+    })
+
+    assert(asserts === 1)
   }
 }
