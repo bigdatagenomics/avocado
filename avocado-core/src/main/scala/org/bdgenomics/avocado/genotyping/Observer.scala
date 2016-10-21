@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.bdgenomics.avocado.observer
+package org.bdgenomics.avocado.genotyping
 
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
@@ -34,7 +34,7 @@ import scala.math.log
 /**
  * Produces raw allelic likelihoods. This is how you get [[Observation]]s!
  */
-object Observer extends Serializable {
+private[genotyping] object Observer extends Serializable {
 
   /**
    * Transforms an RDD of reads into an RDD of per allele/per sample likelihoods.
@@ -61,8 +61,8 @@ object Observer extends Serializable {
    * @return Returns an iterable collection of observations, keyed by (site,
    *   allele, sample ID).
    */
-  private[observer] def observeRead(read: AlignmentRecord,
-                                    ploidy: Int): Iterable[((ReferenceRegion, String, String), Observation)] = {
+  def observeRead(read: AlignmentRecord,
+                  ploidy: Int): Iterable[((ReferenceRegion, String, String), Observation)] = {
 
     // extract cigar
     val alignment = ObservationOperator.extractAlignmentOperators(read)
@@ -112,10 +112,12 @@ object Observer extends Serializable {
 
           // build the observation
           val obs = Observation(forwardStrand,
+            0,
             squareMapQ,
             alleleLogLikelihoods,
             otherLogLikelihoods,
-            1)
+            1,
+            0)
 
           (key, obs)
         })
@@ -146,10 +148,12 @@ object Observer extends Serializable {
 
         // build the observation
         val obs = Observation(forwardStrand,
+          0,
           squareMapQ,
           alleleLogLikelihoods,
           otherLogLikelihoods,
-          1)
+          1,
+          0)
 
         Iterable((key, obs))
       }
@@ -173,10 +177,12 @@ object Observer extends Serializable {
 
         // build the observation
         val obs = Observation(forwardStrand,
+          0,
           squareMapQ,
           alleleLogLikelihoods,
           otherLogLikelihoods,
-          1)
+          1,
+          0)
 
         Iterable((key, obs))
       }

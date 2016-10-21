@@ -31,6 +31,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   val unalignedRead = AlignmentRecord.newBuilder()
     .setReadMapped(false)
     .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
     .build
 
   val perfectReadMCigar = AlignmentRecord.newBuilder()
@@ -39,6 +40,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
     .setCigar("8M")
     .setMismatchingPositions("8")
     .build
@@ -49,6 +51,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
     .setCigar("8=")
     .setMismatchingPositions("8")
     .build
@@ -59,6 +62,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
     .setCigar("8M")
     .setMismatchingPositions("4C3")
     .build
@@ -69,7 +73,30 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
     .setCigar("4=1X3=")
+    .setMismatchingPositions("4C3")
+    .build
+
+  val snpReadHardClip = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("1")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
+    .setCigar("2H8M")
+    .setMismatchingPositions("4C3")
+    .build
+
+  val snpReadSoftClip = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("1")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("TGACACATGA")
+    .setQual("!!!!!!!!!!")
+    .setCigar("2S8M")
     .setMismatchingPositions("4C3")
     .build
 
@@ -79,6 +106,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACTTATGA")
+    .setQual("!!!!!!!!!!")
     .setCigar("4M2I4M")
     .setMismatchingPositions("8")
     .build
@@ -89,12 +117,13 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     .setStart(10L)
     .setEnd(20L)
     .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
     .setCigar("4M2D4M")
     .setMismatchingPositions("4^TT4")
     .build
 
   test("no variants in unaligned read") {
-    assert(DiscoverVariants.variantsInRead(unalignedRead).isEmpty)
+    assert(DiscoverVariants.variantsInRead(unalignedRead, 0).isEmpty)
   }
 
   sparkTest("no variants in rdd with unaligned read") {
@@ -103,8 +132,8 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   }
 
   test("no variants in read that is a perfect sequence match") {
-    assert(DiscoverVariants.variantsInRead(perfectReadMCigar).isEmpty)
-    assert(DiscoverVariants.variantsInRead(perfectReadEqCigar).isEmpty)
+    assert(DiscoverVariants.variantsInRead(perfectReadMCigar, 0).isEmpty)
+    assert(DiscoverVariants.variantsInRead(perfectReadEqCigar, 0).isEmpty)
   }
 
   sparkTest("no variants in rdd with sequence match reads") {
@@ -122,16 +151,23 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
 
   test("find snp in read with a 1bp sequence mismatch") {
     def testSnp(read: AlignmentRecord) {
-      val variants = DiscoverVariants.variantsInRead(read)
+      val variants = DiscoverVariants.variantsInRead(read, 0)
       assert(variants.size === 1)
       validateSnp(variants.head)
+      val highQualVariants = DiscoverVariants.variantsInRead(read, 1)
+      assert(highQualVariants.isEmpty)
     }
     testSnp(snpReadMCigar)
     testSnp(snpReadEqCigar)
+    testSnp(snpReadSoftClip)
+    testSnp(snpReadHardClip)
   }
 
   sparkTest("find one snp in reads with 1bp sequence mismatch") {
-    val snpRdd = sc.parallelize(Seq(snpReadMCigar, snpReadEqCigar))
+    val snpRdd = sc.parallelize(Seq(snpReadMCigar,
+      snpReadEqCigar,
+      snpReadSoftClip,
+      snpReadHardClip))
     val variants = DiscoverVariants.variantsInRdd(snpRdd).collect
     assert(variants.size === 1)
     validateSnp(variants.head)
@@ -146,7 +182,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   }
 
   test("find insertion in read") {
-    val variants = DiscoverVariants.variantsInRead(insertRead)
+    val variants = DiscoverVariants.variantsInRead(insertRead, 0)
     assert(variants.size === 1)
     validateInsertion(variants.head)
   }
@@ -167,7 +203,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   }
 
   test("find deletion in read") {
-    val variants = DiscoverVariants.variantsInRead(deleteRead)
+    val variants = DiscoverVariants.variantsInRead(deleteRead, 0)
     assert(variants.size === 1)
     validateDeletion(variants.head)
   }

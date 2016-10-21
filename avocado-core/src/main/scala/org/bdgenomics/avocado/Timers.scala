@@ -24,6 +24,20 @@ import org.bdgenomics.utils.instrumentation.Metrics
  */
 private[avocado] object Timers extends Metrics {
 
+  // org.bdgenomics.avocado.genotyping.BiallelicGenotyper
+  val DiscoverAndCall = timer("Discover variants and call genotypes")
+  val CallGenotypes = timer("Call genotypes")
+  val JoinReadsAndVariants = timer("Joining reads against variants")
+  val ObserveReads = timer("Observing variants in reads")
+  val ObserveRead = timer("Observing a read")
+  val IntersectVariants = timer("Intersecting observations and variants")
+  val ProcessIntersections = timer("Processing intersections")
+  val ProcessException = timer("Processing exceptions")
+  val EmitGenotypes = timer("Emit observations as genotype calls")
+
+  // org.bdgenomics.avocado.genotyping.DiscoverVariants
+  val DiscoveringVariants = timer("Discovering variants in reads")
+
   // org.bdgenomics.avocado.models.ObservationOperator
   val ExtractingReference = timer("Extracting reference sequence")
   val ExtractingAlignment = timer("Parsing alignment (CIGAR/MD tag)")
@@ -39,4 +53,10 @@ private[avocado] object Timers extends Metrics {
   // org.bdgenomics.avocado.realigner.RealignmentBlock
   val ExtractingRealignmentBlocks = timer("Checking for non-canonical alignment blocks")
 
+  // org.bdgenomics.avocado.util.Downsampler
+  val DownsampleReads = timer("Downsampling reads across an RDD")
+  val DownsamplePartition = timer("Downsampling a single partition")
+
+  // org.bdgenomics.avocado.util.GapFilter
+  val FilteringByGaps = timer("Filtering out reads aligned to gaps")
 }

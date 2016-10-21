@@ -309,9 +309,7 @@ class RealignerSuite extends AvocadoFunSuite {
   }
 
   sparkTest("one sample read should fail due to a repeat, all others should realign") {
-    val readFile = ClassLoader.getSystemClassLoader
-      .getResource("NA12878_reads.sam")
-      .getFile()
+    val readFile = resourceUrl("NA12878_reads.sam").toString
     val reads = sc.loadAlignments(readFile)
       .rdd
       .collect

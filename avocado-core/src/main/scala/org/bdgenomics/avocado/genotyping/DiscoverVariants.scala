@@ -20,6 +20,7 @@ package org.bdgenomics.avocado.genotyping
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.adam.rdd.variation.VariantRDD
+import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{
   Clipped,
   Deletion,
@@ -42,11 +43,15 @@ object DiscoverVariants extends Serializable with Logging {
    * Discovers all variants in an RDD of reads.
    *
    * @param rdd RDD of reads.
+   * @param optPhredThreshold An optional threshold that discards all variants
+   *   not supported by bases of at least a given phred score.
    * @return Returns an RDD of variants.
    */
-  private[avocado] def apply(aRdd: AlignmentRecordRDD): VariantRDD = {
+  private[avocado] def apply(
+    aRdd: AlignmentRecordRDD,
+    optPhredThreshold: Option[Int] = None): VariantRDD = DiscoveringVariants.time {
 
-    VariantRDD(variantsInRdd(aRdd.rdd),
+    VariantRDD(variantsInRdd(aRdd.rdd, optPhredThreshold = optPhredThreshold),
       aRdd.sequences)
   }
 
@@ -54,11 +59,18 @@ object DiscoverVariants extends Serializable with Logging {
    * Discovers all variants in an RDD of reads.
    *
    * @param rdd RDD of reads.
+   * @param optPhredThreshold An optional threshold that discards all variants
+   *   not supported by bases of at least a given phred score.
    * @return Returns an RDD of variants.
    */
-  private[genotyping] def variantsInRdd(rdd: RDD[AlignmentRecord]): RDD[Variant] = {
+  private[genotyping] def variantsInRdd(
+    rdd: RDD[AlignmentRecord],
+    optPhredThreshold: Option[Int] = None): RDD[Variant] = {
 
-    rdd.flatMap(variantsInRead)
+    // if phred threshold is unset, set to 0
+    val phredThreshold = optPhredThreshold.getOrElse(0)
+
+    rdd.flatMap(variantsInRead(_, phredThreshold))
       .distinct
   }
 
@@ -66,9 +78,12 @@ object DiscoverVariants extends Serializable with Logging {
    * Discovers the variants in a single read.
    *
    * @param read Aligned read to look for variants in.
+   * @param phredThreshold A threshold that discards all variants not supported
+   *   by bases of at least a given phred score.
    * @return Returns a collection containing all the variants in a read.
    */
-  private[genotyping] def variantsInRead(read: AlignmentRecord): Iterable[Variant] = {
+  private[genotyping] def variantsInRead(read: AlignmentRecord,
+                                         phredThreshold: Int): Iterable[Variant] = {
 
     if (!read.getReadMapped) {
       Iterable.empty
@@ -90,6 +105,7 @@ object DiscoverVariants extends Serializable with Logging {
 
       // get the read sequence, contig, etc
       val sequence = read.getSequence
+      val qual = read.getQual
       val contigName = read.getContigName
 
       // advance to the first alignment match
@@ -100,7 +116,8 @@ object DiscoverVariants extends Serializable with Logging {
           Iterator()
         } else {
           val stop = iter.head match {
-            case Clipped(length, _) => {
+            case Clipped(_, false) => false
+            case Clipped(length, true) => {
               idx += length
               false
             }
@@ -150,41 +167,55 @@ object DiscoverVariants extends Serializable with Logging {
               val kv = optRef.fold({
                 (sequence(idx + length - 1).toString, variants)
               })(ref => {
-                (ref.last.toString,
+                val matchQuals = qual.substring(idx, idx + length).map(_.toInt - 33).sum / length
+                val newVar = if (matchQuals >= phredThreshold) {
                   Variant.newBuilder
-                  .setContigName(contigName)
-                  .setStart(pos)
-                  .setEnd(pos + length.toLong)
-                  .setReferenceAllele(ref)
-                  .setAlternateAllele(sequence.substring(idx, idx + length))
-                  .build :: variants)
+                    .setContigName(contigName)
+                    .setStart(pos)
+                    .setEnd(pos + length.toLong)
+                    .setReferenceAllele(ref)
+                    .setAlternateAllele(sequence.substring(idx, idx + length))
+                    .build :: variants
+                } else {
+                  variants
+                }
+                (ref.last.toString, newVar)
               })
               pos += length
               idx += length
               kv
             }
             case Insertion(length) => {
-              val insVariant = Variant.newBuilder
-                .setContigName(contigName)
-                .setStart(pos - 1L)
-                .setEnd(pos)
-                .setReferenceAllele(lastRef)
-                .setAlternateAllele(lastRef + sequence.substring(idx, idx + length))
-                .build
+              val insQuals = qual.substring(idx - 1, idx + length).map(_.toInt - 33).sum / length
+              val newVar = if (insQuals >= phredThreshold) {
+                Variant.newBuilder
+                  .setContigName(contigName)
+                  .setStart(pos - 1L)
+                  .setEnd(pos)
+                  .setReferenceAllele(lastRef)
+                  .setAlternateAllele(sequence.substring(idx - 1, idx + length))
+                  .build :: variants
+              } else {
+                variants
+              }
               idx += length
-              (lastRef, insVariant :: variants)
+              (lastRef, newVar)
             }
             case Deletion(ref) => {
               val delLength = ref.size
-              val delVariant = Variant.newBuilder
-                .setContigName(contigName)
-                .setStart(pos - 1L)
-                .setEnd(pos + delLength.toLong)
-                .setReferenceAllele(lastRef + ref)
-                .setAlternateAllele(lastRef)
-                .build
+              val newVar = if (qual(idx - 1).toInt - 33 >= phredThreshold) {
+                Variant.newBuilder
+                  .setContigName(contigName)
+                  .setStart(pos - 1L)
+                  .setEnd(pos + delLength.toLong)
+                  .setReferenceAllele(lastRef + ref)
+                  .setAlternateAllele(sequence.substring(idx - 1, idx))
+                  .build :: variants
+              } else {
+                variants
+              }
               pos += delLength
-              (ref.last.toString, delVariant :: variants)
+              (ref.last.toString, newVar)
             }
           }
 

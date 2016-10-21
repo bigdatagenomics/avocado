@@ -30,7 +30,9 @@ import org.bdgenomics.formats.avro.AlignmentRecord
 case class TestPrefilterReadsArgs(var isNotGrc: Boolean = false,
                                   var autosomalOnly: Boolean = false,
                                   var keepMitochondrialChromosome: Boolean = false,
-                                  var keepDuplicates: Boolean = true) extends PrefilterReadsArgs {
+                                  var keepDuplicates: Boolean = true,
+                                  var minMappingQuality: Int = -1,
+                                  var keepNonPrimary: Boolean = true) extends PrefilterReadsArgs {
 }
 
 class PrefilterReadsSuite extends AvocadoFunSuite {
@@ -50,13 +52,21 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
   test("filter unmapped reads") {
     val mappedRead = AlignmentRecord.newBuilder
       .setReadMapped(true)
+      .setPrimaryAlignment(true)
       .build
-    assert(PrefilterReads.filterMapped(mappedRead))
+    assert(PrefilterReads.filterMapped(mappedRead, false))
+
+    val nonPrimaryMappedRead = AlignmentRecord.newBuilder
+      .setReadMapped(true)
+      .setPrimaryAlignment(false)
+      .build
+    assert(!PrefilterReads.filterMapped(nonPrimaryMappedRead, false))
+    assert(PrefilterReads.filterMapped(nonPrimaryMappedRead, true))
 
     val unmappedRead = AlignmentRecord.newBuilder
       .setReadMapped(false)
       .build
-    assert(!PrefilterReads.filterMapped(unmappedRead))
+    assert(!PrefilterReads.filterMapped(unmappedRead, true))
   }
 
   val contigNames = Seq("chr1",
@@ -145,8 +155,6 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
       .setDuplicateRead(false)).flatMap(rb => {
       contigNames.map(cn => rb.setContigName(cn).build)
     })
-
-  println(reads.mkString("\n"))
 
   def testReadHelperSet(testArgs: PrefilterReadsArgs, passIdxSet: Set[Int]) {
     val testFn = PrefilterReads.readFilterFn(testArgs,

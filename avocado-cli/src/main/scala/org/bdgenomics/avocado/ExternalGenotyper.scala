@@ -99,6 +99,14 @@ class ExternalGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parquet
     name = "-keep_duplicate_reads",
     usage = "True if we want to include reads that were marked as duplicates")
   var keepDuplicates: Boolean = false
+  @Args4jOption(required = false,
+    name = "-min_mapping_quality",
+    usage = "Minimum read mapping quality to keep. Defaults to MapQ = 5.")
+  var minMappingQuality: Int = 5
+  @Args4jOption(required = false,
+    name = "-keep_non_primary",
+    usage = "If set, we keep secondary/supplemental alignments.")
+  var keepNonPrimary: Boolean = false
 
   // required by ADAMSaveAnyArgs
   var sortFastqOutput: Boolean = false
