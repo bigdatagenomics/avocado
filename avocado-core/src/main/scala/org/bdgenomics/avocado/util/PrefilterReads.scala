@@ -21,7 +21,7 @@ import org.bdgenomics.adam.models.SequenceDictionary
 import org.bdgenomics.adam.rdd.read.{ AlignedReadRDD, AlignmentRecordRDD }
 import org.bdgenomics.formats.avro.AlignmentRecord
 
-private[avocado] trait PrefilterReadsArgs {
+private[avocado] trait PrefilterReadsArgs extends Serializable {
 
   /**
    * True if a genome build is not from the Genome Reference Consortium.
@@ -42,6 +42,16 @@ private[avocado] trait PrefilterReadsArgs {
    * True if we want to keep reads marked as sequencing duplicates.
    */
   var keepDuplicates: Boolean
+
+  /**
+   * The minimum mapping quality of read to keep.
+   */
+  var minMappingQuality: Int
+
+  /**
+   * If true, keeps secondary/supplemental alignments.
+   */
+  var keepNonPrimary: Boolean
 }
 
 /**
@@ -113,15 +123,17 @@ private[avocado] object PrefilterReads extends Serializable {
     args: PrefilterReadsArgs,
     contigFilterFn: (String => Boolean)): (AlignmentRecord => Boolean) = {
 
-    if (args.keepDuplicates) {
-      def filterFn(r: AlignmentRecord): Boolean = {
-        filterMapped(r) && contigFilterFn(r.getContigName)
-      }
+    def baseFilterFn(r: AlignmentRecord): Boolean = {
+      (filterMapped(r, args.keepNonPrimary) &&
+        filterMappingQuality(r, args.minMappingQuality) &&
+        contigFilterFn(r.getContigName))
+    }
 
-      filterFn(_)
+    if (args.keepDuplicates) {
+      baseFilterFn(_)
     } else {
       def filterFn(r: AlignmentRecord): Boolean = {
-        filterUnique(r) && filterMapped(r) && contigFilterFn(r.getContigName)
+        filterUnique(r) && baseFilterFn(r)
       }
 
       filterFn(_)
@@ -140,8 +152,25 @@ private[avocado] object PrefilterReads extends Serializable {
    * @param read Read to test for filtration.
    * @return Returns true if the read is aligned.
    */
-  protected[util] def filterMapped(read: AlignmentRecord): Boolean = {
-    read.getReadMapped
+  protected[util] def filterMapped(read: AlignmentRecord,
+                                   keepNonPrimary: Boolean): Boolean = {
+    read.getReadMapped && (keepNonPrimary || read.getPrimaryAlignment)
+  }
+
+  /**
+   * @param read Read to test for filtration.
+   * @param minMappingQuality Only keep reads with a mapping quality above this
+   *   value.
+   * @return Returns true if the read is aligned.
+   */
+  protected[util] def filterMappingQuality(read: AlignmentRecord,
+                                           minMappingQuality: Int): Boolean = {
+    // if mapq is not set, ignore
+    if (read.getMapq == null) {
+      true
+    } else {
+      read.getMapq > minMappingQuality
+    }
   }
 
   /**

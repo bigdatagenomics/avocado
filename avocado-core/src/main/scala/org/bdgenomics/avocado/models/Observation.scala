@@ -20,26 +20,81 @@ package org.bdgenomics.avocado.models
 /**
  * A generic class that stores likelihoods and simple annotations.
  *
- * @param forwardStrand The number of reads observed on the forward strand.
+ * @param alleleForwardStrand The number of reads covering the allele observed
+ *   on the forward strand.
+ * @param otherForwardStrand The number of reads covering the site but not
+ *   matching the allele observed on the forward strand.
  * @param squareMapQ The sum of the squares of the mapping qualities observed.
- * @param alleleLogLikelihoods The log likelihoods that 0...n copies of this allele were
- *   observed.
- * @param otherLogLikelihoods The log likelihoods that 0...n copies of another allele were
- *   observed.
- * @param coverage The total number of reads observed.
+ * @param alleleLogLikelihoods The log likelihoods that 0...n copies of this
+ *   allele were observed.
+ * @param otherLogLikelihoods The log likelihoods that 0...n copies of another
+ *   allele were observed.
+ * @param alleleCoverage The total number of reads observed that cover the
+ *   site and match the allele.
+ * @param otherCoverage The total number of reads observed that cover the site
+ *   but that do not match the allele.
  */
-case class Observation(forwardStrand: Int,
+case class Observation(alleleForwardStrand: Int,
+                       otherForwardStrand: Int,
                        squareMapQ: Double,
                        alleleLogLikelihoods: Array[Double],
                        otherLogLikelihoods: Array[Double],
-                       coverage: Int) {
+                       alleleCoverage: Int,
+                       otherCoverage: Int) {
 
-  protected val copyNumber = alleleLogLikelihoods.length
-  assert(copyNumber == otherLogLikelihoods.length &&
+  override def toString: String = {
+    "Observation(%d, %d, %f, Array(%s), Array(%s), %d, %d)".format(
+      alleleForwardStrand,
+      otherForwardStrand,
+      squareMapQ,
+      alleleLogLikelihoods.mkString(","),
+      otherLogLikelihoods.mkString(","),
+      alleleCoverage,
+      otherCoverage)
+  }
+
+  /**
+   * @return The total coverage of this site.
+   */
+  def coverage: Int = alleleCoverage + otherCoverage
+
+  /**
+   * @return The copy number of this site.
+   */
+  def copyNumber = alleleLogLikelihoods.length - 1
+
+  assert(copyNumber == (otherLogLikelihoods.length - 1) &&
     copyNumber > 0)
   assert(squareMapQ >= 0.0)
-  assert(coverage > 0)
-  assert(forwardStrand >= 0)
+  assert(alleleCoverage >= 0 && otherCoverage >= 0 && coverage > 0)
+  assert(alleleForwardStrand >= 0 && alleleCoverage >= alleleForwardStrand &&
+    otherForwardStrand >= 0 && otherCoverage >= otherForwardStrand)
+
+  /**
+   * @return Makes a copy where underlying arrays are not shared.
+   */
+  def duplicate: Observation = {
+    Observation(alleleForwardStrand,
+      otherForwardStrand,
+      squareMapQ,
+      alleleLogLikelihoods.map(v => v),
+      otherLogLikelihoods.map(v => v),
+      alleleCoverage,
+      otherCoverage)
+  }
+
+  /**
+   * @return Returns this observation, but with allele/other swapped.
+   */
+  def invert: Observation = {
+    Observation(otherForwardStrand,
+      alleleForwardStrand,
+      squareMapQ,
+      otherLogLikelihoods.map(v => v),
+      alleleLogLikelihoods.map(v => v),
+      otherCoverage,
+      alleleCoverage)
+  }
 
   /**
    * Merges two observations.
@@ -54,15 +109,17 @@ case class Observation(forwardStrand: Int,
   def merge(obs: Observation): Observation = {
     assert(copyNumber == obs.copyNumber)
 
-    (0 until copyNumber).foreach(i => {
+    (0 to copyNumber).foreach(i => {
       alleleLogLikelihoods(i) += obs.alleleLogLikelihoods(i)
       otherLogLikelihoods(i) += obs.otherLogLikelihoods(i)
     })
 
-    Observation(forwardStrand + obs.forwardStrand,
+    Observation(alleleForwardStrand + obs.alleleForwardStrand,
+      otherForwardStrand + obs.otherForwardStrand,
       squareMapQ + obs.squareMapQ,
       alleleLogLikelihoods,
       otherLogLikelihoods,
-      coverage + obs.coverage)
+      alleleCoverage + obs.alleleCoverage,
+      otherCoverage + obs.otherCoverage)
   }
 }
