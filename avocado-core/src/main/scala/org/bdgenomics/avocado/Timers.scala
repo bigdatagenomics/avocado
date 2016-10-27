@@ -59,4 +59,11 @@ private[avocado] object Timers extends Metrics {
 
   // org.bdgenomics.avocado.util.GapFilter
   val FilteringByGaps = timer("Filtering out reads aligned to gaps")
+
+  // org.bdgenomics.avocado.util.TreeRegionJoin
+  val TreeJoin = timer("Running broadcast join with interval tree")
+  val BuildingTrees = timer("Building interval tree")
+  val SortingRightSide = timer("Sorting right side of join")
+  val GrowingTrees = timer("Growing forest of trees")
+  val RunningMapSideJoin = timer("Running map-side join")
 }

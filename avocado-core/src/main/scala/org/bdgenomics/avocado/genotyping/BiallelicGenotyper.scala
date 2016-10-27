@@ -34,7 +34,8 @@ import org.bdgenomics.avocado.util.{
   Downsampler,
   HardLimiter,
   LogPhred,
-  LogUtils
+  LogUtils,
+  TreeRegionJoin
 }
 import org.bdgenomics.formats.avro.{
   AlignmentRecord,
@@ -94,8 +95,16 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
     // join reads against variants
     val useBroadcastJoin = false
+    val useTreeJoin = true
     val joinedRdd = JoinReadsAndVariants.time {
-      if (useBroadcastJoin) {
+      if (useTreeJoin) {
+
+        TreeRegionJoin.joinAndGroupByRight(
+          variants.rdd.keyBy(v => ReferenceRegion(v)),
+          reads.rdd.flatMap(r => {
+            ReferenceRegion.opt(r).map(rr => (rr, r))
+          })).map(_.swap)
+      } else if (useBroadcastJoin) {
 
         val joinedGRdd = variants.broadcastRegionJoin(reads)
         joinedGRdd.rdd.map(kv => {
@@ -106,31 +115,32 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         val refLength = reads.sequences.records.map(_.length).sum
         val partitionSize = refLength / optDesiredPartitionCount.getOrElse(reads.rdd.partitions.size)
 
-        reads.shuffleRegionJoinAndGroupByLeft(variants,
+        val shuffledRdd = reads.shuffleRegionJoinAndGroupByLeft(variants,
           optPartitions = Some(partitionSize.toInt))
           .rdd
+
+        val rdd = if (Metrics.isRecording) shuffledRdd.instrument() else shuffledRdd
+        val optCoverageThresholdedRdd = optDesiredMaxCoverage.fold(rdd)(maxCoverage => {
+          HardLimiter(rdd, maxCoverage)
+        })
+        optDesiredPartitionSize.fold(optCoverageThresholdedRdd)(size => {
+
+          val contigLengths = reads.sequences
+            .records
+            .map(r => (r.name -> r.length))
+            .toMap
+          val refLength = contigLengths.values.sum
+          val partitionSize = refLength / optDesiredPartitionCount.getOrElse(reads.rdd.partitions.size)
+
+          val bins = GenomeBins(partitionSize, contigLengths)
+
+          Downsampler.downsample(optCoverageThresholdedRdd, size, bins)
+        })
       }
     }
-    val rdd = if (Metrics.isRecording) joinedRdd.instrument() else joinedRdd
-    val optCoverageThresholdedRdd = optDesiredMaxCoverage.fold(rdd)(maxCoverage => {
-      HardLimiter(rdd, maxCoverage)
-    })
-    val optSampledRdd = optDesiredPartitionSize.fold(optCoverageThresholdedRdd)(size => {
-
-      val contigLengths = reads.sequences
-        .records
-        .map(r => (r.name -> r.length))
-        .toMap
-      val refLength = contigLengths.values.sum
-      val partitionSize = refLength / optDesiredPartitionCount.getOrElse(reads.rdd.partitions.size)
-
-      val bins = GenomeBins(partitionSize, contigLengths)
-
-      Downsampler.downsample(optCoverageThresholdedRdd, size, bins)
-    })
 
     // score variants and get observations
-    val observationRdd = readsToObservations(optSampledRdd, ploidy)
+    val observationRdd = readsToObservations(joinedRdd, ploidy)
 
     // genotype observations
     val genotypeRdd = observationsToGenotypes(observationRdd, samples.head)
