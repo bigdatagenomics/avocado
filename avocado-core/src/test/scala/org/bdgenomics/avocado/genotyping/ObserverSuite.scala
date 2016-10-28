@@ -90,6 +90,7 @@ class ObserverSuite extends AvocadoFunSuite {
     assert(obs.forall(o => {
       MathUtils.fpEquals(o._2.squareMapQ, pow(50.0, 2.0))
     }))
+    assert(obs.forall(_._2.isRef))
     assert(obs.forall(_._1._3 == "sample"))
     (0 until 4).zip("ACGT").foreach(p => {
       val (idx, base) = p
@@ -131,6 +132,7 @@ class ObserverSuite extends AvocadoFunSuite {
     assert(obs.forall(_._2.otherForwardStrand == 0))
     assert(obs.forall(_._2.alleleLogLikelihoods.size == 3))
     assert(obs.forall(_._2.otherLogLikelihoods.size == 3))
+    assert(obs.count(_._2.isRef) === 2)
     assert(obs.forall(o => {
       MathUtils.fpEquals(o._2.squareMapQ, pow(50.0, 2.0))
     }))
@@ -177,6 +179,7 @@ class ObserverSuite extends AvocadoFunSuite {
     assert(obs.forall(_._2.otherForwardStrand == 0))
     assert(obs.forall(_._2.alleleLogLikelihoods.size == 3))
     assert(obs.forall(_._2.otherLogLikelihoods.size == 3))
+    assert(obs.count(_._2.isRef) === 4)
     assert(obs.forall(o => {
       MathUtils.fpEquals(o._2.squareMapQ, pow(50.0, 2.0))
     }))
@@ -278,6 +281,7 @@ class ObserverSuite extends AvocadoFunSuite {
       assert(obs.alleleForwardStrand === 2)
       assert(obs.otherForwardStrand === 0)
       assert(obs.alleleLogLikelihoods.length === 3)
+      assert(obs.isRef)
       assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(0), r0l0 + r1l0 + r2l0))
       assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(1), r0l1 + r1l1 + r2l1))
       assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(2), r0l2 + r1l2 + r2l2))
@@ -294,6 +298,7 @@ class ObserverSuite extends AvocadoFunSuite {
       assert(sample === "sample")
       assert(allele.length === 1)
       assert(rr.length === 1)
+      assert(obs.isRef)
       assert(obs.squareMapQ === 40 * 40)
       assert(obs.alleleCoverage === 1)
       assert(obs.otherCoverage === 0)
@@ -316,6 +321,7 @@ class ObserverSuite extends AvocadoFunSuite {
       assert(sample === "sample")
       assert(allele.length === 1)
       assert(rr.length === 1)
+      assert(obs.isRef)
       assert(obs.squareMapQ === 40 * 40 + 50 * 50)
       assert(obs.alleleCoverage === 2)
       assert(obs.otherCoverage === 0)
@@ -338,6 +344,7 @@ class ObserverSuite extends AvocadoFunSuite {
       assert(sample === "sample")
       assert(allele.length === 1)
       assert(rr.length === 1)
+      assert(obs.isRef)
       assert(obs.squareMapQ === 50 * 50 + 60 * 60)
       assert(obs.alleleCoverage === 2)
       assert(obs.otherCoverage === 0)
@@ -360,6 +367,7 @@ class ObserverSuite extends AvocadoFunSuite {
       assert(sample === "sample")
       assert(allele.length === 1)
       assert(rr.length === 1)
+      assert(obs.isRef)
       assert(obs.squareMapQ === 60 * 60)
       assert(obs.alleleCoverage === 1)
       assert(obs.otherCoverage === 0)

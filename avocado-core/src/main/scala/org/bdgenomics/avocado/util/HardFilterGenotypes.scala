@@ -33,18 +33,32 @@ private[avocado] trait HardFilterGenotypesArgs extends Serializable {
   var minQuality: Int
 
   /**
-   * The minimum quality by depth to allow for SNPs.
+   * The minimum quality by depth to allow for heterozygous SNPs.
    *
    * Set to a negative value to omit.
    */
-  var minSnpQualityByDepth: Float
+  var minHetSnpQualityByDepth: Float
 
   /**
-   * The minimum quality by depth to allow for INDELs.
+   * The minimum quality by depth to allow for homozygous SNPs.
    *
    * Set to a negative value to omit.
    */
-  var minIndelQualityByDepth: Float
+  var minHomSnpQualityByDepth: Float
+
+  /**
+   * The minimum quality by depth to allow for heterozygous INDELs.
+   *
+   * Set to a negative value to omit.
+   */
+  var minHetIndelQualityByDepth: Float
+
+  /**
+   * The minimum quality by depth to allow for homozygous INDELs.
+   *
+   * Set to a negative value to omit.
+   */
+  var minHomIndelQualityByDepth: Float
 
   /**
    * The max Phred-scaled strand bias p-value to allow for SNPs.
@@ -52,6 +66,20 @@ private[avocado] trait HardFilterGenotypesArgs extends Serializable {
    * Set to a negative value to omit.
    */
   var maxSnpPhredStrandBias: Float
+
+  /**
+   * The minimum coverage to allow for SNPs.
+   *
+   * Set to a negative value to omit.
+   */
+  var minSnpDepth: Int
+
+  /**
+   * The max coverage to allow for SNPs.
+   *
+   * Set to a negative value to omit.
+   */
+  var maxSnpDepth: Int
 
   /**
    * The max Phred-scaled strand bias p-value to allow for INDELs.
@@ -73,6 +101,20 @@ private[avocado] trait HardFilterGenotypesArgs extends Serializable {
    * Set to a negative value to omit.
    */
   var minIndelRMSMappingQuality: Float
+
+  /**
+   * The minimum coverage to allow for INDELs.
+   *
+   * Set to a negative value to omit.
+   */
+  var minIndelDepth: Int
+
+  /**
+   * The max coverage to allow for INDELs.
+   *
+   * Set to a negative value to omit.
+   */
+  var maxIndelDepth: Int
 }
 
 /**
@@ -110,19 +152,31 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    */
   private[util] def buildSnpHardFilters(
     args: HardFilterGenotypesArgs): Iterable[Genotype => Option[String]] = {
-    val optQdFilter: Option[Genotype => Option[String]] = Option(args.minSnpQualityByDepth)
+    val optHetQdFilter: Option[Genotype => Option[String]] = Option(args.minHetSnpQualityByDepth)
       .filter(_ > 0.0)
-      .map(minQd => hardFilterQualityByDepth(_, minQd))
+      .map(minQd => hardFilterQualityByDepth(_, minQd, hom = false))
+    val optHomQdFilter: Option[Genotype => Option[String]] = Option(args.minHomSnpQualityByDepth)
+      .filter(_ > 0.0)
+      .map(minQd => hardFilterQualityByDepth(_, minQd, hom = true))
     val optMqFilter: Option[Genotype => Option[String]] = Option(args.minSnpRMSMappingQuality)
       .filter(_ > 0.0)
       .map(minMq => hardFilterRMSMapQ(_, minMq))
     val optFsFilter: Option[Genotype => Option[String]] = Option(args.maxSnpPhredStrandBias)
       .filter(_ > 0.0)
       .map(minFs => hardFilterStrandBias(_, minFs))
+    val optMinDpFilter: Option[Genotype => Option[String]] = Option(args.minSnpDepth)
+      .filter(_ > 0)
+      .map(minDp => hardFilterMinDepth(_, minDp))
+    val optMaxDpFilter: Option[Genotype => Option[String]] = Option(args.maxSnpDepth)
+      .filter(_ > 0)
+      .map(maxDp => hardFilterMaxDepth(_, maxDp))
 
-    Iterable(optQdFilter,
+    Iterable(optHetQdFilter,
+      optHomQdFilter,
       optMqFilter,
-      optFsFilter).flatten
+      optFsFilter,
+      optMinDpFilter,
+      optMaxDpFilter).flatten
   }
 
   /**
@@ -131,19 +185,31 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    */
   private[util] def buildIndelHardFilters(
     args: HardFilterGenotypesArgs): Iterable[Genotype => Option[String]] = {
-    val optQdFilter: Option[Genotype => Option[String]] = Option(args.minIndelQualityByDepth)
+    val optHetQdFilter: Option[Genotype => Option[String]] = Option(args.minHetIndelQualityByDepth)
       .filter(_ > 0.0)
-      .map(minQd => hardFilterQualityByDepth(_, minQd))
+      .map(minQd => hardFilterQualityByDepth(_, minQd, hom = false))
+    val optHomQdFilter: Option[Genotype => Option[String]] = Option(args.minHomIndelQualityByDepth)
+      .filter(_ > 0.0)
+      .map(minQd => hardFilterQualityByDepth(_, minQd, hom = true))
     val optMqFilter: Option[Genotype => Option[String]] = Option(args.minIndelRMSMappingQuality)
       .filter(_ > 0.0)
       .map(minMq => hardFilterRMSMapQ(_, minMq))
     val optFsFilter: Option[Genotype => Option[String]] = Option(args.maxIndelPhredStrandBias)
       .filter(_ > 0.0)
       .map(minFs => hardFilterStrandBias(_, minFs))
+    val optMinDpFilter: Option[Genotype => Option[String]] = Option(args.minIndelDepth)
+      .filter(_ > 0)
+      .map(minDp => hardFilterMinDepth(_, minDp))
+    val optMaxDpFilter: Option[Genotype => Option[String]] = Option(args.maxIndelDepth)
+      .filter(_ > 0)
+      .map(maxDp => hardFilterMaxDepth(_, maxDp))
 
-    Iterable(optQdFilter,
+    Iterable(optHetQdFilter,
+      optHomQdFilter,
       optMqFilter,
-      optFsFilter).flatten
+      optFsFilter,
+      optMinDpFilter,
+      optMaxDpFilter).flatten
   }
 
   /**
@@ -183,22 +249,29 @@ private[avocado] object HardFilterGenotypes extends Serializable {
   /**
    * @param genotype call to evaluate.
    * @param minQualityByDepth The minimum quality/depth value to accept.
+   * @param hom If true, this filter should be applied to homozygous variants.
    * @return If this genotype has a low quality for the depth of the site, we
    *   return an optional filter string. Else, we return a None.
    */
   private[util] def hardFilterQualityByDepth(genotype: Genotype,
-                                             minQualityByDepth: Float): Option[String] = {
-    Option(genotype.getReadDepth)
-      .flatMap(depth => {
-        Option(genotype.getGenotypeQuality)
-          .map(gq => gq.toFloat / depth.toFloat)
-      }).flatMap(qualByDepth => {
-        if (qualByDepth < minQualityByDepth) {
-          Some("QD<%1.1f".format(minQualityByDepth))
-        } else {
-          None
-        }
-      })
+                                             minQualityByDepth: Float,
+                                             hom: Boolean = false): Option[String] = {
+    val gtIsHom = genotype.getAlleles.forall(_ == GenotypeAllele.Alt)
+    if ((!gtIsHom && !hom) || (gtIsHom && hom)) {
+      Option(genotype.getReadDepth)
+        .flatMap(depth => {
+          Option(genotype.getGenotypeQuality)
+            .map(gq => gq.toFloat / depth.toFloat)
+        }).flatMap(qualByDepth => {
+          if (qualByDepth < minQualityByDepth) {
+            Some("QD<%1.1f".format(minQualityByDepth))
+          } else {
+            None
+          }
+        })
+    } else {
+      None
+    }
   }
 
   /**
@@ -214,6 +287,42 @@ private[avocado] object HardFilterGenotypes extends Serializable {
       .flatMap(fs => {
         if (fs > maxPhredStrandBias) {
           Some("FS>%1.1f".format(maxPhredStrandBias))
+        } else {
+          None
+        }
+      })
+  }
+
+  /**
+   * @param genotype call to evaluate.
+   * @param maxDepth The maximum depth to emit variant calls for.
+   * @return If this genotype shows excessive depth, we return an
+   *   optional filter string. Else, we return a None.
+   */
+  private[util] def hardFilterMaxDepth(genotype: Genotype,
+                                       maxDepth: Int): Option[String] = {
+    Option(genotype.getReadDepth)
+      .flatMap(dp => {
+        if (dp > maxDepth) {
+          Some("DP>%d".format(maxDepth))
+        } else {
+          None
+        }
+      })
+  }
+
+  /**
+   * @param genotype call to evaluate.
+   * @param minDepth The minimum depth to emit variant calls for.
+   * @return If this genotype shows insufficient depth, we return an
+   *   optional filter string. Else, we return a None.
+   */
+  private[util] def hardFilterMinDepth(genotype: Genotype,
+                                       minDepth: Int): Option[String] = {
+    Option(genotype.getReadDepth)
+      .flatMap(dp => {
+        if (dp < minDepth) {
+          Some("DP<%d".format(minDepth))
         } else {
           None
         }

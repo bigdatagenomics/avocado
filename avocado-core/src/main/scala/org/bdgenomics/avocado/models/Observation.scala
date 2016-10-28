@@ -33,6 +33,8 @@ package org.bdgenomics.avocado.models
  *   site and match the allele.
  * @param otherCoverage The total number of reads observed that cover the site
  *   but that do not match the allele.
+ * @param totalCoverage The total number of reads that cover the site.
+ * @param isRef True if this allele matches the reference.
  */
 case class Observation(alleleForwardStrand: Int,
                        otherForwardStrand: Int,
@@ -40,17 +42,21 @@ case class Observation(alleleForwardStrand: Int,
                        alleleLogLikelihoods: Array[Double],
                        otherLogLikelihoods: Array[Double],
                        alleleCoverage: Int,
-                       otherCoverage: Int) {
+                       otherCoverage: Int,
+                       totalCoverage: Int = 1,
+                       isRef: Boolean = true) {
 
   override def toString: String = {
-    "Observation(%d, %d, %f, Array(%s), Array(%s), %d, %d)".format(
+    "Observation(%d, %d, %f, Array(%s), Array(%s), %d, %d, %d, %s)".format(
       alleleForwardStrand,
       otherForwardStrand,
       squareMapQ,
       alleleLogLikelihoods.mkString(","),
       otherLogLikelihoods.mkString(","),
       alleleCoverage,
-      otherCoverage)
+      otherCoverage,
+      totalCoverage,
+      isRef)
   }
 
   /**
@@ -66,25 +72,29 @@ case class Observation(alleleForwardStrand: Int,
   assert(copyNumber == (otherLogLikelihoods.length - 1) &&
     copyNumber > 0)
   assert(squareMapQ >= 0.0)
-  assert(alleleCoverage >= 0 && otherCoverage >= 0 && coverage > 0)
+  assert(alleleCoverage >= 0 && otherCoverage >= 0 && coverage >= 0 && totalCoverage > 0)
   assert(alleleForwardStrand >= 0 && alleleCoverage >= alleleForwardStrand &&
     otherForwardStrand >= 0 && otherCoverage >= otherForwardStrand)
 
   /**
    * @return Makes a copy where underlying arrays are not shared.
    */
-  def duplicate: Observation = {
+  def duplicate(setRef: Option[Boolean] = None): Observation = {
     Observation(alleleForwardStrand,
       otherForwardStrand,
       squareMapQ,
       alleleLogLikelihoods.map(v => v),
       otherLogLikelihoods.map(v => v),
       alleleCoverage,
-      otherCoverage)
+      otherCoverage,
+      totalCoverage = totalCoverage,
+      isRef = setRef.getOrElse(isRef))
   }
 
   /**
    * @return Returns this observation, but with allele/other swapped.
+   *
+   * @see null
    */
   def invert: Observation = {
     Observation(otherForwardStrand,
@@ -93,7 +103,27 @@ case class Observation(alleleForwardStrand: Int,
       otherLogLikelihoods.map(v => v),
       alleleLogLikelihoods.map(v => v),
       otherCoverage,
-      alleleCoverage)
+      alleleCoverage,
+      totalCoverage = totalCoverage,
+      isRef = !isRef)
+  }
+
+  /**
+   * @return Returns this observation, but with all allele related fields
+   *   nulled out.
+   *
+   * @see invert
+   */
+  def nullOut: Observation = {
+    Observation(0,
+      0,
+      0,
+      Array.fill(alleleLogLikelihoods.length)({ 0.0 }),
+      alleleLogLikelihoods.map(v => v),
+      0,
+      0,
+      totalCoverage = totalCoverage,
+      isRef = false)
   }
 
   /**
@@ -108,6 +138,7 @@ case class Observation(alleleForwardStrand: Int,
    */
   def merge(obs: Observation): Observation = {
     assert(copyNumber == obs.copyNumber)
+    assert(isRef == obs.isRef)
 
     (0 to copyNumber).foreach(i => {
       alleleLogLikelihoods(i) += obs.alleleLogLikelihoods(i)
@@ -120,6 +151,8 @@ case class Observation(alleleForwardStrand: Int,
       alleleLogLikelihoods,
       otherLogLikelihoods,
       alleleCoverage + obs.alleleCoverage,
-      otherCoverage + obs.otherCoverage)
+      otherCoverage + obs.otherCoverage,
+      totalCoverage = totalCoverage + obs.totalCoverage,
+      isRef = isRef)
   }
 }

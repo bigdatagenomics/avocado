@@ -92,7 +92,7 @@ private[genotyping] object Observer extends Serializable {
         }
         Iterable.empty
       }
-      case Match(length, _) => {
+      case Match(length, optRef) => {
         (0 until length).map(idx => {
 
           // the key is the (site, allele, sampleId)
@@ -117,7 +117,8 @@ private[genotyping] object Observer extends Serializable {
             alleleLogLikelihoods,
             otherLogLikelihoods,
             1,
-            0)
+            0,
+            isRef = optRef.isEmpty)
 
           (key, obs)
         })
@@ -153,7 +154,8 @@ private[genotyping] object Observer extends Serializable {
           alleleLogLikelihoods,
           otherLogLikelihoods,
           1,
-          0)
+          0,
+          isRef = false)
 
         Iterable((key, obs))
       }
@@ -182,7 +184,8 @@ private[genotyping] object Observer extends Serializable {
           alleleLogLikelihoods,
           otherLogLikelihoods,
           1,
-          0)
+          0,
+          isRef = false)
 
         Iterable((key, obs))
       }
