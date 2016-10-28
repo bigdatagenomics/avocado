@@ -79,8 +79,8 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
   var keepDuplicates: Boolean = false
   @Args4jOption(required = false,
     name = "-min_mapping_quality",
-    usage = "Minimum read mapping quality to keep. Defaults to MapQ = 5.")
-  var minMappingQuality: Int = 5
+    usage = "Minimum read mapping quality to keep. Defaults to MapQ = 10.")
+  var minMappingQuality: Int = 10
   @Args4jOption(required = false,
     name = "-keep_non_primary",
     usage = "If set, we keep secondary/supplemental alignments.")
@@ -99,8 +99,12 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
   var desiredMaxCoverage: Int = 1000
   @Args4jOption(required = false,
     name = "-min_phred_to_discover_variant",
-    usage = "Minimum quality needed to discover a variant. Defaults to phred 30.")
-  var minPhredForDiscovery: Int = 30
+    usage = "Minimum quality needed to discover a variant. Defaults to phred 25.")
+  var minPhredForDiscovery: Int = 25
+  @Args4jOption(required = false,
+    name = "-min_observations_to_discover_variant",
+    usage = "Minimum number of times a variant must be seen to be discovered. Defaults to phred 5.")
+  var minObservationsForDiscovery: Int = 5
   @Args4jOption(required = false,
     name = "-reference_gaps",
     usage = "Optional file with reference gaps to filter against.")
@@ -110,21 +114,45 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     usage = "Minimum quality needed to emit a non-ref genotype. Default is Phred 30.")
   var minQuality: Int = 30
   @Args4jOption(required = false,
-    name = "-min_snp_quality_by_depth",
-    usage = "Minimum SNP quality/depth for hard filtering. Default is 2.0. Set negative to ignore filter.")
-  var minSnpQualityByDepth: Float = 2.0f
+    name = "-min_het_snp_quality_by_depth",
+    usage = "Minimum heterozygous SNP quality/depth for hard filtering. Default is 2.0. Set negative to ignore filter.")
+  var minHetSnpQualityByDepth: Float = 2.0f
   @Args4jOption(required = false,
-    name = "-min_indel_quality_by_depth",
-    usage = "Minimum INDEL quality/depth for hard filtering. Default is 2.0. Set negative to ignore filter.")
-  var minIndelQualityByDepth: Float = 2.0f
+    name = "-min_hom_snp_quality_by_depth",
+    usage = "Minimum homozygous SNP quality/depth for hard filtering. Default is 1.0. Set negative to ignore filter.")
+  var minHomSnpQualityByDepth: Float = 1.0f
+  @Args4jOption(required = false,
+    name = "-min_het_indel_quality_by_depth",
+    usage = "Minimum heterozygous INDEL quality/depth for hard filtering. Default is 2.0. Set negative to ignore filter.")
+  var minHetIndelQualityByDepth: Float = 2.0f
+  @Args4jOption(required = false,
+    name = "-min_hom_indel_quality_by_depth",
+    usage = "Minimum homozygous INDEL quality/depth for hard filtering. Default is 1.0. Set negative to ignore filter.")
+  var minHomIndelQualityByDepth: Float = 1.0f
   @Args4jOption(required = false,
     name = "-min_snp_rms_mapping_quality",
-    usage = "Minimum SNP root mean square mapping quality for hard filtering. Default is 40.0. Set negative to ignore filter.")
-  var minSnpRMSMappingQuality: Float = 40.0f
+    usage = "Minimum SNP root mean square mapping quality for hard filtering. Default is 30.0. Set negative to ignore filter.")
+  var minSnpRMSMappingQuality: Float = 30.0f
   @Args4jOption(required = false,
     name = "-min_indel_rms_mapping_quality",
     usage = "Minimum INDEL root mean square mapping quality for hard filtering. Default is -1.0 (ignored). Set negative to ignore filter.")
   var minIndelRMSMappingQuality: Float = -1.0f
+  @Args4jOption(required = false,
+    name = "-min_snp_depth",
+    usage = "Minimum SNP depth for hard filtering. Default is 10. Set to a negative value to omit.")
+  var minSnpDepth: Int = 10
+  @Args4jOption(required = false,
+    name = "-max_snp_depth",
+    usage = "Maximum SNP depth for hard filtering. Default is 300. Set to a negative value to omit.")
+  var maxSnpDepth: Int = 200
+  @Args4jOption(required = false,
+    name = "-min_indel_depth",
+    usage = "Minimum INDEL depth for hard filtering. Default is 10. Set to a negative value to omit.")
+  var minIndelDepth: Int = 10
+  @Args4jOption(required = false,
+    name = "-max_indel_depth",
+    usage = "Maximum INDEL depth for hard filtering. Default is 300. Set to a negative value to omit.")
+  var maxIndelDepth: Int = 200
 
   // required by HardFilterGenotypesArgs
   var maxSnpPhredStrandBias: Float = -1.0f
@@ -176,6 +204,7 @@ class BiallelicGenotyper(
         args.ploidy,
         optDesiredPartitionCount = optDesiredPartitionCount,
         optPhredThreshold = Some(args.minPhredForDiscovery),
+        optMinObservations = Some(args.minObservationsForDiscovery),
         optDesiredPartitionSize = optDesiredPartitionSize,
         optDesiredMaxCoverage = optDesiredMaxCoverage)
     })(vPath => {

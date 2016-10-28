@@ -122,6 +122,17 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     .setMismatchingPositions("4^TT4")
     .build
 
+  val mnpRead = AlignmentRecord.newBuilder()
+    .setReadMapped(true)
+    .setContigName("3")
+    .setStart(10L)
+    .setEnd(18L)
+    .setSequence("ACACATGA")
+    .setQual("!!!!!!!!")
+    .setCigar("8M")
+    .setMismatchingPositions("3T0T3")
+    .build
+
   test("no variants in unaligned read") {
     assert(DiscoverVariants.variantsInRead(unalignedRead, 0).isEmpty)
   }
@@ -233,5 +244,24 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
 
     assert(variantRdd.rdd.count === 3)
     assert(variantRdd.sequences.records.size === 3)
+  }
+
+  test("break TT->CA mnp into two snps") {
+    val variants = DiscoverVariants.variantsInRead(mnpRead, 0)
+    assert(variants.size === 2)
+    assert(variants.forall(_.getContigName == "3"))
+    assert(variants.forall(_.getReferenceAllele == "T"))
+    val optC = variants.find(_.getAlternateAllele == "C")
+    assert(optC.isDefined)
+    optC.foreach(c => {
+      assert(c.getStart === 13L)
+      assert(c.getEnd === 14L)
+    })
+    val optA = variants.find(_.getAlternateAllele == "A")
+    assert(optA.isDefined)
+    optA.foreach(a => {
+      assert(a.getStart === 14L)
+      assert(a.getEnd === 15L)
+    })
   }
 }

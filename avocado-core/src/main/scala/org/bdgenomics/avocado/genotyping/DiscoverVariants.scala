@@ -49,9 +49,12 @@ object DiscoverVariants extends Serializable with Logging {
    */
   private[avocado] def apply(
     aRdd: AlignmentRecordRDD,
-    optPhredThreshold: Option[Int] = None): VariantRDD = DiscoveringVariants.time {
+    optPhredThreshold: Option[Int] = None,
+    optMinObservations: Option[Int] = None): VariantRDD = DiscoveringVariants.time {
 
-    VariantRDD(variantsInRdd(aRdd.rdd, optPhredThreshold = optPhredThreshold),
+    VariantRDD(variantsInRdd(aRdd.rdd,
+      optPhredThreshold = optPhredThreshold,
+      optMinObservations = optMinObservations),
       aRdd.sequences)
   }
 
@@ -65,13 +68,24 @@ object DiscoverVariants extends Serializable with Logging {
    */
   private[genotyping] def variantsInRdd(
     rdd: RDD[AlignmentRecord],
-    optPhredThreshold: Option[Int] = None): RDD[Variant] = {
+    optPhredThreshold: Option[Int] = None,
+    optMinObservations: Option[Int] = None): RDD[Variant] = {
 
     // if phred threshold is unset, set to 0
     val phredThreshold = optPhredThreshold.getOrElse(0)
 
     rdd.flatMap(variantsInRead(_, phredThreshold))
-      .distinct
+      .map(v => (v, 1))
+      .reduceByKey(_ + _)
+      .flatMap(kv => {
+        val (variant, count) = kv
+
+        if (optMinObservations.fold(true)(mo => count > mo)) {
+          Some(variant)
+        } else {
+          None
+        }
+      })
   }
 
   /**
@@ -167,19 +181,20 @@ object DiscoverVariants extends Serializable with Logging {
               val kv = optRef.fold({
                 (sequence(idx + length - 1).toString, variants)
               })(ref => {
-                val matchQuals = qual.substring(idx, idx + length).map(_.toInt - 33).sum / length
-                val newVar = if (matchQuals >= phredThreshold) {
-                  Variant.newBuilder
-                    .setContigName(contigName)
-                    .setStart(pos)
-                    .setEnd(pos + length.toLong)
-                    .setReferenceAllele(ref)
-                    .setAlternateAllele(sequence.substring(idx, idx + length))
-                    .build :: variants
-                } else {
-                  variants
-                }
-                (ref.last.toString, newVar)
+                val newVars = (0 until length).flatMap(i => {
+                  if (qual(i).toInt - 33 >= phredThreshold) {
+                    Some(Variant.newBuilder
+                      .setContigName(contigName)
+                      .setStart(pos + i.toLong)
+                      .setEnd(pos + i.toLong + 1L)
+                      .setReferenceAllele(ref(i).toString)
+                      .setAlternateAllele(sequence(idx + i).toString)
+                      .build)
+                  } else {
+                    None
+                  }
+                }).toList ::: variants
+                (ref.last.toString, newVars)
               })
               pos += length
               idx += length

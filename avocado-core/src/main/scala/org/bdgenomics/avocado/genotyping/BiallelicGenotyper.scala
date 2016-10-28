@@ -47,6 +47,7 @@ import org.bdgenomics.formats.avro.{
 }
 import org.bdgenomics.utils.instrumentation.Metrics
 import org.bdgenomics.utils.misc.{ Logging, MathUtils }
+import scala.annotation.tailrec
 import scala.collection.JavaConversions._
 import scala.math.{ exp, log => mathLog, log10, sqrt }
 
@@ -173,6 +174,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
                       ploidy: Int,
                       optDesiredPartitionCount: Option[Int] = None,
                       optPhredThreshold: Option[Int] = None,
+                      optMinObservations: Option[Int] = None,
                       optDesiredPartitionSize: Option[Int] = None,
                       optDesiredMaxCoverage: Option[Int] = None): GenotypeRDD = {
 
@@ -184,7 +186,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
     // discover variants
     val variants = DiscoverVariants(reads,
-      optPhredThreshold = optPhredThreshold)
+      optPhredThreshold = optPhredThreshold,
+      optMinObservations = optMinObservations)
 
     // "force" call the variants we have discovered in the input reads
     call(reads, variants, ploidy,
@@ -240,13 +243,17 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
             // - if insertion, look for observation matching insert tail
             //
             // FIXME: if we don't see the variant, take the first thing and invert it
+
             if (observed.isEmpty) {
               None
             } else if (isSnp(variant) || isDeletion(variant)) {
               val (_, allele, obs) = observed.head
-              if (observed.size == 1 &&
+              if (observed.count(_._2.nonEmpty) == 1 &&
                 allele == variant.getAlternateAllele) {
-                Some((variant, obs.duplicate))
+                Some((variant, obs.duplicate(Some(false))))
+              } else if (!obs.isRef ||
+                observed.size != variant.getReferenceAllele.length) {
+                Some((variant, obs.nullOut))
               } else {
                 Some((variant, obs.invert))
               }
@@ -255,9 +262,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
               val insObserved = observed.filter(_._2 == insAllele)
               if (observed.size == 2 &&
                 insObserved.size == 1) {
-                Some((variant, insObserved.head._3.duplicate))
-              } else {
+                Some((variant, insObserved.head._3.duplicate(Some(false))))
+              } else if (observed.forall(_._3.isRef)) {
                 Some((variant, observed.head._3.invert))
+              } else {
+                Some((variant, observed.head._3.nullOut))
               }
             } else {
               None
@@ -320,6 +329,63 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     rdd.map(observationToGenotype(_, sample))
   }
 
+  private val TEN_DIV_LOG10 = 10.0 / mathLog(10.0)
+
+  /**
+   * @param logLikelihood The log likelihoods of an observed call.
+   * @return Returns a tuple containing the (genotype state, quality).
+   */
+  private[genotyping] def genotypeStateAndQuality(
+    logLikelihoods: Array[Double]): (Int, Double) = {
+
+    // even for copy number 1, we have at least 2 likelihoods
+    assert(logLikelihoods.length >= 2)
+
+    @tailrec def getMax(iter: Iterator[Double],
+                        idx: Int,
+                        maxIdx: Int,
+                        max: Double,
+                        second: Double): (Int, Double, Double) = {
+      if (!iter.hasNext) {
+        (maxIdx, max, second)
+      } else {
+
+        // do we have a new max? if so, replace max and shift to second
+        val currValue = iter.next
+        val (nextMaxIdx, nextMax, nextSecond) = if (currValue > max) {
+          (idx, currValue, max)
+        } else if (currValue > second) {
+          (maxIdx, max, currValue)
+        } else {
+          (maxIdx, max, second)
+        }
+
+        getMax(iter, idx + 1, nextMaxIdx, nextMax, nextSecond)
+      }
+    }
+
+    // which of first two genotype likelihoods is higher?
+    val (startMaxIdx, startMax, startSecond) =
+      if (logLikelihoods(0) >= logLikelihoods(1)) {
+        (0, logLikelihoods(0), logLikelihoods(1))
+      } else {
+        (1, logLikelihoods(1), logLikelihoods(0))
+      }
+
+    // get the max state and top two likelihoods
+    val (state, maxLikelihood, secondLikelihood) =
+      getMax(logLikelihoods.toIterator.drop(2),
+        2,
+        startMaxIdx,
+        startMax,
+        startSecond)
+
+    // phred quality is 10 * (max - second) / log10
+    val quality = TEN_DIV_LOG10 * (maxLikelihood - secondLikelihood)
+
+    (state, quality)
+  }
+
   /**
    * Turns a single variant observation into a genotype call.
    *
@@ -336,23 +402,12 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
     // merge the log likelihoods
     val coverage = obs.alleleCoverage + obs.otherCoverage
-    val logDepth = (-mathLog(obs.alleleLogLikelihoods.length - 1) *
-      coverage)
     val logLikelihoods = obs.alleleLogLikelihoods
-      .map(allele => {
-        logDepth + allele
-      })
 
-    // sum together the likelihoods for normalization
-    val norm = LogUtils.sumLogProbabilities(logLikelihoods)
+    // get the genotype state and quality
+    val (genotypeState, qual) = genotypeStateAndQuality(logLikelihoods)
 
-    // quality score is:
-    // -10.0 log10(1.0 - (e^max / e^sum))
-    val maxLl = logLikelihoods.max
-    val qual = -10.0 * log10(1.0 - (exp(maxLl) / exp(norm)))
-
-    // get the index of the max log
-    val genotypeState = logLikelihoods.indexWhere(MathUtils.fpEquals(_, maxLl))
+    // build the genotype call array
     val alleles = Seq.fill(genotypeState)({
       GenotypeAllele.Alt
     }) ++ Seq.fill(obs.copyNumber - genotypeState)({
@@ -382,7 +437,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       .setSampleId(sample)
       .setStrandBiasComponents(sbComponents
         .map(i => i: java.lang.Integer))
-      .setReadDepth(coverage)
+      .setReadDepth(obs.totalCoverage)
       .setReferenceReadDepth(obs.otherCoverage)
       .setAlternateReadDepth(obs.alleleCoverage)
       .setGenotypeLikelihoods(logLikelihoods.map(d => d.toFloat: java.lang.Float)

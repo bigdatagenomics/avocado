@@ -28,12 +28,18 @@ import scala.collection.JavaConversions._
 
 case class TestHardFilterGenotypesArgs(
     var minQuality: Int = 30,
-    var minSnpQualityByDepth: Float = 2.0f,
-    var minIndelQualityByDepth: Float = 1.0f,
+    var minHetSnpQualityByDepth: Float = 2.0f,
+    var minHomSnpQualityByDepth: Float = 2.0f,
+    var minHetIndelQualityByDepth: Float = 1.0f,
+    var minHomIndelQualityByDepth: Float = 1.0f,
     var maxSnpPhredStrandBias: Float = 60.0f,
     var maxIndelPhredStrandBias: Float = 200.0f,
     var minSnpRMSMappingQuality: Float = 40.0f,
-    var minIndelRMSMappingQuality: Float = 30.0f) extends HardFilterGenotypesArgs {
+    var minIndelRMSMappingQuality: Float = 30.0f,
+    var minSnpDepth: Int = 10,
+    var maxSnpDepth: Int = 150,
+    var minIndelDepth: Int = 20,
+    var maxIndelDepth: Int = 300) extends HardFilterGenotypesArgs {
 }
 
 class HardFilterGenotypesSuite extends AvocadoFunSuite {
@@ -41,6 +47,11 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
   def alt: Genotype.Builder = {
     Genotype.newBuilder
       .setAlleles(Seq(GenotypeAllele.Alt, GenotypeAllele.Ref))
+  }
+
+  def homAlt: Genotype.Builder = {
+    Genotype.newBuilder
+      .setAlleles(Seq(GenotypeAllele.Alt, GenotypeAllele.Alt))
   }
 
   def altWithAnn: Genotype.Builder = {
@@ -81,6 +92,42 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       .build, 2.0f)
     assert(lowQD.isDefined)
     assert(lowQD.get === "QD<2.0")
+
+    val homQD = HardFilterGenotypes.hardFilterQualityByDepth(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .build, 2.0f, hom = true)
+    assert(homQD.isEmpty)
+
+    val hetQD = HardFilterGenotypes.hardFilterQualityByDepth(homAlt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .build, 2.0f)
+    assert(homQD.isEmpty)
+  }
+
+  test("filter out genotypes with a low depth") {
+    val highDP = HardFilterGenotypes.hardFilterMinDepth(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .build, 10)
+    assert(highDP.isEmpty)
+
+    val lowDP = HardFilterGenotypes.hardFilterMinDepth(alt.setGenotypeQuality(50)
+      .setReadDepth(5)
+      .build, 10)
+    assert(lowDP.isDefined)
+    assert(lowDP.get === "DP<10")
+  }
+
+  test("filter out genotypes with a high depth") {
+    val highDP = HardFilterGenotypes.hardFilterMaxDepth(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .build, 10)
+    assert(highDP.isDefined)
+    assert(highDP.get === "DP>10")
+
+    val lowDP = HardFilterGenotypes.hardFilterMaxDepth(alt.setGenotypeQuality(50)
+      .setReadDepth(5)
+      .build, 10)
+    assert(lowDP.isEmpty)
   }
 
   test("filter out genotypes with a low RMS mapping quality") {
