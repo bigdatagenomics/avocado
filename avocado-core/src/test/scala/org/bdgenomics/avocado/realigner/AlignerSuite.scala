@@ -130,8 +130,8 @@ class AlignerSuite extends FunSuite {
 
     assert(aln.size === 4)
     assert(aln(0) === Match(10))
-    assert(aln(1) === Insertion(2))
-    assert(aln(2) === Deletion("T"))
+    assert(aln(1) === Insertion(1))
+    assert(aln(2) === Match(1, Some("T")))
     assert(aln(3) === Match(10))
   }
 
@@ -179,8 +179,8 @@ class AlignerSuite extends FunSuite {
 
     assert(aln.size === 4)
     assert(aln(0) === Match(10))
-    assert(aln(1) === Deletion("GGG"))
-    assert(aln(2) === Insertion(1))
+    assert(aln(1) === Deletion("GG"))
+    assert(aln(2) === Match(1, Some("G")))
     assert(aln(3) === Match(10))
   }
 
