@@ -95,6 +95,25 @@ object Aligner {
     }
   }
 
+  private def squash(trimmedAlt: String,
+                     trimmedRef: String): Iterable[ObservationOperator] = {
+
+    // per base in the snp/mnp, check equality
+    val verboseOperators = trimmedRef.zip(trimmedAlt)
+      .map(p => {
+        val (r, a) = p
+
+        if (r == a) {
+          Match(1)
+        } else {
+          Match(1, Some(r.toString))
+        }
+      })
+
+    // collapse down the operators
+    ObservationOperator.collapse(verboseOperators)
+  }
+
   /**
    * Aligns two sequences that have been trimmed and partitioned.
    *
@@ -111,20 +130,7 @@ object Aligner {
     // simple snp or mnp
     if (refLength == altLength) {
 
-      // per base in the snp/mnp, check equality
-      val verboseOperators = trimmedRef.zip(trimmedAlt)
-        .map(p => {
-          val (r, a) = p
-
-          if (r == a) {
-            Match(1)
-          } else {
-            Match(1, Some(r.toString))
-          }
-        })
-
-      // collapse down the operators
-      ObservationOperator.collapse(verboseOperators)
+      squash(trimmedAlt, trimmedRef)
     } else {
       // insertion or deletion
 
@@ -132,7 +138,7 @@ object Aligner {
       //
       // - ref is empty --> simple insertion
       // - alt is empty --> simple deletion
-      // - both have a value --> complex indel
+      // - both have a value --> complex indel --> break into indel and mnps
       if (refLength == 0) {
         Iterable(Insertion(altLength))
       } else if (altLength == 0) {
@@ -141,11 +147,15 @@ object Aligner {
         // complex indel = both insertion and deletion (or indel + mnp)
         // put longer event "first"
         if (altLength > refLength) {
-          Iterable(Insertion(altLength),
-            Deletion(trimmedRef))
+          val insLength = altLength - refLength
+          (Iterable(Insertion(insLength)) ++
+            squash(trimmedAlt.drop(insLength),
+              trimmedRef))
         } else {
-          Iterable(Deletion(trimmedRef),
-            Insertion(altLength))
+          val delLength = refLength - altLength
+          (Iterable(Deletion(trimmedRef.take(delLength))) ++
+            squash(trimmedAlt,
+              trimmedRef.drop(delLength)))
         }
       }
     }

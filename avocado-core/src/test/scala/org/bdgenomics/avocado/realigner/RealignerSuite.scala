@@ -125,15 +125,15 @@ class RealignerSuite extends AvocadoFunSuite {
     assert(newAlignment.getMismatchingPositions === "10A1A10")
   }
 
-  test("align") {
+  test("align sequence with a complex deletion") {
     val obs = Aligner.align("ACTCTGAATAGGGAACCACTGGA",
       "ACTCTGAATAC__AACCACTGGA".filter(_ != '_'),
       10).toSeq
 
     assert(obs.size === 4)
     assert(obs(0) === Match(10))
-    assert(obs(1) === Deletion("GGG"))
-    assert(obs(2) === Insertion(1))
+    assert(obs(1) === Deletion("GG"))
+    assert(obs(2) === Match(1, Some("G")))
     assert(obs(3) === Match(10))
   }
 
@@ -153,8 +153,8 @@ class RealignerSuite extends AvocadoFunSuite {
 
     val newAlignment = realign(read, 10)
 
-    assert(newAlignment.getCigar === "10=3D1I10=")
-    assert(newAlignment.getMismatchingPositions === "10^GGG10")
+    assert(newAlignment.getCigar === "10=2D1X10=")
+    assert(newAlignment.getMismatchingPositions === "10^GG0G10")
   }
 
   test("realign a read with a snp and deletion separated by a flank") {
