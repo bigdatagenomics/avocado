@@ -153,8 +153,8 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(genotype.getSampleId === "sample")
     assert(genotype.getGenotypeQuality === 39)
     assert(genotype.getAlleles.size === 2)
-    assert(genotype.getAlleles.get(0) === GenotypeAllele.Alt)
-    assert(genotype.getAlleles.get(1) === GenotypeAllele.Ref)
+    assert(genotype.getAlleles.get(0) === GenotypeAllele.ALT)
+    assert(genotype.getAlleles.get(1) === GenotypeAllele.REF)
     assert(genotype.getReferenceReadDepth === 9)
     assert(genotype.getAlternateReadDepth === 7)
     assert(genotype.getStrandBiasComponents.size === 4)
@@ -187,7 +187,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gts.map(_.getReadDepth).toSet.size === 1)
 
     assert(gts.count(gt => {
-      !gt.getAlleles.forall(_ == GenotypeAllele.Ref)
+      !gt.getAlleles.forall(_ == GenotypeAllele.REF)
     }) === 2)
     assert(gts.sortBy(gt => gt.getGenotypeQuality)
       .reverse // sortBy doesn't have ascending/descending options!
@@ -234,7 +234,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       .transform(rdd => {
         rdd.filter(gt => {
           gt.getReadDepth > 10 &&
-            !gt.getAlleles.forall(_ == GenotypeAllele.Ref) &&
+            !gt.getAlleles.forall(_ == GenotypeAllele.REF) &&
             gt.getGenotypeQuality > 30
         })
       })
@@ -245,8 +245,8 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getVariant.getEnd === 225058L)
     assert(gt.getVariant.getReferenceAllele === "A")
     assert(gt.getVariant.getAlternateAllele === "G")
-    assert(gt.getAlleles.count(_ == GenotypeAllele.Ref) === 1)
-    assert(gt.getAlleles.count(_ == GenotypeAllele.Alt) === 1)
+    assert(gt.getAlleles.count(_ == GenotypeAllele.REF) === 1)
+    assert(gt.getAlleles.count(_ == GenotypeAllele.ALT) === 1)
   }
 
   sparkTest("discover and call short indel") {
@@ -263,7 +263,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       TestHardFilterGenotypesArgs())
       .transform(rdd => {
         rdd.filter(_.getVariantCallingAnnotations
-          .getVariantIsPassing)
+          .getFiltersPassed)
       })
 
     val gts = filteredGenotypes.rdd.collect
@@ -274,8 +274,8 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getVariant.getEnd === 832736L)
     assert(gt.getVariant.getReferenceAllele === "A")
     assert(gt.getVariant.getAlternateAllele === "AGTTTT")
-    assert(gt.getAlleles.count(_ == GenotypeAllele.Ref) === 1)
-    assert(gt.getAlleles.count(_ == GenotypeAllele.Alt) === 1)
+    assert(gt.getAlleles.count(_ == GenotypeAllele.REF) === 1)
+    assert(gt.getAlleles.count(_ == GenotypeAllele.ALT) === 1)
   }
 
   sparkTest("discover and call het and hom snps") {
@@ -293,7 +293,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       .transform(rdd => {
         rdd.filter(gt => {
           gt.getVariantCallingAnnotations
-            .getVariantIsPassing &&
+            .getFiltersPassed &&
             gt.getReadDepth > 30
         })
       })
@@ -311,7 +311,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(hetGt.getVariant.getAlternateAllele === "A")
     */
     val homGt = gts.filter(gt => {
-      gt.getAlleles.count(_ == GenotypeAllele.Alt) == 2
+      gt.getAlleles.count(_ == GenotypeAllele.ALT) == 2
     }).head
     assert(homGt.getVariant.getStart === 839355L)
     assert(homGt.getVariant.getEnd === 839356L)
@@ -369,7 +369,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gtArray.size === 1)
     val gt = gtArray.head
 
-    assert(gt.getAlleles.forall(_ == GenotypeAllele.Alt))
+    assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
   }
 
   sparkTest("call hom alt AGCCAGTGGACGCCGACCT->A deletion at 1/875159") {
@@ -395,7 +395,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gtArray.size === 1)
     val gt = gtArray.head
 
-    assert(gt.getAlleles.forall(_ == GenotypeAllele.Alt))
+    assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
   }
 
   ignore("call hom alt C->G snp at 1/877715") {
@@ -416,7 +416,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val gts = BiallelicGenotyper.discoverAndCall(reads,
       2,
       optPhredThreshold = Some(30)).transform(rdd => {
-        rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.Ref))
+        rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.REF))
       })
     val gtArray = gts.rdd.collect
     assert(gtArray.size === 2)
@@ -433,7 +433,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
         gt.getVariant.getAlternateAllele == "C"
     }) === 1)
     gtArray.foreach(gt => {
-      assert(gt.getAlleles.forall(_ == GenotypeAllele.Alt))
+      assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
     })
   }
 
@@ -447,7 +447,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val gts = BiallelicGenotyper.discoverAndCall(reads,
       2,
       optPhredThreshold = Some(30)).transform(rdd => {
-        rdd.filter(gt => gt.getAlleles.forall(_ == GenotypeAllele.Alt))
+        rdd.filter(gt => gt.getAlleles.forall(_ == GenotypeAllele.ALT))
       })
   }
 
@@ -462,7 +462,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       2,
       optPhredThreshold = Some(30)).transform(rdd => {
         rdd.filter(gt => {
-          !gt.getAlleles.forall(_ == GenotypeAllele.Ref) &&
+          !gt.getAlleles.forall(_ == GenotypeAllele.REF) &&
             gt.getVariant.getStart == 905129L
         })
       }).rdd.collect
@@ -474,7 +474,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getVariant.getEnd === 905132L)
     assert(gt.getVariant.getReferenceAllele === "ATG")
     assert(gt.getVariant.getAlternateAllele === "A")
-    assert(gt.getAlleles.count(_ == GenotypeAllele.Alt) === 1)
+    assert(gt.getAlleles.count(_ == GenotypeAllele.ALT) === 1)
   }
 
   sparkTest("call het AG->A deletion at 1/907170") {
@@ -487,7 +487,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val gts = BiallelicGenotyper.discoverAndCall(reads,
       2,
       optPhredThreshold = Some(30)).transform(rdd => {
-        rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.Ref))
+        rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.REF))
       }).rdd.collect
 
     assert(gts.size === 1)
@@ -497,7 +497,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getVariant.getEnd === 907171L)
     assert(gt.getVariant.getReferenceAllele === "AG")
     assert(gt.getVariant.getAlternateAllele === "A")
-    assert(gt.getAlleles.count(_ == GenotypeAllele.Alt) === 1)
+    assert(gt.getAlleles.count(_ == GenotypeAllele.ALT) === 1)
   }
 
   sparkTest("call het T->G snp at 1/240898") {
@@ -510,7 +510,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val gts = BiallelicGenotyper.discoverAndCall(reads,
       2,
       optPhredThreshold = Some(25)).transform(rdd => {
-        rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.Ref))
+        rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.REF))
       }).rdd.collect
 
     assert(gts.size === 1)
@@ -520,6 +520,6 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getVariant.getEnd === 240898L)
     assert(gt.getVariant.getReferenceAllele === "T")
     assert(gt.getVariant.getAlternateAllele === "G")
-    assert(gt.getAlleles.count(_ == GenotypeAllele.Alt) === 1)
+    assert(gt.getAlleles.count(_ == GenotypeAllele.ALT) === 1)
   }
 }

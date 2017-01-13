@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.genotyping
 
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
-import org.bdgenomics.adam.rdd.variation.VariantRDD
+import org.bdgenomics.adam.rdd.variant.VariantRDD
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{
   Clipped,

@@ -23,7 +23,7 @@ import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.GenomeBins
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
-import org.bdgenomics.adam.rdd.variation.{
+import org.bdgenomics.adam.rdd.variant.{
   GenotypeRDD,
   VariantRDD
 }
@@ -34,8 +34,7 @@ import org.bdgenomics.avocado.util.{
   Downsampler,
   HardLimiter,
   LogPhred,
-  LogUtils,
-  TreeRegionJoin
+  LogUtils
 }
 import org.bdgenomics.formats.avro.{
   AlignmentRecord,
@@ -100,11 +99,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     val joinedRdd = JoinReadsAndVariants.time {
       if (useTreeJoin) {
 
-        TreeRegionJoin.joinAndGroupByRight(
-          variants.rdd.keyBy(v => ReferenceRegion(v)),
-          reads.rdd.flatMap(r => {
-            ReferenceRegion.opt(r).map(rr => (rr, r))
-          })).map(_.swap)
+        variants.broadcastRegionJoinAndGroupByRight(reads)
+          .rdd.map(_.swap)
       } else if (useBroadcastJoin) {
 
         val joinedGRdd = variants.broadcastRegionJoin(reads)
@@ -409,9 +405,9 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
     // build the genotype call array
     val alleles = Seq.fill(genotypeState)({
-      GenotypeAllele.Alt
+      GenotypeAllele.ALT
     }) ++ Seq.fill(obs.copyNumber - genotypeState)({
-      GenotypeAllele.Ref
+      GenotypeAllele.REF
     })
 
     // set up strand bias seq and calculate p value
