@@ -32,7 +32,6 @@ private class AvocadoMain(args: Array[String]) extends Logging {
   private val commands: List[BDGCommandCompanion] = List(
     BiallelicGenotyper,
     DiscoverVariants,
-    ExternalGenotyper,
     Reassemble)
 
   private def printVersion() {

@@ -174,7 +174,6 @@ class BiallelicGenotyper(
     // load reads
     val projection = Some(Filter(AlignmentRecordField.attributes,
       AlignmentRecordField.origQual,
-      AlignmentRecordField.recordGroupId,
       AlignmentRecordField.recordGroupName))
     val reads = sc.loadAlignments(args.inputPath,
       projection = projection)

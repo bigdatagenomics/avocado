@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.util
 
-import org.bdgenomics.adam.rdd.variation.GenotypeRDD
+import org.bdgenomics.adam.rdd.variant.GenotypeRDD
 import org.bdgenomics.formats.avro.{
   Genotype,
   GenotypeAllele,
@@ -217,7 +217,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    * @return Returns false for calls that are homozygous ref.
    */
   private[util] def filterRefCalls(genotype: Genotype): Boolean = {
-    !genotype.getAlleles.forall(_ == GenotypeAllele.Ref)
+    !genotype.getAlleles.forall(_ == GenotypeAllele.REF)
   }
 
   /**
@@ -256,7 +256,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
   private[util] def hardFilterQualityByDepth(genotype: Genotype,
                                              minQualityByDepth: Float,
                                              hom: Boolean = false): Option[String] = {
-    val gtIsHom = genotype.getAlleles.forall(_ == GenotypeAllele.Alt)
+    val gtIsHom = genotype.getAlleles.forall(_ == GenotypeAllele.ALT)
     if ((!gtIsHom && !hom) || (gtIsHom && hom)) {
       Option(genotype.getReadDepth)
         .flatMap(depth => {
@@ -388,10 +388,11 @@ private[avocado] object HardFilterGenotypes extends Serializable {
 
     // set whether we applied filters, and our filter array
     if (filtersWereApplied) {
-      vcab.setVariantIsPassing(failedFilters.isEmpty)
+      vcab.setFiltersApplied(true)
+        .setFiltersPassed(failedFilters.isEmpty)
     }
     if (failedFilters.nonEmpty) {
-      vcab.setVariantFilters(failedFilters.toSeq)
+      vcab.setFiltersFailed(failedFilters.toSeq)
     }
 
     // replace/add our variant calling annotations, build, and return

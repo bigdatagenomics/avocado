@@ -46,12 +46,12 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
 
   def alt: Genotype.Builder = {
     Genotype.newBuilder
-      .setAlleles(Seq(GenotypeAllele.Alt, GenotypeAllele.Ref))
+      .setAlleles(Seq(GenotypeAllele.ALT, GenotypeAllele.REF))
   }
 
   def homAlt: Genotype.Builder = {
     Genotype.newBuilder
-      .setAlleles(Seq(GenotypeAllele.Alt, GenotypeAllele.Alt))
+      .setAlleles(Seq(GenotypeAllele.ALT, GenotypeAllele.ALT))
   }
 
   def altWithAnn: Genotype.Builder = {
@@ -61,7 +61,7 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
   }
 
   val ref = Genotype.newBuilder
-    .setAlleles(Seq(GenotypeAllele.Ref, GenotypeAllele.Ref))
+    .setAlleles(Seq(GenotypeAllele.REF, GenotypeAllele.REF))
     .setGenotypeQuality(99)
     .build
 
@@ -170,11 +170,11 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     val optVca = Option(gt.getVariantCallingAnnotations)
     assert(optVca.isDefined)
     optVca.foreach(vca => {
-      val variantIsPassing = Option(vca.getVariantIsPassing)
+      val variantIsPassing = Option(vca.getFiltersPassed)
       if (filtersApplied) {
         assert(variantIsPassing.isDefined)
         assert(variantIsPassing.get === filterMsgs.isEmpty)
-        val variantMessages = vca.getVariantFilters
+        val variantMessages = vca.getFiltersFailed
         assert(variantMessages.length === filterMsgs.size)
         (0 until filterMsgs.size).foreach(idx => {
           assert(filterMsgs(variantMessages.get(idx)))
@@ -199,7 +199,7 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       val optVca = Option(gt.getVariantCallingAnnotations)
       assert(optVca.isDefined)
       optVca.foreach(vca => {
-        val variantIsPassing = Option(vca.getVariantIsPassing)
+        val variantIsPassing = Option(vca.getFiltersPassed)
         assert(variantIsPassing.isDefined)
         assert(variantIsPassing.get)
       })

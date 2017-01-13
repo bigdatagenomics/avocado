@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.models
 
 import htsjdk.samtools.{ CigarOperator, TextCigarCodec }
-import org.bdgenomics.adam.util.MdTag
+import org.bdgenomics.adam.models.MdTag
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.formats.avro.AlignmentRecord
 import scala.annotation.tailrec
