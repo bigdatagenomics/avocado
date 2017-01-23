@@ -30,6 +30,8 @@ import org.bdgenomics.formats.avro.AlignmentRecord
 
 class RealignerSuite extends SparkRealignerSuite {
 
+  val allowLegacyCigars = false
+
   def realign(rdd: AlignmentRecordRDD,
               kmerLength: Int): AlignmentRecordRDD = {
     Realigner.realign(rdd, kmerLength)

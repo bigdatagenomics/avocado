@@ -24,7 +24,7 @@ import org.bdgenomics.adam.models.{
   SequenceRecord
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.read.AlignedReadRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.formats.avro.AlignmentRecord
 
 case class TestPrefilterReadsArgs(var isNotGrc: Boolean = false,
@@ -239,7 +239,7 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
 
   def testRdd(args: PrefilterReadsArgs, numReads: Int, numContigs: Int) {
 
-    val readRdd = AlignedReadRDD(sc.parallelize(reads), sequences, RecordGroupDictionary.empty)
+    val readRdd = AlignmentRecordRDD(sc.parallelize(reads), sequences, RecordGroupDictionary.empty)
     val filteredRdd = PrefilterReads(readRdd, args)
 
     assert(filteredRdd.rdd.count === numReads)

@@ -24,18 +24,20 @@ import org.bdgenomics.adam.models.{
   RecordGroupDictionary
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.read.{ AlignedReadRDD, AlignmentRecordRDD }
+import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.formats.avro.AlignmentRecord
 
 trait SparkRealignerSuite extends AvocadoFunSuite {
+
+  val allowLegacyCigars: Boolean
 
   def realign(rdd: AlignmentRecordRDD,
               kmerLength: Int): AlignmentRecordRDD
 
   def makeAndRealignRdd(reads: Seq[AlignmentRecord],
                         kmerLength: Int): Array[AlignmentRecord] = {
-    val gRdd = AlignedReadRDD(sc.parallelize(reads),
+    val gRdd = AlignmentRecordRDD(sc.parallelize(reads),
       SequenceDictionary(SequenceRecord("ctg", 50L)),
       RecordGroupDictionary(Seq(RecordGroup("rg", "rg"))))
 
@@ -47,11 +49,16 @@ trait SparkRealignerSuite extends AvocadoFunSuite {
   }
 
   sparkTest("realign a set of reads around an insert") {
-    // insertion sequence:
+    // true insertion sequence:
     // ins: AATGAGACTTACATCATTAAAACCGTGTGGACACA
-    // ref: AATGAGACTTACATCATTAA__CCGTGTGGACACA
+    // ref: AATGAGACTTACATCATT__AACCGTGTGGACACA
+    //
+    // test alignment:
+    // X:                       |
+    // ins: AATGAGACTTACATCATTAAAACCGTGTGGACACA
+    // ref: AATGAGACTTACATCATTAAC__CGTGTGGACACA
     val sequence = "AATGAGACTTACATCATTAAAACCGTGTGGACACA"
-    val insertStart = 20
+    val insertStart = 21
     val readLength = insertStart + 6 + 2
 
     // generate 7 reads with a 6bp flank
@@ -65,10 +72,13 @@ trait SparkRealignerSuite extends AvocadoFunSuite {
         .setRecordGroupName("rg")
         .setReadMapped(true)
         .setSequence(sequence.drop(rId).take(readLength))
+        .setQual("*" * readLength)
         .setStart(rId.toLong)
-        .setEnd((rId + readLength - 2 + 1).toLong)
+        .setEnd((rId + insertStart + 6).toLong)
         .setCigar("%dM2I%dM".format(basesBeforeInsert, basesAfterInsert))
-        .setMismatchingPositions((readLength - 2).toString)
+        .setMismatchingPositions("%dC%d".format(basesBeforeInsert - 1,
+          basesAfterInsert))
+        .setMapq(50)
         .build()
     })
 
@@ -81,25 +91,34 @@ trait SparkRealignerSuite extends AvocadoFunSuite {
 
       // these values are different from above because original alignments were
       // not left justified
-      val basesBeforeInsert = insertStart - rId - 2
-      val basesAfterInsert = 8 + rId
+      val basesBeforeInsert = insertStart - rId - 3
+      val basesAfterInsert = 9 + rId
 
-      assert(r.getCigar === "%d=2I%d=".format(basesBeforeInsert, basesAfterInsert))
+      if (allowLegacyCigars) {
+        assert(r.getCigar === "%dM2I%dM".format(basesBeforeInsert, basesAfterInsert))
+      } else {
+        assert(r.getCigar === "%d=2I%d=".format(basesBeforeInsert, basesAfterInsert))
+      }
       assert(r.getMismatchingPositions === (readLength - 2).toString)
     })
   }
 
   sparkTest("realign a set of reads around a deletion") {
-    // deletion sequence:
-    // del: AGGTCTGAATGAGACTTA__TCATTAACCGTGTGGACACA
+    // true deletion sequence:
+    // del: AGGTCTGAATGAGACTT__ATCATTAACCGTGTGGACACA
+    // ref: AGGTCTGAATGAGACTTACATCATTAACCGTGTGGACACA
+    //
+    // test alignment:
+    // X:                     |
+    // del: AGGTCTGAATGAGACT__TATCATTAACCGTGTGGACACA
     // ref: AGGTCTGAATGAGACTTACATCATTAACCGTGTGGACACA
     val sequence = "AGGTCTGAATGAGACTTATCATTAACCGTGTGGACACA"
-    val deleteStart = 18
-    val readLength = deleteStart + 8
+    val deleteStart = 16
+    val readLength = deleteStart + 7
 
     // generate 10 reads with a 8bp flank
     val reads = (0 until 10).map(rId => {
-      val basesBeforeDelete = deleteStart - rId
+      val basesBeforeDelete = deleteStart - rId - 1
       val basesAfterDelete = 8 + rId
 
       AlignmentRecord.newBuilder()
@@ -108,10 +127,13 @@ trait SparkRealignerSuite extends AvocadoFunSuite {
         .setRecordGroupName("rg")
         .setReadMapped(true)
         .setSequence(sequence.drop(rId).take(readLength))
+        .setQual("*" * readLength)
         .setStart(rId.toLong)
-        .setEnd((rId + readLength + 2 + 1).toLong)
+        .setEnd((rId + readLength + 2).toLong)
         .setCigar("%dM2D%dM".format(basesBeforeDelete, basesAfterDelete))
-        .setMismatchingPositions("%d^CA%d".format(basesBeforeDelete, basesAfterDelete))
+        .setMismatchingPositions("%d^TA0C%d".format(basesBeforeDelete,
+          basesAfterDelete - 1))
+        .setMapq(50)
         .build()
     })
 
@@ -124,23 +146,30 @@ trait SparkRealignerSuite extends AvocadoFunSuite {
 
       // these values are different from above because original alignments were
       // not left justified
-      val basesBeforeDelete = deleteStart - rId - 1
-      val basesAfterDelete = 9 + rId
+      val basesBeforeDelete = deleteStart - rId
+      val basesAfterDelete = 7 + rId
 
-      assert(r.getCigar === "%d=2D%d=".format(basesBeforeDelete, basesAfterDelete))
+      if (allowLegacyCigars) {
+        assert(r.getCigar === "%dM2D%dM".format(basesBeforeDelete, basesAfterDelete))
+      } else {
+        assert(r.getCigar === "%d=2D%d=".format(basesBeforeDelete, basesAfterDelete))
+      }
       assert(r.getMismatchingPositions === "%d^AC%d".format(basesBeforeDelete, basesAfterDelete))
     })
   }
 
   sparkTest("realigning a read with a repeat will return the original read") {
     val read = AlignmentRecord.newBuilder()
+      .setContigName("ctg")
       .setReadName("A_READ")
       .setReadMapped(true)
       .setStart(10L)
       .setEnd(17L)
       .setSequence("TCAAAAAAGG")
+      .setQual("**********")
       .setCigar("3M4I3M")
       .setMismatchingPositions("6")
+      .setMapq(50)
       .build()
 
     // make into a genomic rdd

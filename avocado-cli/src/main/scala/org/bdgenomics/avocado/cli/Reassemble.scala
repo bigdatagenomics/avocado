@@ -20,8 +20,7 @@ package org.bdgenomics.avocado.cli
 import org.apache.spark.SparkContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMSaveAnyArgs
-import org.bdgenomics.adam.rdd.read.{ AlignedReadRDD, AlignmentRecordRDD, MDTagging }
-import org.bdgenomics.avocado.realigner.Realigner
+import org.bdgenomics.avocado.realigner.{ ConsensusRealigner, Realigner }
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Argument, Option => Args4jOption }
 
@@ -58,6 +57,10 @@ class ReassembleArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs {
     name = "-defer_merging",
     usage = "Defers merging single file output")
   var deferMerging: Boolean = false
+  @Args4jOption(required = false,
+    name = "-use_consensus_realigner",
+    usage = "If provided, uses consensus-mode realigner.")
+  var useConsensusRealigner: Boolean = false
 
   // required by ADAMSaveAnyArgs
   var sortFastqOutput: Boolean = false
@@ -79,7 +82,11 @@ class Reassemble(
     val reads = sc.loadAlignments(args.inputPath)
 
     // realign the reads
-    val reassembledReads = Realigner.realign(reads, args.kmerLength)
+    val reassembledReads = if (args.useConsensusRealigner) {
+      ConsensusRealigner.realign(reads, args.kmerLength)
+    } else {
+      Realigner.realign(reads, args.kmerLength)
+    }
 
     // save the reads
     reassembledReads.save(args)
