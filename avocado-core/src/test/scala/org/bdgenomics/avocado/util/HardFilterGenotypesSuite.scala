@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.util
 
+import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.formats.avro.{
   Genotype,
@@ -84,49 +85,49 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
   test("filter out genotypes with a low quality per depth") {
     val highQD = HardFilterGenotypes.hardFilterQualityByDepth(alt.setGenotypeQuality(50)
       .setReadDepth(20)
-      .build, 2.0f)
+      .build, 2.0f, "QD")
     assert(highQD.isEmpty)
 
     val lowQD = HardFilterGenotypes.hardFilterQualityByDepth(alt.setGenotypeQuality(50)
       .setReadDepth(50)
-      .build, 2.0f)
+      .build, 2.0f, "QD")
     assert(lowQD.isDefined)
-    assert(lowQD.get === "QD<2.0")
+    assert(lowQD.get === "QD")
 
     val homQD = HardFilterGenotypes.hardFilterQualityByDepth(alt.setGenotypeQuality(50)
       .setReadDepth(50)
-      .build, 2.0f, hom = true)
+      .build, 2.0f, "QD", hom = true)
     assert(homQD.isEmpty)
 
     val hetQD = HardFilterGenotypes.hardFilterQualityByDepth(homAlt.setGenotypeQuality(50)
       .setReadDepth(50)
-      .build, 2.0f)
+      .build, 2.0f, "QD")
     assert(homQD.isEmpty)
   }
 
   test("filter out genotypes with a low depth") {
     val highDP = HardFilterGenotypes.hardFilterMinDepth(alt.setGenotypeQuality(50)
       .setReadDepth(50)
-      .build, 10)
+      .build, 10, "MINDP")
     assert(highDP.isEmpty)
 
     val lowDP = HardFilterGenotypes.hardFilterMinDepth(alt.setGenotypeQuality(50)
       .setReadDepth(5)
-      .build, 10)
+      .build, 10, "MINDP")
     assert(lowDP.isDefined)
-    assert(lowDP.get === "DP<10")
+    assert(lowDP.get === "MINDP")
   }
 
   test("filter out genotypes with a high depth") {
     val highDP = HardFilterGenotypes.hardFilterMaxDepth(alt.setGenotypeQuality(50)
       .setReadDepth(50)
-      .build, 10)
+      .build, 10, "MAXDP")
     assert(highDP.isDefined)
-    assert(highDP.get === "DP>10")
+    assert(highDP.get === "MAXDP")
 
     val lowDP = HardFilterGenotypes.hardFilterMaxDepth(alt.setGenotypeQuality(50)
       .setReadDepth(5)
-      .build, 10)
+      .build, 10, "MAXDP")
     assert(lowDP.isEmpty)
   }
 
@@ -135,16 +136,16 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       .setVariantCallingAnnotations(VariantCallingAnnotations.newBuilder
         .setRmsMapQ(50.0f)
         .build())
-      .build, 30.0f)
+      .build, 30.0f, "MQ")
     assert(highRMQ.isEmpty)
 
     val lowRMQ = HardFilterGenotypes.hardFilterRMSMapQ(alt.setGenotypeQuality(50)
       .setVariantCallingAnnotations(VariantCallingAnnotations.newBuilder
         .setRmsMapQ(10.0f)
         .build())
-      .build, 30.0f)
+      .build, 30.0f, "MQ")
     assert(lowRMQ.isDefined)
-    assert(lowRMQ.get === "MQ<30.0")
+    assert(lowRMQ.get === "MQ")
   }
 
   test("filter out genotypes with a high strand bias") {
@@ -152,15 +153,15 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       .setVariantCallingAnnotations(VariantCallingAnnotations.newBuilder
         .setFisherStrandBiasPValue(50.0f)
         .build())
-      .build, 30.0f)
+      .build, 30.0f, "FS")
     assert(highStrandBias.isDefined)
-    assert(highStrandBias.get === "FS>30.0")
+    assert(highStrandBias.get === "FS")
 
     val lowStrandBias = HardFilterGenotypes.hardFilterStrandBias(alt
       .setVariantCallingAnnotations(VariantCallingAnnotations.newBuilder
         .setFisherStrandBiasPValue(10.0f)
         .build())
-      .build, 30.0f)
+      .build, 30.0f, "FS")
     assert(lowStrandBias.isEmpty)
   }
 
@@ -265,7 +266,7 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       defaultIndelFilters)
     assert(optGt.isDefined)
     validate(optGt.get,
-      filterMsgs = Set("MQ<40.0", "QD<2.0", "FS>60.0"))
+      filterMsgs = Set("SNPMQ", "HETSNPQD", "SNPFS"))
   }
 
   test("build filters and apply to indel") {
@@ -306,6 +307,15 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       defaultIndelFilters)
     assert(optFailingGt.isDefined)
     validate(optFailingGt.get,
-      filterMsgs = Set("MQ<30.0", "QD<1.0", "FS>200.0"))
+      filterMsgs = Set("INDELMQ", "HETINDELQD", "INDELFS"))
+  }
+
+  sparkTest("test adding filters") {
+    val path = testFile("random.vcf")
+    val initialRdd = sc.loadGenotypes(path)
+    val filteredRdd = HardFilterGenotypes(
+      initialRdd,
+      TestHardFilterGenotypesArgs())
+    assert(filteredRdd.headerLines.size === initialRdd.headerLines.size + 12)
   }
 }
