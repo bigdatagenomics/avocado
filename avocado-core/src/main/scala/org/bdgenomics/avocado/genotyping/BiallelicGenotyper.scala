@@ -34,7 +34,8 @@ import org.bdgenomics.avocado.util.{
   Downsampler,
   HardLimiter,
   LogPhred,
-  LogUtils
+  LogUtils,
+  TreeRegionJoin
 }
 import org.bdgenomics.formats.avro.{
   AlignmentRecord,
@@ -98,9 +99,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     val useTreeJoin = true
     val joinedRdd = JoinReadsAndVariants.time {
       if (useTreeJoin) {
-
-        variants.broadcastRegionJoinAndGroupByRight(reads)
-          .rdd.map(_.swap)
+        TreeRegionJoin.joinAndGroupByRight(
+          variants.rdd.keyBy(v => ReferenceRegion(v)),
+          reads.rdd.flatMap(r => {
+            ReferenceRegion.opt(r).map(rr => (rr, r))
+          })).map(_.swap)
       } else if (useBroadcastJoin) {
 
         val joinedGRdd = variants.broadcastRegionJoin(reads)
