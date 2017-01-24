@@ -397,13 +397,7 @@
       <dependency>
         <groupId>org.seqdoop</groupId>
         <artifactId>hadoop-bam</artifactId>
-        <version>7.0.0</version>
-        <exclusions>
-          <exclusion>
-            <groupId>org.seqdoop</groupId>
-            <artifactId>htsjdk</artifactId>
-          </exclusion>
-        </exclusions>
+        <version>7.7.0</version>
       </dependency>
       <dependency>
         <groupId>com.github.samtools</groupId>
