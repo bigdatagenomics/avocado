@@ -201,7 +201,11 @@ object DiscoverVariants extends Serializable with Logging {
               kv
             }
             case Insertion(length) => {
-              val insQuals = qual.substring(idx - 1, idx + length).map(_.toInt - 33).sum / length
+              val insQuals = if (length > 0) {
+                qual.substring(idx - 1, idx + length).map(_.toInt - 33).sum / length
+              } else {
+                0
+              }
               val newVar = if (insQuals >= phredThreshold) {
                 Variant.newBuilder
                   .setContigName(contigName)

@@ -222,10 +222,26 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
             } else if (isInsertion(variant)) {
               val insAllele = variant.getAlternateAllele.tail
               val insObserved = observed.filter(_._2 == insAllele)
+              println("for %s observed %s in %s".format(insAllele, observed.mkString(","), read))
               if (observed.size == 2 &&
                 insObserved.size == 1) {
                 Some((variant, insObserved.head._3.duplicate(Some(false))))
-              } else if (observed.forall(_._3.isRef)) {
+              } else if (!observed.forall(_._3.isRef)) {
+                val nonRef = observed.filter(!_._3.isRef)
+                if (nonRef.size == 1) {
+                  val (_, allele, nonRefObs) = nonRef.head
+                  if (allele.length == insAllele.length) {
+                    val matchingBases = allele.zip(insAllele).count(p => p._1 == p._2)
+                    Some((variant, nonRefObs.scale(matchingBases,
+                      insAllele.length,
+                      Some(false))))
+                  } else {
+                    Some((variant, observed.head._3.nullOut))
+                  }
+                } else {
+                  Some((variant, observed.head._3.nullOut))
+                }
+              } else if (read.getEnd != variant.getEnd) {
                 Some((variant, observed.head._3.invert))
               } else {
                 Some((variant, observed.head._3.nullOut))
