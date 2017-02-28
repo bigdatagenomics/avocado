@@ -31,7 +31,6 @@ import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.Observation
 import org.bdgenomics.avocado.util.{
-  Downsampler,
   HardLimiter,
   LogPhred,
   LogUtils,
@@ -95,48 +94,12 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         samples.mkString(", ")))
 
     // join reads against variants
-    val useBroadcastJoin = false
-    val useTreeJoin = true
     val joinedRdd = JoinReadsAndVariants.time {
-      if (useTreeJoin) {
-        TreeRegionJoin.joinAndGroupByRight(
-          variants.rdd.keyBy(v => ReferenceRegion(v)),
-          reads.rdd.flatMap(r => {
-            ReferenceRegion.opt(r).map(rr => (rr, r))
-          })).map(_.swap)
-      } else if (useBroadcastJoin) {
-
-        val joinedGRdd = variants.broadcastRegionJoin(reads)
-        joinedGRdd.rdd.map(kv => {
-          val (variant, read) = kv
-          (read, Iterable(variant))
-        })
-      } else {
-        val refLength = reads.sequences.records.map(_.length).sum
-        val partitionSize = refLength / optDesiredPartitionCount.getOrElse(reads.rdd.partitions.size)
-
-        val shuffledRdd = reads.shuffleRegionJoinAndGroupByLeft(variants,
-          optPartitions = Some(partitionSize.toInt))
-          .rdd
-
-        val rdd = if (Metrics.isRecording) shuffledRdd.instrument() else shuffledRdd
-        val optCoverageThresholdedRdd = optDesiredMaxCoverage.fold(rdd)(maxCoverage => {
-          HardLimiter(rdd, maxCoverage)
-        })
-        optDesiredPartitionSize.fold(optCoverageThresholdedRdd)(size => {
-
-          val contigLengths = reads.sequences
-            .records
-            .map(r => (r.name -> r.length))
-            .toMap
-          val refLength = contigLengths.values.sum
-          val partitionSize = refLength / optDesiredPartitionCount.getOrElse(reads.rdd.partitions.size)
-
-          val bins = GenomeBins(partitionSize, contigLengths)
-
-          Downsampler.downsample(optCoverageThresholdedRdd, size, bins)
-        })
-      }
+      TreeRegionJoin.joinAndGroupByRight(
+        variants.rdd.keyBy(v => ReferenceRegion(v)),
+        reads.rdd.flatMap(r => {
+          ReferenceRegion.opt(r).map(rr => (rr, r))
+        })).map(_.swap)
     }
 
     // score variants and get observations

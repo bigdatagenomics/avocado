@@ -23,7 +23,6 @@ import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMSaveAnyArgs
 import org.bdgenomics.avocado.genotyping.{ BiallelicGenotyper => Biallelic }
 import org.bdgenomics.avocado.util.{
-  GapFilter,
   HardFilterGenotypes,
   HardFilterGenotypesArgs,
   PrefilterReads,
@@ -106,10 +105,6 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     usage = "Minimum number of times a variant must be seen to be discovered. Defaults to phred 5.")
   var minObservationsForDiscovery: Int = 5
   @Args4jOption(required = false,
-    name = "-reference_gaps",
-    usage = "Optional file with reference gaps to filter against.")
-  var referenceGaps: String = _
-  @Args4jOption(required = false,
     name = "-min_genotype_quality",
     usage = "Minimum quality needed to emit a non-ref genotype. Default is Phred 30.")
   var minQuality: Int = 30
@@ -180,9 +175,6 @@ class BiallelicGenotyper(
 
     // filter reads
     val filteredReads = PrefilterReads(reads, args)
-    val gapFilteredReads = Option(args.referenceGaps).fold(filteredReads)(gapFile => {
-      GapFilter(filteredReads, gapFile)
-    })
 
     // has the user optionally requested a number of partitions?
     val optDesiredPartitionCount = Option(args.desiredPartitionCount)
@@ -199,7 +191,7 @@ class BiallelicGenotyper(
     // were we provided variants? if so, load them and call.
     // else, discover variants and call
     val genotypes = Option(args.variantsToCall).fold({
-      Biallelic.discoverAndCall(gapFilteredReads,
+      Biallelic.discoverAndCall(filteredReads,
         args.ploidy,
         optDesiredPartitionCount = optDesiredPartitionCount,
         optPhredThreshold = Some(args.minPhredForDiscovery),
@@ -211,7 +203,7 @@ class BiallelicGenotyper(
       // load variants
       val variants = sc.loadVariants(vPath)
 
-      Biallelic.call(gapFilteredReads,
+      Biallelic.call(filteredReads,
         variants,
         args.ploidy,
         optDesiredPartitionCount = optDesiredPartitionCount,
