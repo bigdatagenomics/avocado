@@ -505,5 +505,26 @@
         </plugins>
       </build>
     </profile>
+    <profile>
+      <id>coveralls</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eluder.coveralls</groupId>
+            <artifactId>coveralls-maven-plugin</artifactId>
+            <version>3.0.1</version>
+            <configuration>
+              <coberturaReports>
+                <param>${project.build.directory}/cobertura.xml</param>
+              </coberturaReports>
+              <sourceDirectories>
+                <param>avocado-core/src/main/scala</param>
+                <param>avocado-cli/src/main/scala</param>
+              </sourceDirectories>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>
