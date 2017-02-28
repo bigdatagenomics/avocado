@@ -88,7 +88,7 @@ echo "Using SPARK_SUBMIT=$SPARK_SUBMIT"
 "$SPARK_SUBMIT" \
   --class $AVOCADO_MAIN \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
-  --conf spark.kryo.registrator=org.bdgenomics.adam.serialization.ADAMKryoRegistrator \
+  --conf spark.kryo.registrator=org.bdgenomics.avocado.serialization.AvocadoKryoRegistrator \
   "${SPARK_ARGS[@]}" \
   "$AVOCADO_CLI_JAR" \
   "${AVOCADO_ARGS[@]}"
