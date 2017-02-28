@@ -1,7 +1,9 @@
 avocado
 =======
 
-A Variant Caller, Distributed
+[![Coverage Status](https://coveralls.io/repos/github/bigdatagenomics/avocado/badge.svg?branch=master)](https://coveralls.io/github/bigdatagenomics/avocado?branch=master)
+
+# A Variant Caller, Distributed
 
 This README represents the TL;DR docs for avocado. More detailed documentation is under the `docs` folder.
 
