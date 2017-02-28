@@ -17,25 +17,15 @@
  */
 package org.bdgenomics.avocado.util
 
-import scala.math.{ expm1, log => mathLog }
+import org.scalatest.FunSuite
+import scala.math.log
 
-object LogPhred {
+class LogPhredSuite extends FunSuite {
 
-  private val LOG10 = mathLog(10.0)
-
-  /**
-   * Conversion between log _error_ probabilities and Phred scores.
-   *
-   * Q = -10 log_{10} p
-   *
-   * If l = ln p, then we just need to do a log base conversion.
-   *
-   * @note Just remember kids: if you want to live a happy, fulfilling life, don't use Phred!
-   *
-   * @param l Log error probability.
-   * @return Returns the Phred score corresponding to that log probability.
-   */
-  def logErrorToPhred(l: Double): Double = {
-    (-10.0 * l / LOG10)
+  test("convert log error probabilities to phred scores") {
+    val phred10 = LogPhred.logErrorToPhred(log(0.1))
+    assert(phred10 > 9.999 && phred10 < 10.001)
+    val phred50 = LogPhred.logErrorToPhred(log(0.00001))
+    assert(phred50 > 49.999 && phred50 < 50.001)
   }
 }
