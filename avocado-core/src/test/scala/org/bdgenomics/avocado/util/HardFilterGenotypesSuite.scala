@@ -40,7 +40,13 @@ case class TestHardFilterGenotypesArgs(
     var minSnpDepth: Int = 10,
     var maxSnpDepth: Int = 150,
     var minIndelDepth: Int = 20,
-    var maxIndelDepth: Int = 300) extends HardFilterGenotypesArgs {
+    var maxIndelDepth: Int = 300,
+    var minHetSnpAltAllelicFraction: Float = 0.333f,
+    var maxHetSnpAltAllelicFraction: Float = 0.666f,
+    var minHomSnpAltAllelicFraction: Float = 0.666f,
+    var minHetIndelAltAllelicFraction: Float = 0.333f,
+    var maxHetIndelAltAllelicFraction: Float = 0.666f,
+    var minHomIndelAltAllelicFraction: Float = 0.666f) extends HardFilterGenotypesArgs {
 }
 
 class HardFilterGenotypesSuite extends AvocadoFunSuite {
@@ -316,6 +322,48 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     val filteredRdd = HardFilterGenotypes(
       initialRdd,
       TestHardFilterGenotypesArgs())
-    assert(filteredRdd.headerLines.size === initialRdd.headerLines.size + 12)
+    assert(filteredRdd.headerLines.size === initialRdd.headerLines.size + 18)
+  }
+
+  test("filter out genotypes with a low allelic fraction") {
+    val highAF = HardFilterGenotypes.hardFilterMinAllelicFraction(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .setAlternateReadDepth(25)
+      .build, 0.333f, "MINAF", hom = false)
+    assert(highAF.isEmpty)
+
+    val lowAF = HardFilterGenotypes.hardFilterMinAllelicFraction(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .setAlternateReadDepth(10)
+      .build, 0.333f, "MINAF", hom = false)
+    assert(lowAF.isDefined)
+    assert(lowAF.get === "MINAF")
+
+    val lowAFHet = HardFilterGenotypes.hardFilterMinAllelicFraction(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .setAlternateReadDepth(10)
+      .build, 0.333f, "MINAF", hom = true)
+    assert(lowAFHet.isEmpty)
+  }
+
+  test("filter out genotypes with a high allelic fraction") {
+    val highAF = HardFilterGenotypes.hardFilterMaxAllelicFraction(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .setAlternateReadDepth(45)
+      .build, 0.666f, "MAXAF")
+    assert(highAF.isDefined)
+    assert(highAF.get === "MAXAF")
+
+    val lowAF = HardFilterGenotypes.hardFilterMaxAllelicFraction(alt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .setAlternateReadDepth(30)
+      .build, 0.666f, "MAXAF")
+    assert(lowAF.isEmpty)
+
+    val hom = HardFilterGenotypes.hardFilterMaxAllelicFraction(homAlt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .setAlternateReadDepth(45)
+      .build, 0.666f, "MAXAF")
+    assert(hom.isEmpty)
   }
 }

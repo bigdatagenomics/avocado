@@ -116,6 +116,48 @@ private[avocado] trait HardFilterGenotypesArgs extends Serializable {
    * Set to a negative value to omit.
    */
   var maxIndelDepth: Int
+
+  /**
+   * The minimum allele fraction for the alternate allele in a het SNP call.
+   *
+   * Set to a negative value to omit.
+   */
+  var minHetSnpAltAllelicFraction: Float
+
+  /**
+   * The maximum allele fraction for the alternate allele in a het SNP call.
+   *
+   * Set to a negative value to omit.
+   */
+  var maxHetSnpAltAllelicFraction: Float
+
+  /**
+   * The minimum allele fraction for the alternate allele in a hom SNP call.
+   *
+   * Set to a negative value to omit.
+   */
+  var minHomSnpAltAllelicFraction: Float
+
+  /**
+   * The minimum allele fraction for the alternate allele in a het INDEL call.
+   *
+   * Set to a negative value to omit.
+   */
+  var minHetIndelAltAllelicFraction: Float
+
+  /**
+   * The maximum allele fraction for the alternate allele in a het INDEL call.
+   *
+   * Set to a negative value to omit.
+   */
+  var maxHetIndelAltAllelicFraction: Float
+
+  /**
+   * The minimum allele fraction for the alternate allele in a hom INDEL call.
+   *
+   * Set to a negative value to omit.
+   */
+  var minHomIndelAltAllelicFraction: Float
 }
 
 /**
@@ -174,7 +216,25 @@ private[avocado] object HardFilterGenotypes extends Serializable {
           "Read depth was above %d for a SNP.".format(dp))),
       Option(args.maxIndelDepth).filter(_ > 0)
         .map(dp => new VCFFilterHeaderLine("INDELMAXDP",
-          "Read depth was above %d for a INDEL.".format(dp))))
+          "Read depth was above %d for a INDEL.".format(dp))),
+      Option(args.minHetSnpAltAllelicFraction).filter(_ > 0)
+        .map(af => new VCFFilterHeaderLine("HETSNPMINAF",
+          "Allelic fraction was below %f for a het SNP.".format(af))),
+      Option(args.maxHetSnpAltAllelicFraction).filter(_ > 0)
+        .map(af => new VCFFilterHeaderLine("HETSNPMAXAF",
+          "Allelic fraction was above %f for a het SNP.".format(af))),
+      Option(args.minHomSnpAltAllelicFraction).filter(_ > 0)
+        .map(af => new VCFFilterHeaderLine("HOMSNPMINAF",
+          "Allelic fraction was below %f for a hom SNP.".format(af))),
+      Option(args.minHetSnpAltAllelicFraction).filter(_ > 0)
+        .map(af => new VCFFilterHeaderLine("HETINDELMINAF",
+          "Allelic fraction was below %f for a het INDEL.".format(af))),
+      Option(args.maxHetSnpAltAllelicFraction).filter(_ > 0)
+        .map(af => new VCFFilterHeaderLine("HETINDELMAXAF",
+          "Allelic fraction was above %f for a het INDEL.".format(af))),
+      Option(args.minHomSnpAltAllelicFraction).filter(_ > 0)
+        .map(af => new VCFFilterHeaderLine("HOMINDELMINAF",
+          "Allelic fraction was below %f for a hom INDEL.".format(af))))
       .flatten
 
     // flat map the filters over the genotype rdd
@@ -211,13 +271,25 @@ private[avocado] object HardFilterGenotypes extends Serializable {
     val optMaxDpFilter: Option[Genotype => Option[String]] = Option(args.maxSnpDepth)
       .filter(_ > 0)
       .map(maxDp => hardFilterMaxDepth(_, maxDp, "SNPMAXDP"))
+    val optMinAfHetFilter: Option[Genotype => Option[String]] = Option(args.minHetSnpAltAllelicFraction)
+      .filter(_ > 0)
+      .map(minAf => hardFilterMinAllelicFraction(_, minAf, "HETSNPMINAF", hom = false))
+    val optMaxAfHetFilter: Option[Genotype => Option[String]] = Option(args.maxHetSnpAltAllelicFraction)
+      .filter(_ > 0)
+      .map(maxAf => hardFilterMinAllelicFraction(_, maxAf, "HETSNPMAXAF", hom = false))
+    val optMinAfHomFilter: Option[Genotype => Option[String]] = Option(args.minHomSnpAltAllelicFraction)
+      .filter(_ > 0)
+      .map(minAf => hardFilterMinAllelicFraction(_, minAf, "HOMSNPMINAF", hom = true))
 
     Iterable(optHetQdFilter,
       optHomQdFilter,
       optMqFilter,
       optFsFilter,
       optMinDpFilter,
-      optMaxDpFilter).flatten
+      optMaxDpFilter,
+      optMinAfHetFilter,
+      optMaxAfHetFilter,
+      optMinAfHomFilter).flatten
   }
 
   /**
@@ -244,13 +316,25 @@ private[avocado] object HardFilterGenotypes extends Serializable {
     val optMaxDpFilter: Option[Genotype => Option[String]] = Option(args.maxIndelDepth)
       .filter(_ > 0)
       .map(maxDp => hardFilterMaxDepth(_, maxDp, "INDELMAXDP"))
+    val optMinAfHetFilter: Option[Genotype => Option[String]] = Option(args.minHetIndelAltAllelicFraction)
+      .filter(_ > 0)
+      .map(minAf => hardFilterMinAllelicFraction(_, minAf, "HETINDELMINAF", hom = false))
+    val optMaxAfHetFilter: Option[Genotype => Option[String]] = Option(args.maxHetIndelAltAllelicFraction)
+      .filter(_ > 0)
+      .map(maxAf => hardFilterMinAllelicFraction(_, maxAf, "HETINDELMAXAF", hom = false))
+    val optMinAfHomFilter: Option[Genotype => Option[String]] = Option(args.minHomIndelAltAllelicFraction)
+      .filter(_ > 0)
+      .map(minAf => hardFilterMinAllelicFraction(_, minAf, "HOMINDELMINAF", hom = true))
 
     Iterable(optHetQdFilter,
       optHomQdFilter,
       optMqFilter,
       optFsFilter,
       optMinDpFilter,
-      optMaxDpFilter).flatten
+      optMaxDpFilter,
+      optMinAfHetFilter,
+      optMaxAfHetFilter,
+      optMinAfHomFilter).flatten
   }
 
   /**
@@ -398,6 +482,69 @@ private[avocado] object HardFilterGenotypes extends Serializable {
           None
         }
       })
+  }
+
+  /**
+   * @param genotype call to evaluate.
+   * @return Returns the alleleic fraction for the alt allele.
+   */
+  private[util] def optAlleleFraction(genotype: Genotype): Option[Float] = {
+    (Option(genotype.getReadDepth), Option(genotype.getAlternateReadDepth)) match {
+      case (Some(dp), Some(alt)) => Some(alt.toFloat / dp.toFloat)
+      case _                     => None
+    }
+  }
+
+  /**
+   * @param genotype call to evaluate.
+   * @param minAlleleFraction The minimum allele fraction to allow.
+   * @param msg Filter message to use.
+   * @param hom If true, only consider hom sites; else only consider hets.
+   * @return If this genotype shows low allele fraction, we return an
+   *   optional filter string. Else, we return a None.
+   */
+  private[util] def hardFilterMinAllelicFraction(genotype: Genotype,
+                                                 minAlleleFraction: Float,
+                                                 msg: String,
+                                                 hom: Boolean = false): Option[String] = {
+    val gtIsHom = genotype.getAlleles.forall(_ == GenotypeAllele.ALT)
+    if ((!gtIsHom && !hom) || (gtIsHom && hom)) {
+      optAlleleFraction(genotype)
+        .flatMap(af => {
+          if (af <= minAlleleFraction) {
+            Some(msg)
+          } else {
+            None
+          }
+        })
+    } else {
+      None
+    }
+  }
+
+  /**
+   * @param genotype call to evaluate.
+   * @param maxAlleleFraction The maximum allele fraction to allow.
+   * @param msg Filter message to use.
+   * @return If this genotype shows low allele fraction, we return an
+   *   optional filter string. Else, we return a None.
+   */
+  private[util] def hardFilterMaxAllelicFraction(genotype: Genotype,
+                                                 maxAlleleFraction: Float,
+                                                 msg: String): Option[String] = {
+    val gtIsHom = genotype.getAlleles.forall(_ == GenotypeAllele.ALT)
+    if (gtIsHom) {
+      None
+    } else {
+      optAlleleFraction(genotype)
+        .flatMap(af => {
+          if (af > maxAlleleFraction) {
+            Some(msg)
+          } else {
+            None
+          }
+        })
+    }
   }
 
   /**
