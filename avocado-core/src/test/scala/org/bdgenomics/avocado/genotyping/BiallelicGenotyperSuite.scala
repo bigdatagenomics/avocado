@@ -260,7 +260,9 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       2,
       optDesiredPartitionCount = Some(26))
     val filteredGenotypes = HardFilterGenotypes(genotypes,
-      TestHardFilterGenotypesArgs())
+      TestHardFilterGenotypesArgs(minHetIndelAltAllelicFraction = -1f,
+        maxHetIndelAltAllelicFraction = -1f,
+        minHomIndelAltAllelicFraction = -1f))
       .transform(rdd => {
         rdd.filter(_.getVariantCallingAnnotations
           .getFiltersPassed)

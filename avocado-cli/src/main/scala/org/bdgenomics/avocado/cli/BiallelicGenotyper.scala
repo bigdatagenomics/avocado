@@ -148,6 +148,30 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     name = "-max_indel_depth",
     usage = "Maximum INDEL depth for hard filtering. Default is 300. Set to a negative value to omit.")
   var maxIndelDepth: Int = 200
+  @Args4jOption(required = false,
+    name = "-min_het_snp_allelic_fraction",
+    usage = "Minimum (alt) allelic fraction for calling a het SNP. Default is 0.333. Set to a negative value to omit.")
+  var minHetSnpAltAllelicFraction: Float = 0.333f
+  @Args4jOption(required = false,
+    name = "-max_het_snp_allelic_fraction",
+    usage = "Maximum (alt) allelic fraction for calling a het SNP. Default is 0.666. Set to a negative value to omit.")
+  var maxHetSnpAltAllelicFraction: Float = 0.666f
+  @Args4jOption(required = false,
+    name = "-min_hom_snp_allelic_fraction",
+    usage = "Minimum (alt) allelic fraction for calling a hom SNP. Default is 0.666. Set to a negative value to omit.")
+  var minHomSnpAltAllelicFraction: Float = 0.666f
+  @Args4jOption(required = false,
+    name = "-min_het_indel_allelic_fraction",
+    usage = "Minimum (alt) allelic fraction for calling a het INDEL. Default is 0.333. Set to a negative value to omit.")
+  var minHetIndelAltAllelicFraction: Float = 0.333f
+  @Args4jOption(required = false,
+    name = "-max_het_indel_allelic_fraction",
+    usage = "Maximum (alt) allelic fraction for calling a het INDEL. Default is 0.666. Set to a negative value to omit.")
+  var maxHetIndelAltAllelicFraction: Float = 0.666f
+  @Args4jOption(required = false,
+    name = "-min_hom_indel_allelic_fraction",
+    usage = "Minimum (alt) allelic fraction for calling a hom INDEL. Default is 0.666. Set to a negative value to omit.")
+  var minHomIndelAltAllelicFraction: Float = 0.666f
 
   // required by HardFilterGenotypesArgs
   var maxSnpPhredStrandBias: Float = -1.0f
