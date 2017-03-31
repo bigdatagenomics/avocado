@@ -259,6 +259,7 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       .setAlternateAllele("T")
       .build)
       .setGenotypeQuality(30)
+      .setAlternateReadDepth(15)
       .setReadDepth(20)
       .setVariantCallingAnnotations(VariantCallingAnnotations.newBuilder
         .setRmsMapQ(35.0f)
@@ -272,7 +273,7 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       defaultIndelFilters)
     assert(optGt.isDefined)
     validate(optGt.get,
-      filterMsgs = Set("SNPMQ", "HETSNPQD", "SNPFS"))
+      filterMsgs = Set("SNPMQ", "HETSNPQD", "SNPFS", "HETSNPMAXAF"))
   }
 
   test("build filters and apply to indel") {
