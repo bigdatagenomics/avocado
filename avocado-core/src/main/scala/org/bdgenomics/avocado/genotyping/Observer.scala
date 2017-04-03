@@ -131,9 +131,13 @@ private[genotyping] object Observer extends Serializable {
 
         // get bases and quals
         val bases = readSequence.substring(oldReadIdx, readIdx)
-        val qual = readQualities.substring(oldReadIdx, readIdx)
-          .map(_.toInt - 33)
-          .sum / length
+        val qual = if (length > 0) {
+          readQualities.substring(oldReadIdx, readIdx)
+            .map(_.toInt - 33)
+            .sum / length
+        } else {
+          0
+        }
 
         // the key is the (site, allele, sampleId)
         // insertions associate to the site to their left, hence the -1

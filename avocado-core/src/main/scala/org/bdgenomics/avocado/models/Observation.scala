@@ -92,6 +92,24 @@ case class Observation(alleleForwardStrand: Int,
   }
 
   /**
+   * @return Makes a copy where underlying arrays are not shared.
+   */
+  def scale(num: Int,
+            denum: Int,
+            setRef: Option[Boolean] = None): Observation = {
+    val scaleBy = num.toDouble / denum.toDouble
+    Observation(alleleForwardStrand,
+      otherForwardStrand,
+      squareMapQ,
+      alleleLogLikelihoods.map(v => v * scaleBy),
+      otherLogLikelihoods.map(v => v * scaleBy),
+      alleleCoverage,
+      otherCoverage,
+      totalCoverage = totalCoverage,
+      isRef = setRef.getOrElse(isRef))
+  }
+
+  /**
    * @return Returns this observation, but with allele/other swapped.
    *
    * @see null
