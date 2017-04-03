@@ -228,13 +228,13 @@ private[avocado] object HardFilterGenotypes extends Serializable {
       Option(args.minHomSnpAltAllelicFraction).filter(_ > 0)
         .map(af => new VCFFilterHeaderLine("HOMSNPMINAF",
           "Allelic fraction was below %f for a hom SNP.".format(af))),
-      Option(args.minHetSnpAltAllelicFraction).filter(_ > 0)
+      Option(args.minHetIndelAltAllelicFraction).filter(_ > 0)
         .map(af => new VCFFilterHeaderLine("HETINDELMINAF",
           "Allelic fraction was below %f for a het INDEL.".format(af))),
-      Option(args.maxHetSnpAltAllelicFraction).filter(_ > 0)
+      Option(args.maxHetIndelAltAllelicFraction).filter(_ > 0)
         .map(af => new VCFFilterHeaderLine("HETINDELMAXAF",
           "Allelic fraction was above %f for a het INDEL.".format(af))),
-      Option(args.minHomSnpAltAllelicFraction).filter(_ > 0)
+      Option(args.minHomIndelAltAllelicFraction).filter(_ > 0)
         .map(af => new VCFFilterHeaderLine("HOMINDELMINAF",
           "Allelic fraction was below %f for a hom INDEL.".format(af))))
       .flatten
