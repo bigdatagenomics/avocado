@@ -22,7 +22,7 @@ import org.bdgenomics.adam.models.{
   SequenceDictionary,
   SequenceRecord
 }
-import org.bdgenomics.adam.rdd.read.AlignedReadRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.formats.avro.{ AlignmentRecord, Variant }
 
@@ -233,7 +233,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
       snpReadMCigar, snpReadEqCigar,
       insertRead,
       deleteRead))
-    val readRdd = AlignedReadRDD(rdd,
+    val readRdd = AlignmentRecordRDD(rdd,
       SequenceDictionary(
         SequenceRecord("1", 50L),
         SequenceRecord("2", 40L),
