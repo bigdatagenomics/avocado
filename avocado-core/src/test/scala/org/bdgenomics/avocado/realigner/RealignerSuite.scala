@@ -24,7 +24,7 @@ import org.bdgenomics.adam.models.{
   RecordGroupDictionary
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.read.{ AlignedReadRDD, AlignmentRecordRDD }
+import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.models.{
   Clipped,
@@ -192,7 +192,7 @@ class RealignerSuite extends AvocadoFunSuite {
 
   def makeAndRealignRdd(reads: Seq[AlignmentRecord],
                         kmerLength: Int): Array[AlignmentRecord] = {
-    val gRdd = AlignedReadRDD(sc.parallelize(reads),
+    val gRdd = AlignmentRecordRDD(sc.parallelize(reads),
       SequenceDictionary(SequenceRecord("ctg", 50L)),
       RecordGroupDictionary(Seq(RecordGroup("rg", "rg"))))
 

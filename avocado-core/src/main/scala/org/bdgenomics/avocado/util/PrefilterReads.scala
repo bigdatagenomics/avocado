@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.util
 
 import org.bdgenomics.adam.models.SequenceDictionary
-import org.bdgenomics.adam.rdd.read.{ AlignedReadRDD, AlignmentRecordRDD }
+import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.formats.avro.AlignmentRecord
 
 private[avocado] trait PrefilterReadsArgs extends Serializable {
@@ -85,7 +85,7 @@ private[avocado] object PrefilterReads extends Serializable {
     val readRdd = rdd.rdd.filter(readFn)
 
     // construct a new aligned read rdd
-    AlignedReadRDD(readRdd, sequences, rdd.recordGroups)
+    AlignmentRecordRDD(readRdd, sequences, rdd.recordGroups)
   }
 
   /**
