@@ -26,7 +26,9 @@ import org.bdgenomics.avocado.util.{
   HardFilterGenotypes,
   HardFilterGenotypesArgs,
   PrefilterReads,
-  PrefilterReadsArgs
+  PrefilterReadsArgs,
+  RewriteHets,
+  RewriteHetsArgs
 }
 import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.utils.cli._
@@ -41,7 +43,7 @@ object BiallelicGenotyper extends BDGCommandCompanion {
   }
 }
 
-class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs with PrefilterReadsArgs with HardFilterGenotypesArgs {
+class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs with PrefilterReadsArgs with HardFilterGenotypesArgs with RewriteHetsArgs {
   @Argument(required = true,
     metaVar = "INPUT",
     usage = "The ADAM, BAM or SAM file to call",
@@ -172,6 +174,14 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     name = "-min_hom_indel_allelic_fraction",
     usage = "Minimum (alt) allelic fraction for calling a hom INDEL. Default is 0.666. Set to a negative value to omit.")
   var minHomIndelAltAllelicFraction: Float = 0.666f
+  @Args4jOption(required = false,
+    name = "-disable_het_snp_rewriting",
+    usage = "If true, disables rewriting of high allelic fraction het SNPs as hom alt SNPs.")
+  var disableHetSnpRewriting: Boolean = false
+  @Args4jOption(required = false,
+    name = "-disable_het_indel_rewriting",
+    usage = "If true, disables rewriting of high allelic fraction het INDELs as hom alt INDELs.")
+  var disableHetIndelRewriting: Boolean = false
 
   // required by HardFilterGenotypesArgs
   var maxSnpPhredStrandBias: Float = -1.0f
@@ -236,7 +246,8 @@ class BiallelicGenotyper(
     })
 
     // hard filter the genotypes
-    val filteredGenotypes = HardFilterGenotypes(genotypes, args)
+    val filteredGenotypes = HardFilterGenotypes(RewriteHets(genotypes, args),
+      args)
 
     // save the variant calls
     filteredGenotypes.saveAsParquet(args)
