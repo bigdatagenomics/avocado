@@ -355,7 +355,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    */
   private[util] def filterQuality(genotype: Genotype,
                                   minQuality: Int): Boolean = {
-    genotype.getGenotypeQuality > minQuality
+    Option(genotype.getGenotypeQuality).fold(true)(_ > minQuality)
   }
 
   /**
