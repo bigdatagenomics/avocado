@@ -3,12 +3,12 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.bdgenomics.avocado</groupId>
-    <artifactId>avocado-parent</artifactId>
+    <artifactId>avocado-parent_2.10</artifactId>
     <version>0.0.3-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   
-  <artifactId>avocado-distribution</artifactId>
+  <artifactId>avocado-distribution_2.10</artifactId>
   <packaging>pom</packaging>
   <name>avocado: distribution</name>
   <build>
