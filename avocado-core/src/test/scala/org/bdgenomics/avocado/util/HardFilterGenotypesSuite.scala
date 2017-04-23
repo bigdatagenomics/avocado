@@ -68,6 +68,10 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
   }
 
   val ref = Genotype.newBuilder
+    .setVariant(Variant.newBuilder
+      .setReferenceAllele("A")
+      .setAlternateAllele("T")
+      .build)
     .setAlleles(Seq(GenotypeAllele.REF, GenotypeAllele.REF))
     .setGenotypeQuality(99)
     .build
@@ -83,9 +87,10 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
   }
 
   test("filter out genotypes for emission") {
-    assert(!HardFilterGenotypes.emitGenotypeFilter(ref, 30))
-    assert(HardFilterGenotypes.emitGenotypeFilter(alt.setGenotypeQuality(50).build, 30))
-    assert(!HardFilterGenotypes.emitGenotypeFilter(alt.setGenotypeQuality(10).build, 30))
+    assert(!HardFilterGenotypes.emitGenotypeFilter(ref, 30, true))
+    assert(HardFilterGenotypes.emitGenotypeFilter(ref, 30, false))
+    assert(HardFilterGenotypes.emitGenotypeFilter(alt.setGenotypeQuality(50).build, 30, true))
+    assert(!HardFilterGenotypes.emitGenotypeFilter(alt.setGenotypeQuality(10).build, 30, true))
   }
 
   test("filter out genotypes with a low quality per depth") {
@@ -240,8 +245,18 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     val optGt = HardFilterGenotypes.filterGenotype(ref,
       20,
       Iterable.empty,
-      Iterable.empty)
+      Iterable.empty,
+      true)
     assert(optGt.isEmpty)
+  }
+
+  test("keep a ref genotype call") {
+    val optGt = HardFilterGenotypes.filterGenotype(ref,
+      20,
+      Iterable.empty,
+      Iterable.empty,
+      false)
+    assert(optGt.isDefined)
   }
 
   test("discard a genotype whose quality is too low") {
@@ -249,7 +264,8 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     val optGt = HardFilterGenotypes.filterGenotype(lowQualAlt,
       20,
       Iterable.empty,
-      Iterable.empty)
+      Iterable.empty,
+      true)
     assert(optGt.isEmpty)
   }
 
@@ -270,7 +286,8 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     val optGt = HardFilterGenotypes.filterGenotype(failingSnp,
       20,
       defaultSnpFilters,
-      defaultIndelFilters)
+      defaultIndelFilters,
+      true)
     assert(optGt.isDefined)
     validate(optGt.get,
       filterMsgs = Set("SNPMQ", "HETSNPQD", "SNPFS", "HETSNPMAXAF"))
@@ -292,7 +309,8 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     val optPassingGt = HardFilterGenotypes.filterGenotype(passingIndel,
       20,
       defaultSnpFilters,
-      defaultIndelFilters)
+      defaultIndelFilters,
+      true)
     assert(optPassingGt.isDefined)
     validate(optPassingGt.get)
 
@@ -311,7 +329,8 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     val optFailingGt = HardFilterGenotypes.filterGenotype(failingIndel,
       10,
       defaultSnpFilters,
-      defaultIndelFilters)
+      defaultIndelFilters,
+      true)
     assert(optFailingGt.isDefined)
     validate(optFailingGt.get,
       filterMsgs = Set("INDELMQ", "HETINDELQD", "INDELFS"))
