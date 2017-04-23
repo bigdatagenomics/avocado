@@ -170,10 +170,12 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    *
    * @param grdd GenotypeRDD to filter.
    * @param args The hard filter configuration to apply.
+   * @param filterRefGenotypes If true, discards homozygous ref calls.
    * @return A new GenotypeRDD of hard filtered genotypes.
    */
   def apply(grdd: GenotypeRDD,
-            args: HardFilterGenotypesArgs): GenotypeRDD = {
+            args: HardFilterGenotypesArgs,
+            filterRefGenotypes: Boolean = true): GenotypeRDD = {
 
     // make snp and indel filters
     val snpFilters = buildSnpHardFilters(args)
@@ -243,7 +245,8 @@ private[avocado] object HardFilterGenotypes extends Serializable {
       rdd.flatMap(filterGenotype(_,
         minQuality,
         snpFilters,
-        indelFilters))
+        indelFilters,
+        filterRefGenotypes))
     }).copy(headerLines = (grdd.headerLines ++ filterHeaders).distinct)
   }
 
@@ -364,11 +367,17 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    *
    * @param genotype call to evaluate.
    * @param minQuality The minimum genotype quality to emit.
+   * @param filterRefGenotypes If true, discards hom-ref calls.
    * @return Returns false for calls that are hom ref and/or low quality.
    */
   def emitGenotypeFilter(genotype: Genotype,
-                         minQuality: Int): Boolean = {
-    filterRefCalls(genotype) && filterQuality(genotype, minQuality)
+                         minQuality: Int,
+                         filterRefGenotypes: Boolean): Boolean = {
+    if (filterRefGenotypes) {
+      filterRefCalls(genotype) && filterQuality(genotype, minQuality)
+    } else {
+      filterQuality(genotype, minQuality)
+    }
   }
 
   /**
@@ -611,6 +620,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    * @param minQuality The minimum genotype quality to emit.
    * @param snpFilters Collection of filters to apply to emitted SNPs.
    * @param indelFilters Collection of filters to apply to emitted INDELs.
+   * @param filterRefGenotypes If true, discards hom-ref calls.
    * @return If genotype is high enough quality to emit, a hard filtered
    *   genotype.
    */
@@ -618,10 +628,12 @@ private[avocado] object HardFilterGenotypes extends Serializable {
     genotype: Genotype,
     minQuality: Int,
     snpFilters: Iterable[Genotype => Option[String]],
-    indelFilters: Iterable[Genotype => Option[String]]): Option[Genotype] = {
+    indelFilters: Iterable[Genotype => Option[String]],
+    filterRefGenotypes: Boolean): Option[Genotype] = {
 
     // first, apply emission filters
-    val optGenotype = Some(genotype).filter(emitGenotypeFilter(_, minQuality))
+    val optGenotype = Some(genotype)
+      .filter(emitGenotypeFilter(_, minQuality, filterRefGenotypes))
 
     // then, check whether we are a snp or indel and apply hard filters
     optGenotype.map(gt => {
