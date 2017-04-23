@@ -153,7 +153,7 @@
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.avocado</groupId>
-      <artifactId>avocado-core</artifactId>
+      <artifactId>avocado-core_2.10</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
@@ -165,7 +165,7 @@
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.avocado</groupId>
-      <artifactId>avocado-core</artifactId>
+      <artifactId>avocado-core_2.10</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
