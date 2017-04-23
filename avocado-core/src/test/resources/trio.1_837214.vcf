@@ -1,0 +1,67 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=HETINDELMAXAF,Description="Allelic fraction was above 0.750000 for a het INDEL.">
+##FILTER=<ID=HETINDELMINAF,Description="Allelic fraction was below 0.250000 for a het INDEL.">
+##FILTER=<ID=HETSNPMAXAF,Description="Allelic fraction was above 0.750000 for a het SNP.">
+##FILTER=<ID=HETSNPMINAF,Description="Allelic fraction was below 0.250000 for a het SNP.">
+##FILTER=<ID=HETSNPQD,Description="Quality by depth was below 2.000000 for a heterozygous SNP.">
+##FILTER=<ID=HOMINDELMINAF,Description="Allelic fraction was below 0.666000 for a hom INDEL.">
+##FILTER=<ID=HOMSNPMINAF,Description="Allelic fraction was below 0.666000 for a hom SNP.">
+##FILTER=<ID=HOMSNPQD,Description="Quality by depth was below 1.000000 for a homozygous SNP.">
+##FILTER=<ID=INDELMAXDP,Description="Read depth was above 200 for a INDEL.">
+##FILTER=<ID=INDELMINDP,Description="Read depth was below 10 for a INDEL.">
+##FILTER=<ID=SNPMAXDP,Description="Read depth was above 200 for a SNP.">
+##FILTER=<ID=SNPMINDP,Description="Read depth was below 10 for a SNP.">
+##FILTER=<ID=SNPMQ,Description="RMS mapping quality was below 30.000000 for a SNP.">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth (reads with MQ=255 or with bad mates are filtered)">
+##FORMAT=<ID=FS,Number=1,Type=Float,Description="Phred-scaled p-value using Fisher's exact test to detect strand bias">
+##FORMAT=<ID=FT,Number=.,Type=String,Description="Genotype-level filter">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=MIN_DP,Number=1,Type=Integer,Description="Minimum DP observed within the gVCF block">
+##FORMAT=<ID=MQ,Number=1,Type=Float,Description="Root mean square (RMS) mapping quality">
+##FORMAT=<ID=MQ0,Number=1,Type=Float,Description="Total number of reads with mapping quality=0">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Normalized, Phred-scaled likelihoods for genotypes as defined in the VCF specification">
+##FORMAT=<ID=PQ,Number=1,Type=Float,Description="Read-backed phasing quality">
+##FORMAT=<ID=PS,Number=1,Type=Integer,Description="Phase set ID">
+##FORMAT=<ID=SB,Number=4,Type=Integer,Description="Per-sample component statistics which comprise the Fisher's Exact Test to detect strand bias.">
+##INFO=<ID=1000G,Number=0,Type=Flag,Description="Membership in 1000 Genomes">
+##INFO=<ID=AA,Number=1,Type=String,Description="Ancestral allele">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count">
+##INFO=<ID=AD,Number=R,Type=Integer,Description="Total read depths for each allele">
+##INFO=<ID=ADF,Number=R,Type=Integer,Description="Read depths for each allele on the forward strand">
+##INFO=<ID=ADR,Number=R,Type=Integer,Description="Read depths for each allele on the reverse strand">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency for each allele">
+##INFO=<ID=ANN,Number=.,Type=String,Description="Functional annotations: 'Allele | Annotation | Annotation_Impact | Gene_Name | Gene_ID | Feature_Type | Feature_ID | Transcript_BioType | Rank | HGVS.c | HGVS.p | cDNA.pos / cDNA.length | CDS.pos / CDS.length | AA.pos / AA.length | Distance | ERRORS / WARNINGS / INFO'">
+##INFO=<ID=CIGAR,Number=A,Type=String,Description="Cigar string describing how to align alternate alleles to the reference allele">
+##INFO=<ID=DB,Number=0,Type=Flag,Description="Membership in dbSNP">
+##INFO=<ID=H2,Number=0,Type=Flag,Description="Membership in HapMap2">
+##INFO=<ID=H3,Number=0,Type=Flag,Description="Membership in HapMap3">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic event">
+##INFO=<ID=VALIDATED,Number=0,Type=Flag,Description="Validated by follow-up experiment">
+##contig=<ID=chr1,length=249250621>
+##contig=<ID=chr2,length=243199373>
+##contig=<ID=chr3,length=198022430>
+##contig=<ID=chr4,length=191154276>
+##contig=<ID=chr5,length=180915260>
+##contig=<ID=chr6,length=171115067>
+##contig=<ID=chr7,length=159138663>
+##contig=<ID=chr8,length=146364022>
+##contig=<ID=chr9,length=141213431>
+##contig=<ID=chr10,length=135534747>
+##contig=<ID=chr11,length=135006516>
+##contig=<ID=chr12,length=133851895>
+##contig=<ID=chr13,length=115169878>
+##contig=<ID=chr14,length=107349540>
+##contig=<ID=chr15,length=102531392>
+##contig=<ID=chr16,length=90354753>
+##contig=<ID=chr17,length=81195210>
+##contig=<ID=chr18,length=78077248>
+##contig=<ID=chr19,length=59128983>
+##contig=<ID=chr20,length=63025520>
+##contig=<ID=chr21,length=48129895>
+##contig=<ID=chr22,length=51304566>
+##contig=<ID=chrX,length=155270560>
+##contig=<ID=chrY,length=59373566>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	NA12891	NA12892	NA12878
+chr1	837214	.	G	C	.	.	.	GT:AD:DP:FS:FT:GQ:MQ:PL:SB	0/0:50,0:50:-0.0:HETSNPMINAF:99:60.0:0,256,0:25,25,0,0	1/0:26,27:53:6.689699:PASS:99:59.564617:0,256,0:13,13,13,14	1/0:16,20:36:6.0934744:PASS:99:59.357906:0,256,0:7,9,10,10
