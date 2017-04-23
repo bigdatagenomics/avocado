@@ -287,12 +287,12 @@
       </dependency>
       <dependency>
         <groupId>org.bdgenomics.avocado</groupId>
-        <artifactId>avocado-core</artifactId>
+        <artifactId>avocado-core_2.10</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>org.bdgenomics.avocado</groupId>
-        <artifactId>avocado-core</artifactId>
+        <artifactId>avocado-core_2.10</artifactId>
         <version>${project.version}</version>
         <type>test-jar</type>
         <scope>test</scope>
