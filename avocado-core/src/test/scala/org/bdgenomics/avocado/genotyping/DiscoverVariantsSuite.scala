@@ -164,7 +164,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     def testSnp(read: AlignmentRecord) {
       val variants = DiscoverVariants.variantsInRead(read, 0)
       assert(variants.size === 1)
-      validateSnp(variants.head)
+      validateSnp(variants.head.toVariant)
       val highQualVariants = DiscoverVariants.variantsInRead(read, 1)
       assert(highQualVariants.isEmpty)
     }
@@ -195,7 +195,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   test("find insertion in read") {
     val variants = DiscoverVariants.variantsInRead(insertRead, 0)
     assert(variants.size === 1)
-    validateInsertion(variants.head)
+    validateInsertion(variants.head.toVariant)
   }
 
   sparkTest("find insertion in reads") {
@@ -216,7 +216,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   test("find deletion in read") {
     val variants = DiscoverVariants.variantsInRead(deleteRead, 0)
     assert(variants.size === 1)
-    validateDeletion(variants.head)
+    validateDeletion(variants.head.toVariant)
   }
 
   sparkTest("find deletion in reads") {
@@ -249,19 +249,19 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   test("break TT->CA mnp into two snps") {
     val variants = DiscoverVariants.variantsInRead(mnpRead, 0)
     assert(variants.size === 2)
-    assert(variants.forall(_.getContigName == "3"))
-    assert(variants.forall(_.getReferenceAllele == "T"))
-    val optC = variants.find(_.getAlternateAllele == "C")
+    assert(variants.forall(_.contigName == "3"))
+    assert(variants.forall(_.referenceAllele == "T"))
+    val optC = variants.find(_.alternateAllele == "C")
     assert(optC.isDefined)
     optC.foreach(c => {
-      assert(c.getStart === 13L)
-      assert(c.getEnd === 14L)
+      assert(c.start === 13)
+      assert(c.end === 14)
     })
-    val optA = variants.find(_.getAlternateAllele == "A")
+    val optA = variants.find(_.alternateAllele == "A")
     assert(optA.isDefined)
     optA.foreach(a => {
-      assert(a.getStart === 14L)
-      assert(a.getEnd === 15L)
+      assert(a.start === 14)
+      assert(a.end === 15)
     })
   }
 }
