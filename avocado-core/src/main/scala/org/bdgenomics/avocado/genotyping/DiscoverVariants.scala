@@ -18,6 +18,7 @@
 package org.bdgenomics.avocado.genotyping
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLContext
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.adam.rdd.variant.VariantRDD
 import org.bdgenomics.avocado.Timers._
@@ -31,6 +32,24 @@ import org.bdgenomics.avocado.models.{
 import org.bdgenomics.formats.avro.{ AlignmentRecord, Variant }
 import org.bdgenomics.utils.misc.Logging
 import scala.annotation.tailrec
+
+private[genotyping] case class DiscoveredVariant(
+    contigName: String,
+    start: Int,
+    end: Int,
+    referenceAllele: String,
+    alternateAllele: String) {
+
+  def toVariant: Variant = {
+    Variant.newBuilder
+      .setContigName(contigName)
+      .setStart(start.toLong)
+      .setEnd(end.toLong)
+      .setReferenceAllele(referenceAllele)
+      .setAlternateAllele(alternateAllele)
+      .build
+  }
+}
 
 /**
  * Discovers the variants present in a set of aligned reads.
@@ -74,18 +93,30 @@ object DiscoverVariants extends Serializable with Logging {
     // if phred threshold is unset, set to 0
     val phredThreshold = optPhredThreshold.getOrElse(0)
 
-    rdd.flatMap(variantsInRead(_, phredThreshold))
-      .map(v => (v, 1))
-      .reduceByKey(_ + _)
-      .flatMap(kv => {
-        val (variant, count) = kv
+    val variantRdd = rdd.flatMap(variantsInRead(_, phredThreshold))
 
-        if (optMinObservations.fold(true)(mo => count > mo)) {
-          Some(variant)
-        } else {
-          None
-        }
-      })
+    // convert to dataframe
+    val sqlContext = SQLContext.getOrCreate(rdd.context)
+    import sqlContext.implicits._
+    val variantDs = sqlContext.createDataFrame(variantRdd)
+
+    // count by variant and remove
+    val uniqueVariants = optMinObservations.fold({
+      variantDs.distinct
+    })(mo => {
+      variantDs.groupBy(variantDs("contigName"),
+        variantDs("start"),
+        variantDs("end"),
+        variantDs("referenceAllele"),
+        variantDs("alternateAllele"))
+        .count()
+        .where($"count" >= mo)
+        .drop("count")
+    })
+
+    uniqueVariants.as[DiscoveredVariant]
+      .rdd
+      .map(_.toVariant)
   }
 
   /**
@@ -97,7 +128,7 @@ object DiscoverVariants extends Serializable with Logging {
    * @return Returns a collection containing all the variants in a read.
    */
   private[genotyping] def variantsInRead(read: AlignmentRecord,
-                                         phredThreshold: Int): Iterable[Variant] = {
+                                         phredThreshold: Int): Iterable[DiscoveredVariant] = {
 
     if (!read.getReadMapped) {
       Iterable.empty
@@ -114,7 +145,7 @@ object DiscoverVariants extends Serializable with Logging {
       }
 
       // where are we on the reference and in the read?
-      var pos = read.getStart
+      var pos = read.getStart.toInt
       var idx = 0
 
       // get the read sequence, contig, etc
@@ -161,9 +192,10 @@ object DiscoverVariants extends Serializable with Logging {
       val opsIter = fastForward(ops.toIterator.buffered)
 
       // emit variants
-      @tailrec def emitVariants(iter: Iterator[ObservationOperator],
-                                lastRef: String = "",
-                                variants: List[Variant] = List.empty): Iterable[Variant] = {
+      @tailrec def emitVariants(
+        iter: Iterator[ObservationOperator],
+        lastRef: String = "",
+        variants: List[DiscoveredVariant] = List.empty): Iterable[DiscoveredVariant] = {
 
         if (!iter.hasNext) {
           variants.toIterable
@@ -183,13 +215,12 @@ object DiscoverVariants extends Serializable with Logging {
               })(ref => {
                 val newVars = (0 until length).flatMap(i => {
                   if (qual(i).toInt - 33 >= phredThreshold) {
-                    Some(Variant.newBuilder
-                      .setContigName(contigName)
-                      .setStart(pos + i.toLong)
-                      .setEnd(pos + i.toLong + 1L)
-                      .setReferenceAllele(ref(i).toString)
-                      .setAlternateAllele(sequence(idx + i).toString)
-                      .build)
+                    Some(DiscoveredVariant(
+                      contigName,
+                      pos + i,
+                      pos + i + 1,
+                      ref(i).toString,
+                      sequence(idx + i).toString))
                   } else {
                     None
                   }
@@ -203,13 +234,12 @@ object DiscoverVariants extends Serializable with Logging {
             case Insertion(length) => {
               val insQuals = qual.substring(idx - 1, idx + length).map(_.toInt - 33).sum / length
               val newVar = if (insQuals >= phredThreshold) {
-                Variant.newBuilder
-                  .setContigName(contigName)
-                  .setStart(pos - 1L)
-                  .setEnd(pos)
-                  .setReferenceAllele(lastRef)
-                  .setAlternateAllele(sequence.substring(idx - 1, idx + length))
-                  .build :: variants
+                DiscoveredVariant(
+                  contigName,
+                  pos - 1,
+                  pos,
+                  lastRef,
+                  sequence.substring(idx - 1, idx + length)) :: variants
               } else {
                 variants
               }
@@ -219,13 +249,12 @@ object DiscoverVariants extends Serializable with Logging {
             case Deletion(ref) => {
               val delLength = ref.size
               val newVar = if (qual(idx - 1).toInt - 33 >= phredThreshold) {
-                Variant.newBuilder
-                  .setContigName(contigName)
-                  .setStart(pos - 1L)
-                  .setEnd(pos + delLength.toLong)
-                  .setReferenceAllele(lastRef + ref)
-                  .setAlternateAllele(sequence.substring(idx - 1, idx))
-                  .build :: variants
+                DiscoveredVariant(
+                  contigName,
+                  pos - 1,
+                  pos + delLength,
+                  lastRef + ref,
+                  sequence.substring(idx - 1, idx)) :: variants
               } else {
                 variants
               }
