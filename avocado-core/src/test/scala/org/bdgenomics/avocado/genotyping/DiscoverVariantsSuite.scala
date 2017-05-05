@@ -255,13 +255,11 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     assert(optC.isDefined)
     optC.foreach(c => {
       assert(c.start === 13)
-      assert(c.end === 14)
     })
     val optA = variants.find(_.alternateAllele == "A")
     assert(optA.isDefined)
     optA.foreach(a => {
       assert(a.start === 14)
-      assert(a.end === 15)
     })
   }
 }

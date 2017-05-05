@@ -31,7 +31,6 @@ private[genotyping] object DiscoveredVariant {
   def apply(variant: Variant): DiscoveredVariant = {
     new DiscoveredVariant(variant.getContigName,
       variant.getStart.toInt,
-      variant.getEnd.toInt,
       variant.getReferenceAllele,
       variant.getAlternateAllele)
   }
@@ -46,10 +45,9 @@ private[genotyping] object DiscoveredVariant {
  * @param referenceAllele The reference allele this variant varies from.
  * @param alternateAllele The substituted allele.
  */
-private[genotyping] case class DiscoveredVariant(
+case class DiscoveredVariant(
     contigName: String,
     start: Int,
-    end: Int,
     referenceAllele: String,
     alternateAllele: String) {
 
@@ -60,7 +58,7 @@ private[genotyping] case class DiscoveredVariant(
     Variant.newBuilder
       .setContigName(contigName)
       .setStart(start.toLong)
-      .setEnd(end.toLong)
+      .setEnd((start + referenceAllele.length).toLong)
       .setReferenceAllele(referenceAllele)
       .setAlternateAllele(alternateAllele)
       .build
