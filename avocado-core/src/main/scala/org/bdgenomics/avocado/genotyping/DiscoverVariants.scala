@@ -88,7 +88,6 @@ object DiscoverVariants extends Serializable with Logging {
     })(mo => {
       variantDs.groupBy(variantDs("contigName"),
         variantDs("start"),
-        variantDs("end"),
         variantDs("referenceAllele"),
         variantDs("alternateAllele"))
         .count()
@@ -200,7 +199,6 @@ object DiscoverVariants extends Serializable with Logging {
                     Some(DiscoveredVariant(
                       contigName,
                       pos + i,
-                      pos + i + 1,
                       ref(i).toString,
                       sequence(idx + i).toString))
                   } else {
@@ -219,7 +217,6 @@ object DiscoverVariants extends Serializable with Logging {
                 DiscoveredVariant(
                   contigName,
                   pos - 1,
-                  pos,
                   lastRef,
                   sequence.substring(idx - 1, idx + length)) :: variants
               } else {
@@ -234,7 +231,6 @@ object DiscoverVariants extends Serializable with Logging {
                 DiscoveredVariant(
                   contigName,
                   pos - 1,
-                  pos + delLength,
                   lastRef + ref,
                   sequence.substring(idx - 1, idx)) :: variants
               } else {

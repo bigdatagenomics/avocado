@@ -289,7 +289,6 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     val flatFields = Seq(
       observationsDf("_1.contigName").as("contigName"),
       observationsDf("_1.start").as("start"),
-      observationsDf("_1.end").as("end"),
       observationsDf("_1.referenceAllele").as("referenceAllele"),
       observationsDf("_1.alternateAllele").as("alternateAllele"),
       observationsDf("_2.alleleForwardStrand").as("alleleForwardStrand"),
@@ -324,7 +323,6 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         first("isRef").as("isRef"))
     val aggregatedObservationsDf = flatObservationsDf.groupBy("contigName",
       "start",
-      "end",
       "referenceAllele",
       "alternateAllele")
       .agg(aggCols.head, aggCols.tail: _*)
@@ -332,7 +330,6 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     // re-nest the output
     val firstField = struct(aggregatedObservationsDf("contigName"),
       aggregatedObservationsDf("start"),
-      aggregatedObservationsDf("end"),
       aggregatedObservationsDf("referenceAllele"),
       aggregatedObservationsDf("alternateAllele"))
     val secondFields = Seq(
