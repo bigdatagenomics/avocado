@@ -20,6 +20,9 @@ package org.bdgenomics.avocado.genotyping
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.MetricsContext._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.types.IntegerType
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.GenomeBins
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
@@ -167,7 +170,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    */
   private[genotyping] def readToObservations(
     readAndVariants: (AlignmentRecord, Iterable[Variant]),
-    copyNumber: Int): Iterable[(Variant, Observation)] = ObserveRead.time {
+    copyNumber: Int): Iterable[(DiscoveredVariant, Observation)] = ObserveRead.time {
 
     // unpack tuple
     val (read, variants) = readAndVariants
@@ -212,23 +215,24 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
               val (_, allele, obs) = observed.head
               if (observed.count(_._2.nonEmpty) == 1 &&
                 allele == variant.getAlternateAllele) {
-                Some((variant, obs.duplicate(Some(false))))
+                Some((DiscoveredVariant(variant), obs.duplicate(Some(false))))
               } else if (!obs.isRef ||
                 observed.size != variant.getReferenceAllele.length) {
-                Some((variant, obs.nullOut))
+                Some((DiscoveredVariant(variant), obs.nullOut))
               } else {
-                Some((variant, obs.invert))
+                Some((DiscoveredVariant(variant), obs.invert))
               }
             } else if (isInsertion(variant)) {
               val insAllele = variant.getAlternateAllele.tail
               val insObserved = observed.filter(_._2 == insAllele)
               if (observed.size == 2 &&
                 insObserved.size == 1) {
-                Some((variant, insObserved.head._3.duplicate(Some(false))))
+                Some((DiscoveredVariant(variant),
+                  insObserved.head._3.duplicate(Some(false))))
               } else if (observed.forall(_._3.isRef)) {
-                Some((variant, observed.head._3.invert))
+                Some((DiscoveredVariant(variant), observed.head._3.invert))
               } else {
-                Some((variant, observed.head._3.nullOut))
+                Some((DiscoveredVariant(variant), observed.head._3.nullOut))
               }
             } else {
               None
@@ -274,8 +278,101 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     rdd: RDD[(AlignmentRecord, Iterable[Variant])],
     ploidy: Int): RDD[(Variant, Observation)] = ObserveReads.time {
 
-    rdd.flatMap(readToObservations(_, ploidy))
-      .reduceByKey(_.merge(_))
+    val observations = rdd.flatMap(readToObservations(_, ploidy))
+
+    // convert to dataframe
+    val sqlContext = SQLContext.getOrCreate(rdd.context)
+    import sqlContext.implicits._
+    val observationsDf = sqlContext.createDataFrame(observations)
+
+    // flatten schema
+    val flatFields = Seq(
+      observationsDf("_1.contigName").as("contigName"),
+      observationsDf("_1.start").as("start"),
+      observationsDf("_1.end").as("end"),
+      observationsDf("_1.referenceAllele").as("referenceAllele"),
+      observationsDf("_1.alternateAllele").as("alternateAllele"),
+      observationsDf("_2.alleleForwardStrand").as("alleleForwardStrand"),
+      observationsDf("_2.otherForwardStrand").as("otherForwardStrand"),
+      observationsDf("_2.squareMapQ").as("squareMapQ")) ++ (0 to ploidy).map(i => {
+        observationsDf("_2.alleleLogLikelihoods").getItem(i)
+          .as("alleleLogLikelihoods%d".format(i))
+      }).toSeq ++ (0 to ploidy).map(i => {
+        observationsDf("_2.otherLogLikelihoods").getItem(i)
+          .as("otherLogLikelihoods%d".format(i))
+      }).toSeq ++ Seq(
+        observationsDf("_2.alleleCoverage").as("alleleCoverage"),
+        observationsDf("_2.otherCoverage").as("otherCoverage"),
+        observationsDf("_2.totalCoverage").as("totalCoverage"),
+        observationsDf("_2.isRef").as("isRef"))
+    val flatObservationsDf = observationsDf.select(flatFields: _*)
+
+    // run aggregation
+    val aggCols = Seq(
+      sum("alleleForwardStrand").as("alleleForwardStrand"),
+      sum("otherForwardStrand").as("otherForwardStrand"),
+      sum("squareMapQ").as("squareMapQ")) ++ (0 to ploidy).map(i => {
+        val field = "alleleLogLikelihoods%d".format(i)
+        sum(field).as(field)
+      }).toSeq ++ (0 to ploidy).map(i => {
+        val field = "otherLogLikelihoods%d".format(i)
+        sum(field).as(field)
+      }).toSeq ++ Seq(
+        sum("alleleCoverage").as("alleleCoverage"),
+        sum("otherCoverage").as("otherCoverage"),
+        sum("totalCoverage").as("totalCoverage"),
+        first("isRef").as("isRef"))
+    val aggregatedObservationsDf = flatObservationsDf.groupBy("contigName",
+      "start",
+      "end",
+      "referenceAllele",
+      "alternateAllele")
+      .agg(aggCols.head, aggCols.tail: _*)
+
+    // re-nest the output
+    val firstField = struct(aggregatedObservationsDf("contigName"),
+      aggregatedObservationsDf("start"),
+      aggregatedObservationsDf("end"),
+      aggregatedObservationsDf("referenceAllele"),
+      aggregatedObservationsDf("alternateAllele"))
+    val secondFields = Seq(
+      aggregatedObservationsDf("alleleForwardStrand")
+        .cast(IntegerType)
+        .as("alleleForwardStrand"),
+      aggregatedObservationsDf("otherForwardStrand")
+        .cast(IntegerType)
+        .as("otherForwardStrand"),
+      aggregatedObservationsDf("squareMapQ"), {
+        val fields = (0 to ploidy).map(i => {
+          aggregatedObservationsDf("alleleLogLikelihoods%d".format(i))
+        })
+        array(fields: _*).as("alleleLogLikelihoods")
+      }, {
+        val fields = (0 to ploidy).map(i => {
+          aggregatedObservationsDf("otherLogLikelihoods%d".format(i))
+        })
+        array(fields: _*).as("otherLogLikelihoods")
+      },
+      aggregatedObservationsDf("alleleCoverage")
+        .cast(IntegerType)
+        .as("alleleCoverage"),
+      aggregatedObservationsDf("otherCoverage")
+        .cast(IntegerType)
+        .as("otherCoverage"),
+      aggregatedObservationsDf("totalCoverage")
+        .cast(IntegerType)
+        .as("totalCoverage"),
+      aggregatedObservationsDf("isRef"))
+    val aggregatedNestedDf = aggregatedObservationsDf.select(firstField,
+      struct(secondFields: _*))
+
+    // convert to a dataset, and finally an rdd
+    aggregatedNestedDf.as[(DiscoveredVariant, Observation)]
+      .rdd
+      .map(p => {
+        val (v, obs) = p
+        (v.toVariant, obs)
+      })
   }
 
   /**

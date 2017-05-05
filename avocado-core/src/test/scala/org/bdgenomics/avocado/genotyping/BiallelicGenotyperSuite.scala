@@ -108,7 +108,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(scores.size === 1)
 
     val (snpVariant, snpObservation) = scores.head
-    assert(snpVariant === snp)
+    assert(snpVariant.toVariant === snp)
     assert(snpObservation.squareMapQ === 50 * 50)
     assert(snpObservation.alleleCoverage === 0)
     assert(snpObservation.otherCoverage === 1)
@@ -126,7 +126,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(scores.size === 1)
 
     val (snpVariant, snpObservation) = scores.head
-    assert(snpVariant === snp)
+    assert(snpVariant.toVariant === snp)
     assert(snpObservation.squareMapQ === 40 * 40)
     assert(snpObservation.alleleCoverage === 1)
     assert(snpObservation.otherCoverage === 0)
