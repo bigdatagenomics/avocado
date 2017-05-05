@@ -33,24 +33,6 @@ import org.bdgenomics.formats.avro.{ AlignmentRecord, Variant }
 import org.bdgenomics.utils.misc.Logging
 import scala.annotation.tailrec
 
-private[genotyping] case class DiscoveredVariant(
-    contigName: String,
-    start: Int,
-    end: Int,
-    referenceAllele: String,
-    alternateAllele: String) {
-
-  def toVariant: Variant = {
-    Variant.newBuilder
-      .setContigName(contigName)
-      .setStart(start.toLong)
-      .setEnd(end.toLong)
-      .setReferenceAllele(referenceAllele)
-      .setAlternateAllele(alternateAllele)
-      .build
-  }
-}
-
 /**
  * Discovers the variants present in a set of aligned reads.
  *
@@ -110,7 +92,7 @@ object DiscoverVariants extends Serializable with Logging {
         variantDs("referenceAllele"),
         variantDs("alternateAllele"))
         .count()
-        .where($"count" >= mo)
+        .where($"count" > mo)
         .drop("count")
     })
 
