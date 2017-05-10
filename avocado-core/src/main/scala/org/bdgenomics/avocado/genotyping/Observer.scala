@@ -37,21 +37,6 @@ import scala.math.log
 private[genotyping] object Observer extends Serializable {
 
   /**
-   * Transforms an RDD of reads into an RDD of per allele/per sample likelihoods.
-   *
-   * @param rdd RDD of reads to generate likelihoods from.
-   * @param ploidy Sample ploidy to assume.
-   * @return Returns an RDD of Observations, keyed by the (site, allele, and
-   *   sample ID) that was observed.
-   */
-  def observe(rdd: RDD[AlignmentRecord],
-              ploidy: Int): RDD[((ReferenceRegion, String, String), Observation)] = {
-    rdd.filter(_.getReadMapped)
-      .flatMap(observeRead(_, ploidy))
-      .reduceByKey(_.merge(_))
-  }
-
-  /**
    * From a single read, emits likelihood observations.
    *
    * Emits a likelihood for each allele seen in this read.
@@ -62,7 +47,7 @@ private[genotyping] object Observer extends Serializable {
    *   allele, sample ID).
    */
   def observeRead(read: AlignmentRecord,
-                  ploidy: Int): Iterable[((ReferenceRegion, String, String), Observation)] = {
+                  ploidy: Int): Iterable[((ReferenceRegion, String, String), SummarizedObservation)] = {
 
     // extract cigar
     val alignment = ObservationOperator.extractAlignmentOperators(read)
@@ -72,15 +57,9 @@ private[genotyping] object Observer extends Serializable {
     val sampleId = read.getRecordGroupSample
     val contigName = read.getContigName
     val mapQ = read.getMapq
-    val squareMapQ = mapQ * mapQ
-    val mapSuccessProb = PhredUtils.phredToSuccessProbability(mapQ)
     val readSequence = read.getSequence
     val readQualities = read.getQual
-    val forwardStrand = if (read.getReadNegativeStrand) {
-      0
-    } else {
-      1
-    }
+    val forwardStrand = !read.getReadNegativeStrand
 
     // map over the alignment operators and generate allelic observations
     var readIdx = 0
@@ -100,25 +79,15 @@ private[genotyping] object Observer extends Serializable {
             readSequence(readIdx).toString,
             sampleId)
 
-          // compute likelihoods
-          val (alleleLogLikelihoods,
-            otherLogLikelihoods) = likelihoods(ploidy,
-            mapSuccessProb,
-            Some(readQualities(readIdx).toInt - 33))
+          // build the observation
+          val obs = SummarizedObservation(optRef.isEmpty,
+            forwardStrand,
+            Some(readQualities(readIdx).toInt - 33),
+            mapQ)
 
           // increment the indices
           readIdx += 1
           pos += 1
-
-          // build the observation
-          val obs = Observation(forwardStrand,
-            0,
-            squareMapQ,
-            alleleLogLikelihoods,
-            otherLogLikelihoods,
-            1,
-            0,
-            isRef = optRef.isEmpty)
 
           (key, obs)
         })
@@ -141,21 +110,11 @@ private[genotyping] object Observer extends Serializable {
           bases,
           sampleId)
 
-        // compute likelihoods
-        val (alleleLogLikelihoods,
-          otherLogLikelihoods) = likelihoods(ploidy,
-          mapSuccessProb,
-          Some(qual))
-
         // build the observation
-        val obs = Observation(forwardStrand,
-          0,
-          squareMapQ,
-          alleleLogLikelihoods,
-          otherLogLikelihoods,
-          1,
-          0,
-          isRef = false)
+        val obs = SummarizedObservation(false,
+          forwardStrand,
+          Some(qual),
+          mapQ)
 
         Iterable((key, obs))
       }
@@ -171,21 +130,11 @@ private[genotyping] object Observer extends Serializable {
           "",
           sampleId)
 
-        // compute likelihoods, no base quality
-        val (alleleLogLikelihoods,
-          otherLogLikelihoods) = likelihoods(ploidy,
-          mapSuccessProb,
-          None)
-
         // build the observation
-        val obs = Observation(forwardStrand,
-          0,
-          squareMapQ,
-          alleleLogLikelihoods,
-          otherLogLikelihoods,
-          1,
-          0,
-          isRef = false)
+        val obs = SummarizedObservation(false,
+          forwardStrand,
+          None,
+          mapQ)
 
         Iterable((key, obs))
       }
@@ -201,9 +150,9 @@ private[genotyping] object Observer extends Serializable {
    * @param baseQuality The optional base quality (in Phred) for this site.
    * @return Returns a tuple of the (allele, non-allele) likelihoods.
    */
-  private def likelihoods(copyNumber: Int,
-                          mapSuccessProb: Double,
-                          baseQuality: Option[Int]): (Array[Double], Array[Double]) = {
+  private[genotyping] def likelihoods(copyNumber: Int,
+                                      mapSuccessProb: Double,
+                                      baseQuality: Option[Int]): (Array[Double], Array[Double]) = {
 
     // build allele/other likelihood arrays
     val alleleArray = new Array[Double](copyNumber + 1)

@@ -170,7 +170,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    */
   private[genotyping] def readToObservations(
     readAndVariants: (AlignmentRecord, Iterable[Variant]),
-    copyNumber: Int): Iterable[(DiscoveredVariant, Observation)] = ObserveRead.time {
+    copyNumber: Int): Iterable[(DiscoveredVariant, SummarizedObservation)] = ObserveRead.time {
 
     // unpack tuple
     val (read, variants) = readAndVariants
@@ -208,34 +208,35 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
             // - if insertion, look for observation matching insert tail
             //
             // FIXME: if we don't see the variant, take the first thing and invert it
-
             if (observed.isEmpty) {
               None
-            } else if (isSnp(variant) || isDeletion(variant)) {
-              val (_, allele, obs) = observed.head
-              if (observed.count(_._2.nonEmpty) == 1 &&
-                allele == variant.getAlternateAllele) {
-                Some((DiscoveredVariant(variant), obs.duplicate(Some(false))))
-              } else if (!obs.isRef ||
-                observed.size != variant.getReferenceAllele.length) {
-                Some((DiscoveredVariant(variant), obs.nullOut))
-              } else {
-                Some((DiscoveredVariant(variant), obs.invert))
-              }
             } else if (isInsertion(variant)) {
               val insAllele = variant.getAlternateAllele.tail
               val insObserved = observed.filter(_._2 == insAllele)
               if (observed.size == 2 &&
                 insObserved.size == 1) {
                 Some((DiscoveredVariant(variant),
-                  insObserved.head._3.duplicate(Some(false))))
+                  insObserved.head._3))
               } else if (observed.forall(_._3.isRef)) {
-                Some((DiscoveredVariant(variant), observed.head._3.invert))
+                Some((DiscoveredVariant(variant), observed.head._3.asRef))
               } else {
                 Some((DiscoveredVariant(variant), observed.head._3.nullOut))
               }
             } else {
-              None
+              val (_, allele, obs) = observed.head
+              if (observed.count(_._2.nonEmpty) == 1 &&
+                allele == variant.getAlternateAllele) {
+                if (isDeletion(variant)) {
+                  Some((DiscoveredVariant(variant), obs.asAlt))
+                } else {
+                  Some((DiscoveredVariant(variant), obs))
+                }
+              } else if (!obs.isRef ||
+                observed.size != variant.getReferenceAllele.length) {
+                Some((DiscoveredVariant(variant), obs.nullOut))
+              } else {
+                Some((DiscoveredVariant(variant), obs.asRef))
+              }
             }
           })
 
@@ -291,20 +292,24 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       observationsDf("_1.start").as("start"),
       observationsDf("_1.referenceAllele").as("referenceAllele"),
       observationsDf("_1.alternateAllele").as("alternateAllele"),
-      observationsDf("_2.alleleForwardStrand").as("alleleForwardStrand"),
-      observationsDf("_2.otherForwardStrand").as("otherForwardStrand"),
-      observationsDf("_2.squareMapQ").as("squareMapQ")) ++ (0 to ploidy).map(i => {
-        observationsDf("_2.alleleLogLikelihoods").getItem(i)
-          .as("alleleLogLikelihoods%d".format(i))
-      }).toSeq ++ (0 to ploidy).map(i => {
-        observationsDf("_2.otherLogLikelihoods").getItem(i)
-          .as("otherLogLikelihoods%d".format(i))
-      }).toSeq ++ Seq(
-        observationsDf("_2.alleleCoverage").as("alleleCoverage"),
-        observationsDf("_2.otherCoverage").as("otherCoverage"),
-        observationsDf("_2.totalCoverage").as("totalCoverage"),
-        observationsDf("_2.isRef").as("isRef"))
+      observationsDf("_2.isRef").as("isRef"),
+      observationsDf("_2.forwardStrand").as("forwardStrand"),
+      observationsDf("_2.optQuality").as("optQuality"),
+      observationsDf("_2.mapQ").as("mapQ"),
+      observationsDf("_2.isOther").as("isOther"))
     val flatObservationsDf = observationsDf.select(flatFields: _*)
+
+    // create scored table and prepare for join
+    val scoredDf = broadcast(ScoredObservation.createFlattenedScores(
+      rdd.context, 93, 93, ploidy))
+
+    // run the join
+    val joinedObservationsDf = scoredDf.join(flatObservationsDf,
+      Seq("isRef",
+        "isOther",
+        "forwardStrand",
+        "optQuality",
+        "mapQ"))
 
     // run aggregation
     val aggCols = Seq(
@@ -321,7 +326,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         sum("otherCoverage").as("otherCoverage"),
         sum("totalCoverage").as("totalCoverage"),
         first("isRef").as("isRef"))
-    val aggregatedObservationsDf = flatObservationsDf.groupBy("contigName",
+    val aggregatedObservationsDf = joinedObservationsDf.groupBy("contigName",
       "start",
       "referenceAllele",
       "alternateAllele")

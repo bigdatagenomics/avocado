@@ -36,6 +36,9 @@ import scala.math.log
 class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
   val os = new ObserverSuite()
+  lazy val summaryObservations = ScoredObservation.createScores(sc, 90, 90, 2)
+    .collect()
+    .toSeq
 
   val perfectRead = AlignmentRecord.newBuilder
     .setContigName("1")
@@ -102,12 +105,13 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(snpScores.isEmpty)
   }
 
-  test("score snp in a read with no evidence of the snp") {
+  sparkTest("score snp in a read with no evidence of the snp") {
     val scores = BiallelicGenotyper.readToObservations(
       (perfectRead, Iterable(snp)), 2)
     assert(scores.size === 1)
 
-    val (snpVariant, snpObservation) = scores.head
+    val (snpVariant, snpSumObservation) = scores.head
+    val snpObservation = snpSumObservation.toObservation(summaryObservations)
     assert(snpVariant.toVariant === snp)
     assert(snpObservation.squareMapQ === 50 * 50)
     assert(snpObservation.alleleCoverage === 0)
@@ -120,12 +124,13 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(MathUtils.fpEquals(snpObservation.otherLogLikelihoods(2), os.logL(2, 2, 0.9999, 0.99999)))
   }
 
-  test("score snp in a read with evidence of the snp") {
+  sparkTest("score snp in a read with evidence of the snp") {
     val scores = BiallelicGenotyper.readToObservations(
       (snpRead, Iterable(snp)), 2)
     assert(scores.size === 1)
 
-    val (snpVariant, snpObservation) = scores.head
+    val (snpVariant, snpSumObservation) = scores.head
+    val snpObservation = snpSumObservation.toObservation(summaryObservations)
     assert(snpVariant.toVariant === snp)
     assert(snpObservation.squareMapQ === 40 * 40)
     assert(snpObservation.alleleCoverage === 1)
