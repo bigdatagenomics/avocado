@@ -16,10 +16,14 @@ genome-wide estimate of the reference allele frequency (0.999 in humans).
 
 The likelihood function used is:
 
+Using latex：   
 $$
 \mathcal{L}(g) = \frac{1}{m^{l + j}} \prod_{i = 1}^l (g * \epsilon_i + (m - g) * (1 - \epsilon_i))
 \prod_{i = l + 1}^{l + j}(g * (1 - \epsilon_i) + (m - g) * \epsilon_i)
 $$
+
+Using picture：   
+![](http://i.imgur.com/IMASqCQ.png)
 
 Where the variables are defined as follows:
 
@@ -35,10 +39,14 @@ $1 - \sqrt{\text{mapQ} * \text{baseQ}}$
 The EM algorithm that we use estimates the site-specific MAF ($\psi$) from the per-sample
 genotype likelihoods at a site. In each iteration $i$, we evaluate:
 
+Using latex：   
 $$
 \psi^{(i)} = \frac{1}{M} \sum_{s = 1}^{n} \frac{\sum_{g = 0}^{m_s} g P_s(g | \psi)
 }{\sum_{g = 0}^{m_s} P_s(g | \psi)}
-$$
+$$   
+
+Using picture：   
+![](http://i.imgur.com/K3JUjNp.png)
 
 Where:
 
