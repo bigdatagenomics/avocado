@@ -154,7 +154,7 @@ options:
 
 * `ploidy`: The ploidy assumed at each site. Default value is 2.
 * `useEM`: Whether or not to use an EM algorithm to find the MAF. Default is false.
-* `emitGVCF`: Whether or not to emit confident reference genotype calls.
+* `emitGVCF`: Whether or not to emit confident reference genotype calls. Default is true.
 * `referenceFrequency`: The global expected frequency of reference alleles. If the EM algorithm
 is used, this value is used to seed the EM loop. If the EM algorithm is disabled, this value is
 used as the MAF in the prior distribution at each site.
