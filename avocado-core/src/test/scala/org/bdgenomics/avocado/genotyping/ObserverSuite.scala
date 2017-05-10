@@ -25,6 +25,10 @@ import scala.math.{ log, pow, sqrt }
 
 class ObserverSuite extends AvocadoFunSuite {
 
+  lazy val summaryObservations = ScoredObservation.createScores(sc, 90, 90, 2)
+    .collect()
+    .toSeq
+
   test("a fully clipped read will not generate any observations") {
     val read = AlignmentRecord.newBuilder
       .setStart(10L)
@@ -60,7 +64,7 @@ class ObserverSuite extends AvocadoFunSuite {
     log(eps(m - g, mapP, baseP) + invEps(g, mapP, baseP))
   }
 
-  test("generate observations for a sequence match under diploid model") {
+  sparkTest("generate observations for a sequence match under diploid model") {
     val read = AlignmentRecord.newBuilder
       .setStart(10L)
       .setEnd(15L)
@@ -79,12 +83,13 @@ class ObserverSuite extends AvocadoFunSuite {
 
     val obs = Observer.observeRead(read, 2)
       .toSeq
+      .map(p => (p._1, p._2.toObservation(summaryObservations)))
 
     assert(obs.size === 4)
-    assert(obs.forall(_._2.alleleCoverage == 1))
-    assert(obs.forall(_._2.otherCoverage == 0))
-    assert(obs.forall(_._2.alleleForwardStrand == 1))
-    assert(obs.forall(_._2.otherForwardStrand == 0))
+    assert(obs.forall(_._2.alleleCoverage == 0))
+    assert(obs.forall(_._2.otherCoverage == 1))
+    assert(obs.forall(_._2.alleleForwardStrand == 0))
+    assert(obs.forall(_._2.otherForwardStrand == 1))
     assert(obs.forall(_._2.alleleLogLikelihoods.size == 3))
     assert(obs.forall(_._2.otherLogLikelihoods.size == 3))
     assert(obs.forall(o => {
@@ -99,9 +104,9 @@ class ObserverSuite extends AvocadoFunSuite {
     })
     (0 until 4).zip(Array(0.99, 0.999, 0.9999, 0.99999)).foreach(p => {
       val (idx, baseQ) = p
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(0, 2, baseQ, 0.99999)))
+      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(2, 2, baseQ, 0.99999)))
       assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(1), logL(1, 2, baseQ, 0.99999)))
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(2, 2, baseQ, 0.99999)))
+      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(0, 2, baseQ, 0.99999)))
     })
   }
 
@@ -124,12 +129,17 @@ class ObserverSuite extends AvocadoFunSuite {
 
     val obs = Observer.observeRead(read, 2)
       .toSeq
+      .map(p => (p._1, p._2.toObservation(summaryObservations)))
 
     assert(obs.size === 3)
-    assert(obs.forall(_._2.alleleCoverage == 1))
-    assert(obs.forall(_._2.otherCoverage == 0))
-    assert(obs.forall(_._2.alleleForwardStrand == 1))
-    assert(obs.forall(_._2.otherForwardStrand == 0))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.alleleCoverage == 1))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.alleleCoverage == 0))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.otherCoverage == 0))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.otherCoverage == 1))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.alleleForwardStrand == 1))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.alleleForwardStrand == 0))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.otherForwardStrand == 0))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.otherForwardStrand == 1))
     assert(obs.forall(_._2.alleleLogLikelihoods.size == 3))
     assert(obs.forall(_._2.otherLogLikelihoods.size == 3))
     assert(obs.count(_._2.isRef) === 2)
@@ -146,9 +156,15 @@ class ObserverSuite extends AvocadoFunSuite {
     assert(obs(1)._1._2 === "CG")
     (0 until 3).zip(Array(0.99, 1.0 - sqrt(0.001 * 0.0001), 0.99999)).foreach(p => {
       val (idx, baseQ) = p
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(0, 2, baseQ, 0.99999)))
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(1), logL(1, 2, baseQ, 0.99999)))
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(2, 2, baseQ, 0.99999)))
+      if (obs(idx)._1._2.size != 1) {
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(0, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(1), logL(1, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(2, 2, baseQ, 0.99999)))
+      } else {
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(0, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(1), logL(1, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(2, 2, baseQ, 0.99999)))
+      }
     })
   }
 
@@ -171,12 +187,17 @@ class ObserverSuite extends AvocadoFunSuite {
 
     val obs = Observer.observeRead(read, 2)
       .toSeq
+      .map(p => (p._1, p._2.toObservation(summaryObservations)))
 
     assert(obs.size === 5)
-    assert(obs.forall(_._2.alleleCoverage == 1))
-    assert(obs.forall(_._2.otherCoverage == 0))
-    assert(obs.forall(_._2.alleleForwardStrand == 1))
-    assert(obs.forall(_._2.otherForwardStrand == 0))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.alleleCoverage == 1))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.alleleCoverage == 0))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.otherCoverage == 0))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.otherCoverage == 1))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.alleleForwardStrand == 1))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.alleleForwardStrand == 0))
+    assert(obs.filter(p => p._1._2.length != 1).forall(_._2.otherForwardStrand == 0))
+    assert(obs.filter(p => p._1._2.length == 1).forall(_._2.otherForwardStrand == 1))
     assert(obs.forall(_._2.alleleLogLikelihoods.size == 3))
     assert(obs.forall(_._2.otherLogLikelihoods.size == 3))
     assert(obs.count(_._2.isRef) === 4)
@@ -193,190 +214,15 @@ class ObserverSuite extends AvocadoFunSuite {
     assert(obs(2)._1._2.isEmpty)
     (0 until 5).zip(Array(0.99, 0.999, 1.0, 0.9999, 0.99999)).foreach(p => {
       val (idx, baseQ) = p
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(0, 2, baseQ, 0.99999)))
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(1), logL(1, 2, baseQ, 0.99999)))
-      assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(2, 2, baseQ, 0.99999)))
-    })
-  }
-
-  sparkTest("unmapped reads generate no observations") {
-    val reads = (0 until 100).map(i => {
-      AlignmentRecord.newBuilder
-        .setReadName(i.toString)
-        .setReadMapped(false)
-        .build()
-    })
-
-    val obsRdd = Observer.observe(sc.parallelize(reads), 2)
-    assert(obsRdd.count === 0)
-  }
-
-  sparkTest("generate reads covering a sequence match") {
-    val reads = Seq(AlignmentRecord.newBuilder
-      .setRecordGroupSample("sample")
-      .setStart(10L)
-      .setEnd(18L)
-      .setContigName("ctg")
-      .setSequence("ACGTACGT")
-      .setQual((20 + 33).toChar.toString * 8)
-      .setReadMapped(true)
-      .setReadNegativeStrand(false)
-      .setCigar("8M")
-      .setMismatchingPositions("8")
-      .setMapq(40)
-      .build(), AlignmentRecord.newBuilder
-      .setRecordGroupSample("sample")
-      .setStart(11L)
-      .setEnd(19L)
-      .setContigName("ctg")
-      .setSequence("CGTACGTA")
-      .setQual((30 + 33).toChar.toString * 8)
-      .setReadMapped(true)
-      .setReadNegativeStrand(true)
-      .setCigar("8M")
-      .setMismatchingPositions("8")
-      .setMapq(50)
-      .build(), AlignmentRecord.newBuilder
-      .setRecordGroupSample("sample")
-      .setStart(12L)
-      .setEnd(20L)
-      .setContigName("ctg")
-      .setSequence("GTACGTAC")
-      .setQual((40 + 33).toChar.toString * 8)
-      .setReadMapped(true)
-      .setReadNegativeStrand(false)
-      .setCigar("8M")
-      .setMismatchingPositions("8")
-      .setMapq(60)
-      .build())
-
-    val r0l0 = logL(0, 2, 0.99, 0.9999)
-    val r0l1 = logL(1, 2, 0.99, 0.9999)
-    val r0l2 = logL(2, 2, 0.99, 0.9999)
-    val r1l0 = logL(0, 2, 0.999, 0.99999)
-    val r1l1 = logL(1, 2, 0.999, 0.99999)
-    val r1l2 = logL(2, 2, 0.999, 0.99999)
-    val r2l0 = logL(0, 2, 0.9999, 0.999999)
-    val r2l1 = logL(1, 2, 0.9999, 0.999999)
-    val r2l2 = logL(2, 2, 0.9999, 0.999999)
-
-    val obsRdd = Observer.observe(sc.parallelize(reads), 2)
-      .collect
-    assert(obsRdd.length === 10)
-
-    val tripleBases = obsRdd.filter(o => {
-      val rr = o._1._1
-      rr.start >= 12L && rr.end <= 18L
-    })
-    assert(tripleBases.length === 6)
-    tripleBases.foreach(o => {
-      val ((rr, allele, sample), obs) = o
-      assert(rr.referenceName === "ctg")
-      assert(sample === "sample")
-      assert(allele.length === 1)
-      assert(rr.length === 1)
-      assert(obs.squareMapQ === 40 * 40 + 50 * 50 + 60 * 60)
-      assert(obs.alleleCoverage === 3)
-      assert(obs.otherCoverage === 0)
-      assert(obs.alleleForwardStrand === 2)
-      assert(obs.otherForwardStrand === 0)
-      assert(obs.alleleLogLikelihoods.length === 3)
-      assert(obs.isRef)
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(0), r0l0 + r1l0 + r2l0))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(1), r0l1 + r1l1 + r2l1))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(2), r0l2 + r1l2 + r2l2))
-    })
-
-    val only1Bases = obsRdd.filter(o => {
-      val rr = o._1._1
-      rr.start == 10L && rr.end == 11L
-    })
-    assert(only1Bases.size === 1)
-    only1Bases.foreach(o => {
-      val ((rr, allele, sample), obs) = o
-      assert(rr.referenceName === "ctg")
-      assert(sample === "sample")
-      assert(allele.length === 1)
-      assert(rr.length === 1)
-      assert(obs.isRef)
-      assert(obs.squareMapQ === 40 * 40)
-      assert(obs.alleleCoverage === 1)
-      assert(obs.otherCoverage === 0)
-      assert(obs.alleleForwardStrand === 1)
-      assert(obs.otherForwardStrand === 0)
-      assert(obs.alleleLogLikelihoods.length === 3)
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(0), r0l0))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(1), r0l1))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(2), r0l2))
-    })
-
-    val both12Bases = obsRdd.filter(o => {
-      val rr = o._1._1
-      rr.start == 11L && rr.end == 12L
-    })
-    assert(both12Bases.size === 1)
-    both12Bases.foreach(o => {
-      val ((rr, allele, sample), obs) = o
-      assert(rr.referenceName === "ctg")
-      assert(sample === "sample")
-      assert(allele.length === 1)
-      assert(rr.length === 1)
-      assert(obs.isRef)
-      assert(obs.squareMapQ === 40 * 40 + 50 * 50)
-      assert(obs.alleleCoverage === 2)
-      assert(obs.otherCoverage === 0)
-      assert(obs.alleleForwardStrand === 1)
-      assert(obs.otherForwardStrand === 0)
-      assert(obs.alleleLogLikelihoods.length === 3)
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(0), r0l0 + r1l0))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(1), r0l1 + r1l1))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(2), r0l2 + r1l2))
-    })
-
-    val both23Bases = obsRdd.filter(o => {
-      val rr = o._1._1
-      rr.start == 18L && rr.end == 19L
-    })
-    assert(both23Bases.size === 1)
-    both23Bases.foreach(o => {
-      val ((rr, allele, sample), obs) = o
-      assert(rr.referenceName === "ctg")
-      assert(sample === "sample")
-      assert(allele.length === 1)
-      assert(rr.length === 1)
-      assert(obs.isRef)
-      assert(obs.squareMapQ === 50 * 50 + 60 * 60)
-      assert(obs.alleleCoverage === 2)
-      assert(obs.otherCoverage === 0)
-      assert(obs.alleleForwardStrand === 1)
-      assert(obs.otherForwardStrand === 0)
-      assert(obs.alleleLogLikelihoods.length === 3)
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(0), r2l0 + r1l0))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(1), r2l1 + r1l1))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(2), r2l2 + r1l2))
-    })
-
-    val only3Bases = obsRdd.filter(o => {
-      val rr = o._1._1
-      rr.start == 19L && rr.end == 20L
-    })
-    assert(only3Bases.size === 1)
-    only3Bases.foreach(o => {
-      val ((rr, allele, sample), obs) = o
-      assert(rr.referenceName === "ctg")
-      assert(sample === "sample")
-      assert(allele.length === 1)
-      assert(rr.length === 1)
-      assert(obs.isRef)
-      assert(obs.squareMapQ === 60 * 60)
-      assert(obs.alleleCoverage === 1)
-      assert(obs.otherCoverage === 0)
-      assert(obs.alleleForwardStrand === 1)
-      assert(obs.otherForwardStrand === 0)
-      assert(obs.alleleLogLikelihoods.length === 3)
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(0), r2l0))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(1), r2l1))
-      assert(MathUtils.fpEquals(obs.alleleLogLikelihoods(2), r2l2))
+      if (obs(idx)._1._2.size != 1) {
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(0, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(1), logL(1, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(2, 2, baseQ, 0.99999)))
+      } else {
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(2), logL(0, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(1), logL(1, 2, baseQ, 0.99999)))
+        assert(MathUtils.fpEquals(obs(idx)._2.alleleLogLikelihoods(0), logL(2, 2, baseQ, 0.99999)))
+      }
     })
   }
 }
