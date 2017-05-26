@@ -232,17 +232,20 @@ class TrioGenotyper(
     val firstParentGenotypes = Biallelic.call(
       PrefilterReads(firstParentReads, args),
       variants,
-      args.ploidy)
+      args.ploidy,
+      false)
 
     val secondParentGenotypes = Biallelic.call(
       PrefilterReads(secondParentReads, args),
       variants,
-      args.ploidy)
+      args.ploidy,
+      false)
 
     val childGenotypes = Biallelic.call(
       PrefilterReads(childReads, args),
       variants,
-      args.ploidy)
+      args.ploidy,
+      false)
 
     /*val genotypes = GenotypeRDD(sc.union(firstParentGenotypes.rdd,
       secondParentGenotypes.rdd,

@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.genotyping
 
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.formats.avro.Variant
 
 /**
@@ -32,7 +33,31 @@ private[genotyping] object DiscoveredVariant {
     new DiscoveredVariant(variant.getContigName,
       variant.getStart.toInt,
       variant.getReferenceAllele,
-      variant.getAlternateAllele)
+      Some(variant.getAlternateAllele))
+  }
+
+  /**
+   * @param contigName The contig this variant is on.
+   * @param start The position this variant starts at.
+   * @param referenceAllele The reference allele this variant varies from.
+   * @param alternateAllele The substituted allele.
+   * @return Returns a discovered variant with a defined alternate allele.
+   */
+  def apply(
+    contigName: String,
+    start: Int,
+    referenceAllele: String,
+    alternateAllele: String): DiscoveredVariant = {
+    new DiscoveredVariant(contigName, start, referenceAllele, Some(alternateAllele))
+  }
+
+  /**
+   * @param rr The region where this variant occurs.
+   * @return Returns a discovered variant with no alternate allele. Uses a
+   *   generic reference allele of "N".
+   */
+  def apply(rr: ReferenceRegion): DiscoveredVariant = {
+    new DiscoveredVariant(rr.referenceName, rr.start.toInt, "N", None)
   }
 }
 
@@ -41,7 +66,6 @@ private[genotyping] object DiscoveredVariant {
  *
  * @param contigName The contig this variant is on.
  * @param start The position this variant starts at.
- * @param end The position this variant ends at.
  * @param referenceAllele The reference allele this variant varies from.
  * @param alternateAllele The substituted allele.
  */
@@ -49,7 +73,12 @@ case class DiscoveredVariant(
     contigName: String,
     start: Int,
     referenceAllele: String,
-    alternateAllele: String) {
+    alternateAllele: Option[String]) {
+
+  /**
+   * @return True if this is a symbolic model of a non-ref allele.
+   */
+  def isNonRefModel: Boolean = alternateAllele.isEmpty
 
   lazy val end: Int = start + referenceAllele.length
 
@@ -57,13 +86,17 @@ case class DiscoveredVariant(
    * @return Returns an avro representation of this variant.
    */
   def toVariant: Variant = {
-    Variant.newBuilder
+    val builder = Variant.newBuilder
       .setContigName(contigName)
       .setStart(start.toLong)
       .setEnd(end.toLong)
       .setReferenceAllele(referenceAllele)
-      .setAlternateAllele(alternateAllele)
-      .build
+
+    alternateAllele.foreach(aa => {
+      builder.setAlternateAllele(aa)
+    })
+
+    builder.build
   }
 
   def overlaps(v: DiscoveredVariant): Boolean = {

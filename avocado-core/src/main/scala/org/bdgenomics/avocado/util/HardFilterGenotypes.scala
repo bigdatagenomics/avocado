@@ -639,12 +639,16 @@ private[avocado] object HardFilterGenotypes extends Serializable {
       .filter(emitGenotypeFilter(_, minQuality, filterRefGenotypes))
 
     // then, check whether we are a snp or indel and apply hard filters
-    optGenotype.map(gt => {
-      if (siteIsSnp(gt)) {
-        hardFilterGenotype(gt, snpFilters)
-      } else {
-        hardFilterGenotype(gt, indelFilters)
-      }
-    })
+    if (genotype.getVariant.getAlternateAllele != null) {
+      optGenotype.map(gt => {
+        if (siteIsSnp(gt)) {
+          hardFilterGenotype(gt, snpFilters)
+        } else {
+          hardFilterGenotype(gt, indelFilters)
+        }
+      })
+    } else {
+      Some(genotype)
+    }
   }
 }

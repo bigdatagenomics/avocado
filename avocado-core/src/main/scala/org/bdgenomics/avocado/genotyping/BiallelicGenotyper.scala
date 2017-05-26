@@ -51,6 +51,7 @@ import org.bdgenomics.utils.instrumentation.Metrics
 import org.bdgenomics.utils.misc.{ Logging, MathUtils }
 import scala.annotation.tailrec
 import scala.collection.JavaConversions._
+import scala.collection.mutable.ListBuffer
 import scala.math.{ exp, log => mathLog, log10, sqrt }
 
 /**
@@ -73,6 +74,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * @param reads The reads to use as evidence.
    * @param variants The variants to force call.
    * @param ploidy The assumed copy number at each site.
+   * @param scoreAllSites If true, generates a gVCF style genotype dataset by
+   *   scoring genotype likelihoods for all sites.
    * @param optDesiredPartitionCount Optional parameter for setting the number
    *   of partitions desired after the shuffle region join. Defaults to None.
    * @param optDesiredPartitionSize An optional number of reads per partition to
@@ -83,6 +86,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
   def call(reads: AlignmentRecordRDD,
            variants: VariantRDD,
            ploidy: Int,
+           scoreAllSites: Boolean,
            optDesiredPartitionCount: Option[Int] = None,
            optDesiredPartitionSize: Option[Int] = None,
            optDesiredMaxCoverage: Option[Int] = None): GenotypeRDD = CallGenotypes.time {
@@ -106,10 +110,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     }
 
     // score variants and get observations
-    val observationRdd = readsToObservations(joinedRdd, ploidy)
+    val observationRdd = readsToObservations(joinedRdd, ploidy, scoreAllSites)
 
     // genotype observations
-    val genotypeRdd = observationsToGenotypes(observationRdd, samples.head)
+    val genotypeRdd = observationsToGenotypes(observationRdd,
+      samples.head)
 
     GenotypeRDD(genotypeRdd,
       variants.sequences,
@@ -126,6 +131,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    *
    * @param reads The reads to use as evidence.
    * @param ploidy The assumed copy number at each site.
+   * @param scoreAllSites If true, generates a gVCF style genotype dataset by
+   *   scoring genotype likelihoods for all sites.
    * @param optDesiredPartitionCount Optional parameter for setting the number
    *   of partitions desired after the shuffle region join. Defaults to None.
    * @param optPhredThreshold An optional threshold that discards all variants
@@ -137,6 +144,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    */
   def discoverAndCall(reads: AlignmentRecordRDD,
                       ploidy: Int,
+                      scoreAllSites: Boolean,
                       optDesiredPartitionCount: Option[Int] = None,
                       optPhredThreshold: Option[Int] = None,
                       optMinObservations: Option[Int] = None,
@@ -155,7 +163,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       optMinObservations = optMinObservations)
 
     // "force" call the variants we have discovered in the input reads
-    call(reads, variants, ploidy,
+    call(reads, variants, ploidy, scoreAllSites,
       optDesiredPartitionCount = optDesiredPartitionCount,
       optDesiredPartitionSize = optDesiredPartitionSize)
   }
@@ -166,16 +174,19 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * @param readAndVariants A tuple pairing a read with the variants it covers.
    * @param copyNumber The number of copies of this locus expected to exist at
    *   this site.
+   * @param scoreAllSites If true, calculates likelihoods for all sites, and not
+   *   just variant sites.
    * @return Returns an iterable collection of (Variant, Observation) pairs.
    */
   private[genotyping] def readToObservations(
     readAndVariants: (AlignmentRecord, Iterable[Variant]),
-    copyNumber: Int): Iterable[(DiscoveredVariant, SummarizedObservation)] = ObserveRead.time {
+    copyNumber: Int,
+    scoreAllSites: Boolean): Iterable[(DiscoveredVariant, SummarizedObservation)] = ObserveRead.time {
 
     // unpack tuple
     val (read, variants) = readAndVariants
 
-    if (variants.isEmpty) {
+    if (variants.isEmpty && !scoreAllSites) {
       Iterable.empty
     } else {
       try {
@@ -188,15 +199,71 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
           })
 
         // find all variant/observation intersections
-        val intersection = IntersectVariants.time {
-          variants.map(v => {
-            val rr = ReferenceRegion(v)
+        val intersection: Iterable[(DiscoveredVariant, Iterable[(ReferenceRegion, String, SummarizedObservation)])] =
+          IntersectVariants.time {
+            if (scoreAllSites) {
+              if (variants.isEmpty) {
+                observations.map(t => {
+                  (DiscoveredVariant(t._1), Iterable(t))
+                })
+              } else {
+                val nonRefObservations =
+                  new ListBuffer[(DiscoveredVariant, Iterable[(ReferenceRegion, String, SummarizedObservation)])]()
+                val vLists = Array.fill(variants.size) {
+                  new ListBuffer[(ReferenceRegion, String, SummarizedObservation)]()
+                }
+                val vArray = new Array[DiscoveredVariant](variants.size)
+                var vIdx = 0
+                val variantsByRegion = variants.map(v => {
+                  val rr = ReferenceRegion(v)
 
-            val obs = observations.filter(_._1.overlaps(rr))
+                  // create mapping from 
+                  val rv = (rr, vIdx)
+                  vArray(vIdx) = DiscoveredVariant(v)
 
-            (v, obs)
-          })
-        }
+                  // increment loop variable
+                  vIdx += 1
+
+                  rv
+                })
+
+                observations.foreach(t => {
+                  val (rr, _, _) = t
+
+                  val overlappingVariants = variantsByRegion.filter(p => {
+                    p._1.overlaps(rr)
+                  })
+
+                  if (overlappingVariants.isEmpty) {
+                    nonRefObservations.append((DiscoveredVariant(rr), Iterable(t)))
+                  } else {
+                    overlappingVariants.foreach(kv => {
+                      val (_, idx) = kv
+                      vLists(idx).append(t)
+                    })
+                  }
+                })
+
+                // loop and flatten the observed variants into the nonref obs
+                vIdx = 0
+                while (vIdx < variants.size) {
+                  nonRefObservations.append((vArray(vIdx), vLists(vIdx).toIterable))
+
+                  vIdx += 1
+                }
+
+                nonRefObservations.toIterable
+              }
+            } else {
+              variants.map(v => {
+                val rr = ReferenceRegion(v)
+
+                val obs = observations.filter(_._1.overlaps(rr))
+
+                (DiscoveredVariant(v), obs)
+              })
+            }
+          }
 
         // process these intersections
         ProcessIntersections.time {
@@ -210,30 +277,38 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
             // FIXME: if we don't see the variant, take the first thing and invert it
             if (observed.isEmpty) {
               None
+            } else if (variant.isNonRefModel) {
+              observed.map(o => {
+                if (o._3.isRef) {
+                  (variant, o._3.asRef)
+                } else {
+                  (variant, o._3)
+                }
+              })
             } else if (isInsertion(variant)) {
-              val insAllele = variant.getAlternateAllele.tail
+              val insAllele = variant.alternateAllele.get.tail
               val insObserved = observed.filter(_._2 == insAllele)
               if (observed.size == 2 &&
                 insObserved.size == 1) {
                 val leadBaseObserved = observed.filter(_._2 != insAllele)
                   .head
                   ._2
-                if (leadBaseObserved(0) == variant.getAlternateAllele()(0)) {
-                  Some((DiscoveredVariant(variant),
+                if (variant.alternateAllele.fold(false)(aa => leadBaseObserved(0) == aa(0))) {
+                  Some((variant,
                     insObserved.head._3))
                 } else {
-                  Some((DiscoveredVariant(variant),
+                  Some((variant,
                     insObserved.head._3.nullOut))
                 }
               } else if (observed.forall(_._3.isRef)) {
-                Some((DiscoveredVariant(variant), observed.head._3.asRef))
+                Some((variant, observed.head._3.asRef))
               } else {
-                Some((DiscoveredVariant(variant), observed.head._3.nullOut))
+                Some((variant, observed.head._3.nullOut))
               }
             } else {
               val (_, allele, obs) = observed.head
               if (observed.count(_._2.nonEmpty) == 1 &&
-                allele == variant.getAlternateAllele) {
+                allele == variant.alternateAllele.get) {
                 if (isDeletion(variant)) {
                   val delsObserved = observed.flatMap(o => {
                     if (o._2.isEmpty) {
@@ -245,18 +320,18 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
                   if (delsObserved.size == 1 &&
                     observed.size == 2 &&
                     delsObserved.head == deletionLength(variant)) {
-                    Some((DiscoveredVariant(variant), obs.asAlt))
+                    Some((variant, obs.asAlt))
                   } else {
-                    Some((DiscoveredVariant(variant), obs.nullOut))
+                    Some((variant, obs.nullOut))
                   }
                 } else {
-                  Some((DiscoveredVariant(variant), obs))
+                  Some((variant, obs))
                 }
               } else if (!obs.isRef ||
-                observed.size != variant.getReferenceAllele.length) {
-                Some((DiscoveredVariant(variant), obs.nullOut))
+                observed.size != variant.referenceAllele.length) {
+                Some((variant, obs.nullOut))
               } else {
-                Some((DiscoveredVariant(variant), obs.asRef))
+                Some((variant, obs.asRef))
               }
             }
           })
@@ -288,23 +363,23 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     }
   }
 
-  private def isSnp(v: Variant): Boolean = {
-    v.getReferenceAllele.length == 1 &&
-      v.getAlternateAllele.length == 1
+  private def isSnp(v: DiscoveredVariant): Boolean = {
+    v.referenceAllele.length == 1 &&
+      v.alternateAllele.fold(false)(_.length == 1)
   }
 
-  private def isDeletion(v: Variant): Boolean = {
-    v.getReferenceAllele.length > 1 &&
-      v.getAlternateAllele.length == 1
+  private def isDeletion(v: DiscoveredVariant): Boolean = {
+    v.referenceAllele.length > 1 &&
+      v.alternateAllele.fold(false)(_.length == 1)
   }
 
-  private def deletionLength(v: Variant): Int = {
-    v.getReferenceAllele.length - v.getAlternateAllele.length
+  private def deletionLength(v: DiscoveredVariant): Int = {
+    v.referenceAllele.length - v.alternateAllele.fold(0)(_.length)
   }
 
-  private def isInsertion(v: Variant): Boolean = {
-    v.getReferenceAllele.length == 1 &&
-      v.getAlternateAllele.length > 1
+  private def isInsertion(v: DiscoveredVariant): Boolean = {
+    v.referenceAllele.length == 1 &&
+      v.alternateAllele.fold(false)(_.length > 1)
   }
 
   /**
@@ -313,13 +388,16 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * @param rdd An RDD containing the product of joining variants against reads
    *   and then grouping by the reads.
    * @param ploidy The assumed copy number at each site.
+   * @param scoreAllSites If true, calculates likelihoods for all sites, and not
+   *   just variant sites.
    * @return Returns an RDD of (Variant, Observation) pairs.
    */
   private[genotyping] def readsToObservations(
     rdd: RDD[(AlignmentRecord, Iterable[Variant])],
-    ploidy: Int): RDD[(Variant, Observation)] = ObserveReads.time {
+    ploidy: Int,
+    scoreAllSites: Boolean): RDD[(Variant, Observation)] = ObserveReads.time {
 
-    val observations = rdd.flatMap(readToObservations(_, ploidy))
+    val observations = rdd.flatMap(readToObservations(_, ploidy, scoreAllSites))
 
     // convert to dataframe
     val sqlContext = SQLContext.getOrCreate(rdd.context)
@@ -439,6 +517,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * Turns observations of variants into genotype calls.
    *
    * @param rdd RDD of (variant, observation) pairs to transform.
+   * @param sample The ID of the sample we are genotyping.
    * @return Returns an RDD of genotype calls.
    */
   private[genotyping] def observationsToGenotypes(
