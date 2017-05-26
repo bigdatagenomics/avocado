@@ -252,12 +252,12 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
     assert(variants.size === 2)
     assert(variants.forall(_.contigName == "3"))
     assert(variants.forall(_.referenceAllele == "T"))
-    val optC = variants.find(_.alternateAllele == "C")
+    val optC = variants.find(_.alternateAllele == Some("C"))
     assert(optC.isDefined)
     optC.foreach(c => {
       assert(c.start === 13)
     })
-    val optA = variants.find(_.alternateAllele == "A")
+    val optA = variants.find(_.alternateAllele == Some("A"))
     assert(optA.isDefined)
     optA.foreach(a => {
       assert(a.start === 14)

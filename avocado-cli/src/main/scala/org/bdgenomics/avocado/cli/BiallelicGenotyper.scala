@@ -182,6 +182,10 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     name = "-disable_het_indel_rewriting",
     usage = "If true, disables rewriting of high allelic fraction het INDELs as hom alt INDELs.")
   var disableHetIndelRewriting: Boolean = false
+  @Args4jOption(required = false,
+    name = "-score_all_sites",
+    usage = "If provided, scores all sites, even non-variant sites. Emits a gVCF styled output.")
+  var scoreAllSites = false
 
   // required by HardFilterGenotypesArgs
   var maxSnpPhredStrandBias: Float = -1.0f
@@ -228,6 +232,7 @@ class BiallelicGenotyper(
     val genotypes = Option(args.variantsToCall).fold({
       Biallelic.discoverAndCall(filteredReads,
         args.ploidy,
+        args.scoreAllSites,
         optDesiredPartitionCount = optDesiredPartitionCount,
         optPhredThreshold = Some(args.minPhredForDiscovery),
         optMinObservations = Some(args.minObservationsForDiscovery),
@@ -241,14 +246,15 @@ class BiallelicGenotyper(
       Biallelic.call(filteredReads,
         variants,
         args.ploidy,
+        args.scoreAllSites,
         optDesiredPartitionCount = optDesiredPartitionCount,
         optDesiredPartitionSize = optDesiredPartitionSize,
         optDesiredMaxCoverage = optDesiredMaxCoverage)
     })
 
     // hard filter the genotypes
-    val filteredGenotypes = HardFilterGenotypes(RewriteHets(genotypes, args),
-      args)
+    val filteredGenotypes = HardFilterGenotypes(genotypes, args,
+      filterRefGenotypes = !args.scoreAllSites)
 
     // save the variant calls
     filteredGenotypes.saveAsParquet(args)

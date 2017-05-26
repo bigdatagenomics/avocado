@@ -53,6 +53,10 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
 
   def alt: Genotype.Builder = {
     Genotype.newBuilder
+      .setVariant(Variant.newBuilder
+        .setReferenceAllele("T")
+        .setAlternateAllele("A")
+        .build)
       .setAlleles(Seq(GenotypeAllele.ALT, GenotypeAllele.REF))
   }
 
