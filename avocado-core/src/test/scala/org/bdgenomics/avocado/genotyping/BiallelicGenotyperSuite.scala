@@ -409,12 +409,40 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
   }
 
-  ignore("call hom alt C->G snp at 1/877715") {
-    ???
+  sparkTest("call hom alt C->G snp at 1/877715") {
+    val readPath = resourceUrl("NA12878.chr1.877715.sam")
+    val reads = sc.loadAlignments(readPath.toString)
+      .transform(rdd => {
+        rdd.filter(_.getMapq > 0)
+      })
+
+    val gts = BiallelicGenotyper.discoverAndCall(reads, 2)
+      .transform(rdd => {
+        rdd.filter(gt => gt.getStart == 877714)
+      })
+    val gtArray = gts.rdd.collect
+    assert(gtArray.size === 1)
+    val gt = gtArray.head
+
+    assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
   }
 
-  ignore("call hom alt ACAG->A deletion at 1/886049") {
-    ???
+  sparkTest("call hom alt ACAG->A deletion at 1/886049") {
+    val readPath = resourceUrl("NA12878.chr1.886049.sam")
+    val reads = sc.loadAlignments(readPath.toString)
+      .transform(rdd => {
+        rdd.filter(_.getMapq > 0)
+      })
+
+    val gts = BiallelicGenotyper.discoverAndCall(reads, 2)
+      .transform(rdd => {
+        rdd.filter(gt => gt.getStart == 886048)
+      })
+    val gtArray = gts.rdd.collect
+    assert(gtArray.size === 1)
+    val gt = gtArray.head
+
+    assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
   }
 
   sparkTest("call hom alt GA->CC mnp at 1/889158–9") {
@@ -448,12 +476,12 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     })
   }
 
-  ignore("call hom alt C->CCCCT insertion at 1/866511") {
+  sparkTest("call hom alt C->CCCCT insertion at 1/866511") {
     val readPath = resourceUrl("NA12878.chr1.866511.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
         rdd.filter(_.getMapq > 0)
-      })
+      }).realignIndels()
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
       2,
