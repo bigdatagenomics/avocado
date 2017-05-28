@@ -17,7 +17,14 @@
  */
 package org.bdgenomics.avocado.genotyping
 
+import org.bdgenomics.adam.models.{
+  RecordGroup,
+  RecordGroupDictionary,
+  SequenceDictionary,
+  SequenceRecord
+}
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.models.Observation
 import org.bdgenomics.avocado.util.{
@@ -67,12 +74,6 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     .setAlternateAllele("A")
     .build
 
-  test("must have at least one likelihood to get qual and state") {
-    intercept[AssertionError] {
-      BiallelicGenotyper.genotypeStateAndQuality(Array(0.0))
-    }
-  }
-
   test("properly handle haploid genotype state") {
     val (state, qual) = BiallelicGenotyper.genotypeStateAndQuality(
       Array(5.0, 0.394829))
@@ -119,9 +120,9 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(snpObservation.alleleForwardStrand === 0)
     assert(snpObservation.otherForwardStrand === 1)
     assert(snpObservation.copyNumber === 2)
-    assert(MathUtils.fpEquals(snpObservation.otherLogLikelihoods(0), os.logL(0, 2, 0.9999, 0.99999)))
-    assert(MathUtils.fpEquals(snpObservation.otherLogLikelihoods(1), os.logL(1, 2, 0.9999, 0.99999)))
-    assert(MathUtils.fpEquals(snpObservation.otherLogLikelihoods(2), os.logL(2, 2, 0.9999, 0.99999)))
+    assert(MathUtils.fpEquals(snpObservation.referenceLogLikelihoods(0), os.logL(0, 2, 0.9999, 0.99999)))
+    assert(MathUtils.fpEquals(snpObservation.referenceLogLikelihoods(1), os.logL(1, 2, 0.9999, 0.99999)))
+    assert(MathUtils.fpEquals(snpObservation.referenceLogLikelihoods(2), os.logL(2, 2, 0.9999, 0.99999)))
   }
 
   sparkTest("score snp in a read with evidence of the snp") {
@@ -146,8 +147,9 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
   test("build genotype for het snp") {
     val obs = Observation(3, 5,
       40 * 40 * 16,
+      Array(-24.0, -4.0, -12.0),
       Array(-10.0, -1.0, -10.0),
-      Array(-12.0, -4.0, -24.0),
+      Array(0.0, 0.0, 0.0),
       7, 9)
     val genotype = BiallelicGenotyper.observationToGenotype((snp, obs), "sample")
 
@@ -156,7 +158,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(genotype.getEnd === snp.getEnd)
     assert(genotype.getContigName === snp.getContigName)
     assert(genotype.getSampleId === "sample")
-    assert(genotype.getGenotypeQuality === 39)
+    assert(genotype.getGenotypeQuality === 73)
     assert(genotype.getAlleles.size === 2)
     assert(genotype.getAlleles.get(0) === GenotypeAllele.ALT)
     assert(genotype.getAlleles.get(1) === GenotypeAllele.REF)
@@ -269,8 +271,10 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
         maxHetIndelAltAllelicFraction = -1f,
         minHomIndelAltAllelicFraction = -1f))
       .transform(rdd => {
-        rdd.filter(_.getVariantCallingAnnotations
-          .getFiltersPassed)
+        rdd.filter(gt => {
+          gt.getVariantCallingAnnotations
+            .getFiltersPassed && gt.getAlternateReadDepth != 0
+        })
       })
 
     val gts = filteredGenotypes.rdd.collect
@@ -528,5 +532,40 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getVariant.getReferenceAllele === "T")
     assert(gt.getVariant.getAlternateAllele === "G")
     assert(gt.getAlleles.count(_ == GenotypeAllele.ALT) === 1)
+  }
+
+  sparkTest("make het alt calls at biallelic snp locus") {
+    def makeRead(allele: Char): AlignmentRecord = {
+      assert(allele != 'T')
+      AlignmentRecord.newBuilder
+        .setContigName("ctg")
+        .setStart(10L)
+        .setEnd(15L)
+        .setSequence("AC%sTG".format(allele))
+        .setCigar("5M")
+        .setMismatchingPositions("2T2")
+        .setQual(Seq(50, 50, 50, 50, 50).map(q => (q + 33).toInt).mkString)
+        .setMapq(50)
+        .setReadMapped(true)
+        .setPrimaryAlignment(true)
+        .build
+    }
+
+    val reads = Seq(makeRead('A'), makeRead('A'), makeRead('A'), makeRead('A'),
+      makeRead('C'), makeRead('C'), makeRead('C'), makeRead('C'))
+    val readRdd = AlignmentRecordRDD(
+      sc.parallelize(reads),
+      SequenceDictionary(SequenceRecord("ctg", 16L)),
+      RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))))
+
+    val gts = BiallelicGenotyper.discoverAndCall(readRdd,
+      2).rdd.collect
+    assert(gts.size === 2)
+    assert(gts.forall(gt => gt.getAlleles.size == 2))
+    assert(gts.forall(gt => gt.getAlleles.count(_ == GenotypeAllele.ALT) == 1))
+    assert(gts.forall(gt => gt.getAlleles.count(_ == GenotypeAllele.OTHER_ALT) == 1))
+    val alleles = gts.map(gt => gt.getVariant.getAlternateAllele).toSet
+    assert(alleles("A"))
+    assert(alleles("C"))
   }
 }

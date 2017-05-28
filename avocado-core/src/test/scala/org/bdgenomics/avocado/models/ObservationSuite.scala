@@ -23,62 +23,67 @@ class ObservationSuite extends FunSuite {
 
   test("cannot create an observation with empty likelihoods") {
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array.empty, Array.empty, 1, 0)
+      Observation(0, 0, 0.0, Array.empty, Array.empty, Array.empty, 1, 0)
     }
   }
 
   test("cannot create an observation with 1-length likelihoods") {
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0), Array(0.0), 1, 0)
+      Observation(0, 0, 0.0, Array(0.0), Array(0.0), Array(0.0), 1, 0)
     }
   }
 
   test("cannot create an observation with mismatching likelihood lengths") {
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array.fill(3)(0.0), Array.fill(2)(0.0), 1, 0)
+      Observation(0, 0, 0.0,
+        Array.fill(3)(0.0), Array.fill(3)(0.0), Array.fill(2)(0.0),
+        1, 0)
     }
   }
 
+  val twoNils = Array(0.0, 0.0)
+
   test("forward strand must be >= 0") {
     intercept[AssertionError] {
-      Observation(-1, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(-1, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
     intercept[AssertionError] {
-      Observation(0, -1, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(0, -1, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
   }
 
   test("forward strand cannot exceed coverage") {
     intercept[AssertionError] {
-      Observation(2, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(2, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
     intercept[AssertionError] {
-      Observation(0, 3, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), 1, 2)
+      Observation(0, 3, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 2)
     }
   }
 
   test("square map-q must be >= 0") {
     intercept[AssertionError] {
-      Observation(0, 0, -1.0, Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(0, 0, -1.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
   }
 
   test("coverage is strictly positive") {
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), 0, 0,
+      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 0, 0,
         totalCoverage = 0)
     }
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), -2, 4)
+      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), -2, 4)
     }
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), 2, -1)
+      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 2, -1)
     }
   }
 
   test("invert an observation") {
-    val obs = Observation(0, 1, 0.0, Array(1.0, 2.0), Array(3.0, 4.0), 1, 2,
-      totalCoverage = 4)
+    val obs = Observation(0, 1, 0.0,
+      Array(5.0, 6.0), Array(1.0, 2.0), Array(3.0, 4.0),
+      1, 2, totalCoverage = 4)
 
     val invertedObs = obs.invert
     assert(invertedObs.alleleForwardStrand === 1)
@@ -96,7 +101,7 @@ class ObservationSuite extends FunSuite {
   }
 
   test("null an observation") {
-    val obs = Observation(0, 1, 0.0, Array(1.0, 2.0), Array(3.0, 4.0), 1, 2,
+    val obs = Observation(0, 1, 0.0, Array(5.0, 6.0), Array(1.0, 2.0), Array(3.0, 4.0), 1, 2,
       totalCoverage = 4)
 
     val nulledObs = obs.nullOut
@@ -112,71 +117,5 @@ class ObservationSuite extends FunSuite {
     assert(nulledObs.otherCoverage === 0)
     assert(nulledObs.totalCoverage === 4)
     assert(!nulledObs.isRef)
-  }
-
-  test("merge two observations") {
-    val obs1 = Observation(0, 1, 0.0, Array(1.0, 2.0), Array(3.0, 4.0), 1, 2,
-      totalCoverage = 3)
-    val obs2 = Observation(1, 2, 1.0, Array(2.0, 4.0), Array(4.0, 6.0), 3, 3,
-      totalCoverage = 7)
-
-    val newObs = obs1.merge(obs2)
-
-    assert(newObs.alleleForwardStrand === 1)
-    assert(newObs.otherForwardStrand === 3)
-    assert(newObs.squareMapQ > 0.999 && newObs.squareMapQ < 1.001)
-    assert(newObs.copyNumber === 1)
-    assert(newObs.alleleLogLikelihoods(0) > 2.999 && newObs.alleleLogLikelihoods(0) < 3.001)
-    assert(newObs.alleleLogLikelihoods(1) > 5.999 && newObs.alleleLogLikelihoods(1) < 6.001)
-    assert(newObs.otherLogLikelihoods(0) > 6.999 && newObs.otherLogLikelihoods(0) < 7.001)
-    assert(newObs.otherLogLikelihoods(1) > 9.999 && newObs.otherLogLikelihoods(1) < 10.001)
-    assert(newObs.alleleCoverage === 4)
-    assert(newObs.otherCoverage === 5)
-    assert(newObs.coverage === 9)
-    assert(newObs.totalCoverage === 10)
-    assert(newObs.isRef)
-  }
-
-  test("merge two alt observations") {
-    val obs1 = Observation(0, 1, 0.0, Array(1.0, 2.0), Array(3.0, 4.0), 1, 2,
-      totalCoverage = 3, isRef = false)
-    val obs2 = Observation(1, 2, 1.0, Array(2.0, 4.0), Array(4.0, 6.0), 3, 3,
-      totalCoverage = 7, isRef = false)
-
-    val newObs = obs1.merge(obs2)
-
-    assert(newObs.alleleForwardStrand === 1)
-    assert(newObs.otherForwardStrand === 3)
-    assert(newObs.squareMapQ > 0.999 && newObs.squareMapQ < 1.001)
-    assert(newObs.copyNumber === 1)
-    assert(newObs.alleleLogLikelihoods(0) > 2.999 && newObs.alleleLogLikelihoods(0) < 3.001)
-    assert(newObs.alleleLogLikelihoods(1) > 5.999 && newObs.alleleLogLikelihoods(1) < 6.001)
-    assert(newObs.otherLogLikelihoods(0) > 6.999 && newObs.otherLogLikelihoods(0) < 7.001)
-    assert(newObs.otherLogLikelihoods(1) > 9.999 && newObs.otherLogLikelihoods(1) < 10.001)
-    assert(newObs.alleleCoverage === 4)
-    assert(newObs.otherCoverage === 5)
-    assert(newObs.coverage === 9)
-    assert(newObs.totalCoverage === 10)
-    assert(!newObs.isRef)
-  }
-
-  test("cannot merge observations that disagree about whether the allele is an alt") {
-    val obs1 = Observation(0, 1, 0.0, Array(1.0, 2.0), Array(3.0, 4.0), 1, 2,
-      totalCoverage = 3)
-    val obs2 = Observation(1, 2, 1.0, Array(2.0, 4.0), Array(4.0, 6.0), 3, 3,
-      totalCoverage = 7, isRef = false)
-
-    intercept[AssertionError] {
-      obs1.merge(obs2)
-    }
-  }
-
-  test("cannot merge two observations that have a different copy number") {
-    val obs1 = Observation(0, 1, 0.0, Array(1.0, 1.0), Array(3.0, 3.0), 1, 2)
-    val obs2 = Observation(1, 1, 1.0, Array(2.0, 2.0, 2.0), Array(4.0, 4.0, 4.0), 3, 2)
-
-    intercept[AssertionError] {
-      obs1.merge(obs2)
-    }
   }
 }
