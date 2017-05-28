@@ -316,6 +316,9 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       sum("alleleForwardStrand").as("alleleForwardStrand"),
       sum("otherForwardStrand").as("otherForwardStrand"),
       sum("squareMapQ").as("squareMapQ")) ++ (0 to ploidy).map(i => {
+        val field = "referenceLogLikelihoods%d".format(i)
+        sum(field).as(field)
+      }).toSeq ++ (0 to ploidy).map(i => {
         val field = "alleleLogLikelihoods%d".format(i)
         sum(field).as(field)
       }).toSeq ++ (0 to ploidy).map(i => {
@@ -345,6 +348,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         .cast(IntegerType)
         .as("otherForwardStrand"),
       aggregatedObservationsDf("squareMapQ"), {
+        val fields = (0 to ploidy).map(i => {
+          aggregatedObservationsDf("referenceLogLikelihoods%d".format(i))
+        })
+        array(fields: _*).as("referenceLogLikelihoods")
+      }, {
         val fields = (0 to ploidy).map(i => {
           aggregatedObservationsDf("alleleLogLikelihoods%d".format(i))
         })
@@ -394,13 +402,54 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
   /**
    * @param logLikelihood The log likelihoods of an observed call.
+   * @return Returns a tuple containing the (number of alt, ref, and otheralt
+   *   alleles, quality).
+   */
+  private[genotyping] def genotypeStateAndQuality(
+    obs: Observation): (Int, Int, Int, Double) = {
+
+    val states = obs.referenceLogLikelihoods.size
+    val scoreArray = new Array[Double](states)
+
+    def blend(array1: Array[Double],
+              array2: Array[Double]) {
+      var idx1 = 0
+      var idx2 = states - 1
+
+      while (idx1 < states) {
+        scoreArray(idx1) = array1(idx1) + array2(idx2)
+        idx1 += 1
+        idx2 -= 1
+      }
+    }
+
+    // score alt/ref
+    blend(obs.alleleLogLikelihoods, obs.referenceLogLikelihoods)
+    val (altRefState, altRefQual) = genotypeStateAndQuality(scoreArray)
+
+    // score alt/otheralt
+    blend(obs.alleleLogLikelihoods, obs.otherLogLikelihoods)
+    val (altOtherState, altOtherQual) = genotypeStateAndQuality(scoreArray)
+
+    // score otheralt/ref
+    blend(obs.otherLogLikelihoods, obs.referenceLogLikelihoods)
+    val (otherAltState, otherAltQual) = genotypeStateAndQuality(scoreArray)
+
+    if (altRefQual >= altOtherQual && altRefQual >= otherAltQual) {
+      (altRefState, states - altRefState - 1, 0, altRefQual)
+    } else if (altOtherQual >= otherAltQual) {
+      (altOtherState, 0, states - altOtherState - 1, altOtherQual)
+    } else {
+      (0, states - otherAltState - 1, otherAltState, otherAltQual)
+    }
+  }
+
+  /**
+   * @param logLikelihood The log likelihoods of an observed call.
    * @return Returns a tuple containing the (genotype state, quality).
    */
   private[genotyping] def genotypeStateAndQuality(
     logLikelihoods: Array[Double]): (Int, Double) = {
-
-    // even for copy number 1, we have at least 2 likelihoods
-    assert(logLikelihoods.length >= 2)
 
     @tailrec def getMax(iter: Iterator[Double],
                         idx: Int,
@@ -463,16 +512,17 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
     // merge the log likelihoods
     val coverage = obs.alleleCoverage + obs.otherCoverage
-    val logLikelihoods = obs.alleleLogLikelihoods
 
     // get the genotype state and quality
-    val (genotypeState, qual) = genotypeStateAndQuality(logLikelihoods)
+    val (alt, ref, other, qual) = genotypeStateAndQuality(obs)
 
     // build the genotype call array
-    val alleles = Seq.fill(genotypeState)({
+    val alleles = Seq.fill(alt)({
       GenotypeAllele.ALT
-    }) ++ Seq.fill(obs.copyNumber - genotypeState)({
+    }) ++ Seq.fill(ref)({
       GenotypeAllele.REF
+    }) ++ Seq.fill(other)({
+      GenotypeAllele.OTHER_ALT
     })
 
     // set up strand bias seq and calculate p value
@@ -489,6 +539,24 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       .setFisherStrandBiasPValue(sbPValue)
       .build
 
+    // merge likelihoods
+    val likelihoods = obs.alleleLogLikelihoods.length
+    val gl = new Array[java.lang.Float](likelihoods)
+    val ol = new Array[java.lang.Float](likelihoods)
+    def mergeArrays(a1: Array[Double],
+                    a2: Array[Double],
+                    oa: Array[java.lang.Float]) {
+      var idx1 = 0
+      var idx2 = likelihoods - 1
+      while (idx1 < likelihoods) {
+        oa(idx1) = (a1(idx1) + a2(idx2)).toFloat
+        idx1 += 1
+        idx2 -= 1
+      }
+    }
+    mergeArrays(obs.alleleLogLikelihoods, obs.referenceLogLikelihoods, gl)
+    mergeArrays(obs.otherLogLikelihoods, obs.referenceLogLikelihoods, ol)
+
     Genotype.newBuilder()
       .setVariant(v)
       .setVariantCallingAnnotations(vcAnnotations)
@@ -501,8 +569,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       .setReadDepth(obs.totalCoverage)
       .setReferenceReadDepth(obs.otherCoverage)
       .setAlternateReadDepth(obs.alleleCoverage)
-      .setGenotypeLikelihoods(logLikelihoods.map(d => d.toFloat: java.lang.Float)
-        .toSeq)
+      .setGenotypeLikelihoods(gl.toSeq)
+      .setNonReferenceLikelihoods(ol.toSeq)
       .setAlleles(alleles)
       .setGenotypeQuality(qual.toInt)
       .build

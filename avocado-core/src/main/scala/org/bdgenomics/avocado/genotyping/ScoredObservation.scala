@@ -52,13 +52,15 @@ private[genotyping] object ScoredObservation extends Serializable {
       ploidy,
       mapSuccessProbability,
       optQuality)
-    val (alleleLikelihoods, otherLikelihoods) = if (isOther) {
-      (Array.fill(ploidy + 1)({ 0.0 }), altLikelihoods)
+
+    val zeros = Array.fill(ploidy + 1)({ 0.0 })
+    val (referenceLikelihoods, alleleLikelihoods, otherLikelihoods) = if (isOther) {
+      (zeros, zeros, altLikelihoods)
     } else {
       if (isRef) {
-        (nonRefLikelihoods, altLikelihoods)
+        (altLikelihoods, zeros, zeros)
       } else {
-        (altLikelihoods, nonRefLikelihoods)
+        (zeros, altLikelihoods, zeros)
       }
     }
 
@@ -70,6 +72,7 @@ private[genotyping] object ScoredObservation extends Serializable {
       if (!isRef && !isOther && forwardStrand) 1 else 0,
       if (isRef && forwardStrand) 1 else 0,
       (mapQ * mapQ).toDouble,
+      referenceLikelihoods,
       alleleLikelihoods,
       otherLikelihoods,
       if (!isRef && !isOther) 1 else 0,
@@ -151,6 +154,9 @@ private[genotyping] object ScoredObservation extends Serializable {
         scoreDf("alleleForwardStrand"),
         scoreDf("otherForwardStrand"),
         scoreDf("squareMapQ")) ++ (0 to ploidy).map(p => {
+          scoreDf("referenceLogLikelihoods").getItem(p)
+            .as("referenceLogLikelihoods%d".format(p))
+        }) ++ (0 to ploidy).map(p => {
           scoreDf("alleleLogLikelihoods").getItem(p)
             .as("alleleLogLikelihoods%d".format(p))
         }) ++ (0 to ploidy).map(p => {
@@ -175,6 +181,8 @@ private[genotyping] object ScoredObservation extends Serializable {
  * @param otherForwardStrand The number of reads covering the site but not
  *   matching the allele observed on the forward strand.
  * @param squareMapQ The sum of the squares of the mapping qualities observed.
+ * @param alleleLogLikelihoods The log likelihoods that 0...n copies of the
+ *   reference allele were observed.
  * @param alleleLogLikelihoods The log likelihoods that 0...n copies of this
  *   allele were observed.
  * @param otherLogLikelihoods The log likelihoods that 0...n copies of another
@@ -194,6 +202,7 @@ private[genotyping] case class ScoredObservation(
     alleleForwardStrand: Int,
     otherForwardStrand: Int,
     squareMapQ: Double,
+    referenceLogLikelihoods: Array[Double],
     alleleLogLikelihoods: Array[Double],
     otherLogLikelihoods: Array[Double],
     alleleCoverage: Int,
