@@ -409,6 +409,21 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
   }
 
+  sparkTest("call hom alt CAG->C deletion at 1/1067596") {
+    val readPath = resourceUrl("NA12878.1_1067596.sam")
+    val reads = sc.loadAlignments(readPath.toString)
+
+    val gts = BiallelicGenotyper.discoverAndCall(reads, 2)
+      .transform(rdd => {
+        rdd.filter(gt => gt.getStart == 1067595)
+      })
+    val gtArray = gts.rdd.collect
+    assert(gtArray.size === 1)
+    val gt = gtArray.head
+
+    assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
+  }
+
   sparkTest("call hom alt C->G snp at 1/877715") {
     val readPath = resourceUrl("NA12878.chr1.877715.sam")
     val reads = sc.loadAlignments(readPath.toString)

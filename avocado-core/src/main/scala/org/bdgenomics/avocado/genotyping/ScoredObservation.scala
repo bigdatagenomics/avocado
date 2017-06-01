@@ -97,8 +97,8 @@ private[genotyping] object ScoredObservation extends Serializable {
     import sqlContext.implicits._
     sqlContext.createDataset(
       (Seq(None.asInstanceOf[Option[Int]]) ++
-        (0 to maxQuality).map(q => Some(q))).flatMap(optQ => {
-          (0 to maxMapQ).flatMap(mq => {
+        (1 to maxQuality).map(q => Some(q))).flatMap(optQ => {
+          (1 to maxMapQ).flatMap(mq => {
             Seq(
               ScoredObservation(true, true, true,
                 optQ, mq,
