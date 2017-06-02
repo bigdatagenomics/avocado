@@ -23,20 +23,20 @@ class ObservationSuite extends FunSuite {
 
   test("cannot create an observation with empty likelihoods") {
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array.empty, Array.empty, Array.empty, 1, 0)
+      Observation(0, 0, 0.0, Array.empty, Array.empty, Array.empty, Array.empty, 1, 0)
     }
   }
 
   test("cannot create an observation with 1-length likelihoods") {
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0), Array(0.0), Array(0.0), 1, 0)
+      Observation(0, 0, 0.0, Array(0.0), Array(0.0), Array(0.0), Array(0.0), 1, 0)
     }
   }
 
   test("cannot create an observation with mismatching likelihood lengths") {
     intercept[AssertionError] {
       Observation(0, 0, 0.0,
-        Array.fill(3)(0.0), Array.fill(3)(0.0), Array.fill(2)(0.0),
+        Array.fill(3)(0.0), Array.fill(3)(0.0), Array.fill(2)(0.0), Array.fill(2)(0.0),
         1, 0)
     }
   }
@@ -45,44 +45,44 @@ class ObservationSuite extends FunSuite {
 
   test("forward strand must be >= 0") {
     intercept[AssertionError] {
-      Observation(-1, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(-1, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
     intercept[AssertionError] {
-      Observation(0, -1, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(0, -1, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
   }
 
   test("forward strand cannot exceed coverage") {
     intercept[AssertionError] {
-      Observation(2, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(2, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
     intercept[AssertionError] {
-      Observation(0, 3, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 2)
+      Observation(0, 3, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 2)
     }
   }
 
   test("square map-q must be >= 0") {
     intercept[AssertionError] {
-      Observation(0, 0, -1.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
+      Observation(0, 0, -1.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 1, 0)
     }
   }
 
   test("coverage is strictly positive") {
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 0, 0,
+      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 0, 0,
         totalCoverage = 0)
     }
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), -2, 4)
+      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), -2, 4)
     }
     intercept[AssertionError] {
-      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 2, -1)
+      Observation(0, 0, 0.0, Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), Array(0.0, 0.0), 2, -1)
     }
   }
 
   test("invert an observation") {
     val obs = Observation(0, 1, 0.0,
-      Array(5.0, 6.0), Array(1.0, 2.0), Array(3.0, 4.0),
+      Array(5.0, 6.0), Array(1.0, 2.0), Array(3.0, 4.0), Array(7.0, 8.0),
       1, 2, totalCoverage = 4)
 
     val invertedObs = obs.invert
@@ -101,7 +101,7 @@ class ObservationSuite extends FunSuite {
   }
 
   test("null an observation") {
-    val obs = Observation(0, 1, 0.0, Array(5.0, 6.0), Array(1.0, 2.0), Array(3.0, 4.0), 1, 2,
+    val obs = Observation(0, 1, 0.0, Array(5.0, 6.0), Array(1.0, 2.0), Array(3.0, 4.0), Array(7.0, 8.0), 1, 2,
       totalCoverage = 4)
 
     val nulledObs = obs.nullOut

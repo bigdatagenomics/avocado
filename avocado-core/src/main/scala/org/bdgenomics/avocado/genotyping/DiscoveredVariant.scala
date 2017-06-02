@@ -51,6 +51,8 @@ case class DiscoveredVariant(
     referenceAllele: String,
     alternateAllele: String) {
 
+  lazy val end: Int = start + referenceAllele.length
+
   /**
    * @return Returns an avro representation of this variant.
    */
@@ -58,9 +60,13 @@ case class DiscoveredVariant(
     Variant.newBuilder
       .setContigName(contigName)
       .setStart(start.toLong)
-      .setEnd((start + referenceAllele.length).toLong)
+      .setEnd(end.toLong)
       .setReferenceAllele(referenceAllele)
       .setAlternateAllele(alternateAllele)
       .build
+  }
+
+  def overlaps(v: DiscoveredVariant): Boolean = {
+    contigName == v.contigName && start < v.end && end > v.start
   }
 }

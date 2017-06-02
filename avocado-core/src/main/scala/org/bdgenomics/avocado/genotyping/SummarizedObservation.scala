@@ -31,13 +31,15 @@ import org.bdgenomics.avocado.models.Observation
  * @param optQuality What was the quality score of the bases in the observation,
  *   if known.
  * @param mapQ What was the mapping quality of the bases in the observation?
- * @param isOther Was this observation of a non-ref/non-alt allele?
+ * @param isOther Was this observation of an other-alt allele?
+ * @param isOther Was this observation of an unknown allele?
  */
 private[genotyping] case class SummarizedObservation(isRef: Boolean,
                                                      forwardStrand: Boolean,
                                                      optQuality: Option[Int],
                                                      mapQ: Int,
-                                                     isOther: Boolean = false) {
+                                                     isOther: Boolean = false,
+                                                     isNonRef: Boolean = false) {
 
   /**
    * @return Returns an observation that agrees with the reference allele.
@@ -60,14 +62,25 @@ private[genotyping] case class SummarizedObservation(isRef: Boolean,
   }
 
   /**
-   * @return Returns an observation that is neither alt nor ref.
+   * @return Returns an observation that is another alternate allele.
+   */
+  def otherAlt: SummarizedObservation = {
+    SummarizedObservation(false,
+      forwardStrand,
+      optQuality,
+      mapQ,
+      isOther = true)
+  }
+
+  /**
+   * @return Returns an observation that is an unknown allele.
    */
   def nullOut: SummarizedObservation = {
     SummarizedObservation(false,
       forwardStrand,
       optQuality,
       mapQ,
-      isOther = true)
+      isNonRef = true)
   }
 
   /**
@@ -80,7 +93,8 @@ private[genotyping] case class SummarizedObservation(isRef: Boolean,
         score.forwardStrand == forwardStrand &&
         score.optQuality == optQuality &&
         score.mapQ == mapQ &&
-        score.isOther == isOther
+        score.isOther == isOther &&
+        score.isNonRef == isNonRef
     })
     assert(optScore.isDefined)
     val score = optScore.get
@@ -91,6 +105,7 @@ private[genotyping] case class SummarizedObservation(isRef: Boolean,
       score.referenceLogLikelihoods,
       score.alleleLogLikelihoods,
       score.otherLogLikelihoods,
+      score.nonRefLogLikelihoods,
       score.alleleCoverage,
       score.otherCoverage,
       score.totalCoverage,
