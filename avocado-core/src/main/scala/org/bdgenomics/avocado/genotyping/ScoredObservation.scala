@@ -35,6 +35,7 @@ private[genotyping] object ScoredObservation extends Serializable {
    *
    * @param isRef Is this the reference allele?
    * @param isOther Is this an other-alt allele?
+   * @param isNonRef Is this not a known allele?
    * @param forwardStrand Was this on the forward strand?
    * @param optQuality What is the quality of this observation, if defined?
    * @param mapQ What is the mapping quality of the read this is from?
@@ -43,29 +44,33 @@ private[genotyping] object ScoredObservation extends Serializable {
    */
   def apply(isRef: Boolean,
             isOther: Boolean,
+            isNonRef: Boolean,
             forwardStrand: Boolean,
             optQuality: Option[Int],
             mapQ: Int,
             ploidy: Int): ScoredObservation = {
     val mapSuccessProbability = PhredUtils.phredToSuccessProbability(mapQ)
-    val (altLikelihoods, nonRefLikelihoods) = Observer.likelihoods(
+    val (altLikelihoods, _) = Observer.likelihoods(
       ploidy,
       mapSuccessProbability,
       optQuality)
 
     val zeros = Array.fill(ploidy + 1)({ 0.0 })
-    val (referenceLikelihoods, alleleLikelihoods, otherLikelihoods) = if (isOther) {
-      (zeros, zeros, altLikelihoods)
+    val (referenceLikelihoods, alleleLikelihoods, otherLikelihoods, nonRefLikelihoods) = if (isOther) {
+      (zeros, zeros, altLikelihoods, zeros)
+    } else if (isNonRef) {
+      (zeros, zeros, zeros, altLikelihoods)
     } else {
       if (isRef) {
-        (altLikelihoods, zeros, zeros)
+        (altLikelihoods, zeros, zeros, zeros)
       } else {
-        (zeros, altLikelihoods, zeros)
+        (zeros, altLikelihoods, zeros, zeros)
       }
     }
 
     ScoredObservation(isRef,
       isOther,
+      isNonRef,
       forwardStrand,
       optQuality,
       mapQ,
@@ -75,6 +80,7 @@ private[genotyping] object ScoredObservation extends Serializable {
       referenceLikelihoods,
       alleleLikelihoods,
       otherLikelihoods,
+      nonRefLikelihoods,
       if (!isRef && !isOther) 1 else 0,
       if (isRef) 1 else 0,
       1)
@@ -100,28 +106,52 @@ private[genotyping] object ScoredObservation extends Serializable {
         (1 to maxQuality).map(q => Some(q))).flatMap(optQ => {
           (1 to maxMapQ).flatMap(mq => {
             Seq(
-              ScoredObservation(true, true, true,
+              ScoredObservation(true, true, true, true,
                 optQ, mq,
                 ploidy),
-              ScoredObservation(false, true, true,
+              ScoredObservation(false, true, true, true,
                 optQ, mq,
                 ploidy),
-              ScoredObservation(true, false, true,
+              ScoredObservation(true, false, true, true,
                 optQ, mq,
                 ploidy),
-              ScoredObservation(false, false, true,
+              ScoredObservation(false, false, true, true,
                 optQ, mq,
                 ploidy),
-              ScoredObservation(true, true, false,
+              ScoredObservation(true, true, false, true,
                 optQ, mq,
                 ploidy),
-              ScoredObservation(false, true, false,
+              ScoredObservation(false, true, false, true,
                 optQ, mq,
                 ploidy),
-              ScoredObservation(true, false, false,
+              ScoredObservation(true, false, false, true,
                 optQ, mq,
                 ploidy),
-              ScoredObservation(false, false, false,
+              ScoredObservation(false, false, false, true,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(true, true, true, false,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(false, true, true, false,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(true, false, true, false,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(false, false, true, false,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(true, true, false, false,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(false, true, false, false,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(true, false, false, false,
+                optQ, mq,
+                ploidy),
+              ScoredObservation(false, false, false, false,
                 optQ, mq,
                 ploidy))
           })
@@ -148,6 +178,7 @@ private[genotyping] object ScoredObservation extends Serializable {
     scoreDf.select((
       Seq(scoreDf("isRef"),
         scoreDf("isOther"),
+        scoreDf("isNonRef"),
         scoreDf("forwardStrand"),
         scoreDf("optQuality"),
         scoreDf("mapQ"),
@@ -162,6 +193,9 @@ private[genotyping] object ScoredObservation extends Serializable {
         }) ++ (0 to ploidy).map(p => {
           scoreDf("otherLogLikelihoods").getItem(p)
             .as("otherLogLikelihoods%d".format(p))
+        }) ++ (0 to ploidy).map(p => {
+          scoreDf("nonRefLogLikelihoods").getItem(p)
+            .as("nonRefLogLikelihoods%d".format(p))
         }) ++ Seq(scoreDf("alleleCoverage"),
           scoreDf("otherCoverage"),
           scoreDf("totalCoverage"))): _*)
@@ -173,6 +207,7 @@ private[genotyping] object ScoredObservation extends Serializable {
  *
  * @param isRef Is this a reference allele?
  * @param isOther Is this an other-alt allele?
+ * @param isNonRef Is this an unknown allele?
  * @param forwardStrand Is this on the forward strand?
  * @param optQuality What is the base quality of this observation, if defined?
  * @param mapQ What is the mapping quality of this observation?
@@ -187,6 +222,8 @@ private[genotyping] object ScoredObservation extends Serializable {
  *   allele were observed.
  * @param otherLogLikelihoods The log likelihoods that 0...n copies of another
  *   allele were observed.
+ * @param nonRefLogLikelihoods The log likelihoods that 0...n copies of an
+ *   unknown allele were observed.
  * @param alleleCoverage The total number of reads observed that cover the
  *   site and match the allele.
  * @param otherCoverage The total number of reads observed that cover the site
@@ -196,6 +233,7 @@ private[genotyping] object ScoredObservation extends Serializable {
 private[genotyping] case class ScoredObservation(
     isRef: Boolean,
     isOther: Boolean,
+    isNonRef: Boolean,
     forwardStrand: Boolean,
     optQuality: Option[Int],
     mapQ: Int,
@@ -205,6 +243,7 @@ private[genotyping] case class ScoredObservation(
     referenceLogLikelihoods: Array[Double],
     alleleLogLikelihoods: Array[Double],
     otherLogLikelihoods: Array[Double],
+    nonRefLogLikelihoods: Array[Double],
     alleleCoverage: Int,
     otherCoverage: Int,
     totalCoverage: Int) {

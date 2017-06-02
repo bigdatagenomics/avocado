@@ -31,6 +31,8 @@ package org.bdgenomics.avocado.models
  *   allele were observed.
  * @param otherLogLikelihoods The log likelihoods that 0...n copies of another
  *   allele were observed.
+ * @param otherLogLikelihoods The log likelihoods that 0...n copies of an
+ *   unknown allele were observed.
  * @param alleleCoverage The total number of reads observed that cover the
  *   site and match the allele.
  * @param otherCoverage The total number of reads observed that cover the site
@@ -44,19 +46,21 @@ case class Observation(alleleForwardStrand: Int,
                        referenceLogLikelihoods: Array[Double],
                        alleleLogLikelihoods: Array[Double],
                        otherLogLikelihoods: Array[Double],
+                       nonRefLogLikelihoods: Array[Double],
                        alleleCoverage: Int,
                        otherCoverage: Int,
                        totalCoverage: Int = 1,
                        isRef: Boolean = true) {
 
   override def toString: String = {
-    "Observation(%d, %d, %f, Array(%s), Array(%s), Array(%s), %d, %d, %d, %s)".format(
+    "Observation(%d, %d, %f, Array(%s), Array(%s), Array(%s), Array(%s), %d, %d, %d, %s)".format(
       alleleForwardStrand,
       otherForwardStrand,
       squareMapQ,
       referenceLogLikelihoods.mkString(","),
       alleleLogLikelihoods.mkString(","),
       otherLogLikelihoods.mkString(","),
+      nonRefLogLikelihoods.mkString(","),
       alleleCoverage,
       otherCoverage,
       totalCoverage,
@@ -91,6 +95,7 @@ case class Observation(alleleForwardStrand: Int,
       referenceLogLikelihoods.map(v => v),
       alleleLogLikelihoods.map(v => v),
       otherLogLikelihoods.map(v => v),
+      nonRefLogLikelihoods.map(v => v),
       alleleCoverage,
       otherCoverage,
       totalCoverage = totalCoverage,
@@ -109,6 +114,7 @@ case class Observation(alleleForwardStrand: Int,
       referenceLogLikelihoods.map(v => v),
       otherLogLikelihoods.map(v => v),
       alleleLogLikelihoods.map(v => v),
+      nonRefLogLikelihoods.map(v => v),
       otherCoverage,
       alleleCoverage,
       totalCoverage = totalCoverage,
@@ -128,6 +134,7 @@ case class Observation(alleleForwardStrand: Int,
       referenceLogLikelihoods.map(v => v),
       Array.fill(alleleLogLikelihoods.length)({ 0.0 }),
       alleleLogLikelihoods.map(v => v),
+      nonRefLogLikelihoods.map(v => v),
       0,
       0,
       totalCoverage = totalCoverage,

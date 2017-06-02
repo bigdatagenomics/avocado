@@ -240,7 +240,22 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
             }
           })
 
-          obsMap
+          // check for overlapping other-alts
+          obsMap.map(p => {
+            val (dv, observed) = p
+            if (observed.isNonRef) {
+              val overlappingObs = obsMap.filter(kv => kv._1.overlaps(dv))
+                .map(_._2)
+
+              if (overlappingObs.exists(o => !o.isRef && !o.isOther && !o.isNonRef)) {
+                (dv, observed.otherAlt)
+              } else {
+                p
+              }
+            } else {
+              p
+            }
+          })
         }
       } catch {
         case t: Throwable => ProcessException.time {
@@ -296,7 +311,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       observationsDf("_2.forwardStrand").as("forwardStrand"),
       observationsDf("_2.optQuality").as("optQuality"),
       observationsDf("_2.mapQ").as("mapQ"),
-      observationsDf("_2.isOther").as("isOther"))
+      observationsDf("_2.isOther").as("isOther"),
+      observationsDf("_2.isNonRef").as("isNonRef"))
     val flatObservationsDf = observationsDf.select(flatFields: _*)
 
     // create scored table and prepare for join
@@ -307,6 +323,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     val joinedObservationsDf = scoredDf.join(flatObservationsDf,
       Seq("isRef",
         "isOther",
+        "isNonRef",
         "forwardStrand",
         "optQuality",
         "mapQ"))
@@ -323,6 +340,9 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         sum(field).as(field)
       }).toSeq ++ (0 to ploidy).map(i => {
         val field = "otherLogLikelihoods%d".format(i)
+        sum(field).as(field)
+      }).toSeq ++ (0 to ploidy).map(i => {
+        val field = "nonRefLogLikelihoods%d".format(i)
         sum(field).as(field)
       }).toSeq ++ Seq(
         sum("alleleCoverage").as("alleleCoverage"),
@@ -362,6 +382,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
           aggregatedObservationsDf("otherLogLikelihoods%d".format(i))
         })
         array(fields: _*).as("otherLogLikelihoods")
+      }, {
+        val fields = (0 to ploidy).map(i => {
+          aggregatedObservationsDf("nonRefLogLikelihoods%d".format(i))
+        })
+        array(fields: _*).as("nonRefLogLikelihoods")
       },
       aggregatedObservationsDf("alleleCoverage")
         .cast(IntegerType)
@@ -555,7 +580,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       }
     }
     mergeArrays(obs.alleleLogLikelihoods, obs.referenceLogLikelihoods, gl)
-    mergeArrays(obs.otherLogLikelihoods, obs.referenceLogLikelihoods, ol)
+    mergeArrays(obs.nonRefLogLikelihoods, obs.referenceLogLikelihoods, ol)
 
     Genotype.newBuilder()
       .setVariant(v)

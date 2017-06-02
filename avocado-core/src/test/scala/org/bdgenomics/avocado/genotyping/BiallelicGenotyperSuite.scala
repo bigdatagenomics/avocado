@@ -150,6 +150,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       Array(-24.0, -4.0, -12.0),
       Array(-10.0, -1.0, -10.0),
       Array(0.0, 0.0, 0.0),
+      Array(0.0, 0.0, 0.0),
       7, 9)
     val genotype = BiallelicGenotyper.observationToGenotype((snp, obs), "sample")
 
@@ -406,6 +407,24 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(gtArray.size === 1)
     val gt = gtArray.head
 
+    assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
+  }
+
+  sparkTest("call hom alt TACACACACACACACACACACACACACACAC->T deletion at 1/1777263") {
+    val readPath = resourceUrl("NA12878.1_1777263.sam")
+    val reads = sc.loadAlignments(readPath.toString)
+      .transform(rdd => {
+        rdd.filter(_.getMapq > 0)
+      })
+
+    val gts = BiallelicGenotyper.discoverAndCall(reads, 2, optMinObservations = Some(3))
+    val gtArray = gts.rdd.collect
+    assert(gtArray.size === 1)
+    val gt = gtArray.head
+
+    assert(gt.getStart === 1777262L)
+    assert(gt.getVariant.getReferenceAllele === "TACACACACACACACACACACACACACACAC")
+    assert(gt.getVariant.getAlternateAllele === "T")
     assert(gt.getAlleles.forall(_ == GenotypeAllele.ALT))
   }
 
