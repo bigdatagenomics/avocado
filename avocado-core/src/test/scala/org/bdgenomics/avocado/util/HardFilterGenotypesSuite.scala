@@ -61,6 +61,11 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       .setAlleles(Seq(GenotypeAllele.ALT, GenotypeAllele.ALT))
   }
 
+  def hetAlt: Genotype.Builder = {
+    Genotype.newBuilder
+      .setAlleles(Seq(GenotypeAllele.ALT, GenotypeAllele.OTHER_ALT))
+  }
+
   def altWithAnn: Genotype.Builder = {
     alt
       .setVariantCallingAnnotations(VariantCallingAnnotations.newBuilder
@@ -405,5 +410,11 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
       .setAlternateReadDepth(45)
       .build, 0.666f, "MAXAF")
     assert(hom.isEmpty)
+
+    val het = HardFilterGenotypes.hardFilterMaxAllelicFraction(hetAlt.setGenotypeQuality(50)
+      .setReadDepth(50)
+      .setAlternateReadDepth(40)
+      .build, 0.666f, "MAXAF")
+    assert(het.isEmpty)
   }
 }
