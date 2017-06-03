@@ -541,7 +541,10 @@ private[avocado] object HardFilterGenotypes extends Serializable {
   private[util] def hardFilterMaxAllelicFraction(genotype: Genotype,
                                                  maxAlleleFraction: Float,
                                                  msg: String): Option[String] = {
-    val gtIsHom = genotype.getAlleles.forall(_ == GenotypeAllele.ALT)
+    // treat het-alt as hom
+    val gtIsHom = genotype.getAlleles.forall(ga => {
+      ga == GenotypeAllele.ALT || ga == GenotypeAllele.OTHER_ALT
+    })
     if (gtIsHom) {
       None
     } else {
