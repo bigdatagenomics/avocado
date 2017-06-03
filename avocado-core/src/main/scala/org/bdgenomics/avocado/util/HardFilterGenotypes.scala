@@ -345,7 +345,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    * @return Returns false for calls that are homozygous ref.
    */
   private[util] def filterRefCalls(genotype: Genotype): Boolean = {
-    !genotype.getAlleles.forall(_ == GenotypeAllele.REF)
+    genotype.getAlleles.exists(_ == GenotypeAllele.ALT)
   }
 
   /**

@@ -76,9 +76,29 @@ class HardFilterGenotypesSuite extends AvocadoFunSuite {
     .setGenotypeQuality(99)
     .build
 
+  val hetOtherAlt = Genotype.newBuilder
+    .setVariant(Variant.newBuilder
+      .setReferenceAllele("A")
+      .setAlternateAllele("T")
+      .build)
+    .setAlleles(Seq(GenotypeAllele.REF, GenotypeAllele.OTHER_ALT))
+    .setGenotypeQuality(99)
+    .build
+
+  val homOtherAlt = Genotype.newBuilder
+    .setVariant(Variant.newBuilder
+      .setReferenceAllele("A")
+      .setAlternateAllele("T")
+      .build)
+    .setAlleles(Seq(GenotypeAllele.OTHER_ALT, GenotypeAllele.OTHER_ALT))
+    .setGenotypeQuality(99)
+    .build
+
   test("filter out reference calls") {
     assert(!HardFilterGenotypes.filterRefCalls(ref))
     assert(HardFilterGenotypes.filterRefCalls(alt.build))
+    assert(!HardFilterGenotypes.filterRefCalls(hetOtherAlt))
+    assert(!HardFilterGenotypes.filterRefCalls(homOtherAlt))
   }
 
   test("filter out low quality calls") {
