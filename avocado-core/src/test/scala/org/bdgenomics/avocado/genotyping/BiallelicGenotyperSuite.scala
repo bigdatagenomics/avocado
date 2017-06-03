@@ -630,4 +630,51 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(alleles("A"))
     assert(alleles("C"))
   }
+
+  sparkTest("call hom alt T->TAAA insertion at 1/4120185") {
+    val readPath = resourceUrl("NA12878.1_4120185.sam")
+    val reads = sc.loadAlignments(readPath.toString)
+
+    val gts = BiallelicGenotyper.discoverAndCall(reads,
+      2,
+      optPhredThreshold = Some(18),
+      optMinObservations = Some(3)).transform(rdd => {
+        rdd.filter(gt => gt.getStart == 4120184)
+      }).rdd.collect
+
+    assert(gts.size === 2)
+    val taaaGt = gts.filter(_.getVariant.getAlternateAllele === "TAAA").head
+    assert(taaaGt.getVariant.getContigName === "1")
+    assert(taaaGt.getVariant.getReferenceAllele === "T")
+    assert(taaaGt.getVariant.getAlternateAllele === "TAAA")
+    assert(taaaGt.getAlleles.count(_ == GenotypeAllele.ALT) === 2)
+    val caaaGt = gts.filter(_.getVariant.getAlternateAllele === "CAAA").head
+    assert(caaaGt.getVariant.getContigName === "1")
+    assert(caaaGt.getVariant.getReferenceAllele === "T")
+    assert(caaaGt.getVariant.getAlternateAllele === "CAAA")
+    assert(caaaGt.getAlleles.count(_ == GenotypeAllele.OTHER_ALT) === 2)
+  }
+
+  sparkTest("call het alt TTATA,TTA->T insertion at 1/5274547") {
+    val readPath = resourceUrl("NA12878.1_5274547.sam")
+    val reads = sc.loadAlignments(readPath.toString)
+
+    val gts = BiallelicGenotyper.discoverAndCall(reads,
+      2,
+      optPhredThreshold = Some(18),
+      optMinObservations = Some(3)).rdd.collect
+
+    gts.foreach(println)
+    assert(gts.size === 2)
+    assert(gts.forall(_.getStart == 5274546L))
+    assert(gts.forall(_.getVariant.getAlternateAllele == "T"))
+    assert(gts.count(_.getVariant.getReferenceAllele == "TTA") === 1)
+    assert(gts.count(_.getVariant.getReferenceAllele == "TTATA") === 1)
+    assert(gts.forall(gt => {
+      gt.getAlleles.count(_ == GenotypeAllele.ALT) == 1
+    }))
+    assert(gts.forall(gt => {
+      gt.getAlleles.count(_ == GenotypeAllele.OTHER_ALT) == 1
+    }))
+  }
 }
