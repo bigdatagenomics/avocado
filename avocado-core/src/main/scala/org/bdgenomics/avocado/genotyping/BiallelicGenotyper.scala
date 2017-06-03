@@ -215,8 +215,16 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
               val insObserved = observed.filter(_._2 == insAllele)
               if (observed.size == 2 &&
                 insObserved.size == 1) {
-                Some((DiscoveredVariant(variant),
-                  insObserved.head._3))
+                val leadBaseObserved = observed.filter(_._2 != insAllele)
+                  .head
+                  ._2
+                if (leadBaseObserved(0) == variant.getAlternateAllele()(0)) {
+                  Some((DiscoveredVariant(variant),
+                    insObserved.head._3))
+                } else {
+                  Some((DiscoveredVariant(variant),
+                    insObserved.head._3.nullOut))
+                }
               } else if (observed.forall(_._3.isRef)) {
                 Some((DiscoveredVariant(variant), observed.head._3.asRef))
               } else {
@@ -227,7 +235,20 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
               if (observed.count(_._2.nonEmpty) == 1 &&
                 allele == variant.getAlternateAllele) {
                 if (isDeletion(variant)) {
-                  Some((DiscoveredVariant(variant), obs.asAlt))
+                  val delsObserved = observed.flatMap(o => {
+                    if (o._2.isEmpty) {
+                      Some(o._1.width)
+                    } else {
+                      None
+                    }
+                  })
+                  if (delsObserved.size == 1 &&
+                    observed.size == 2 &&
+                    delsObserved.head == deletionLength(variant)) {
+                    Some((DiscoveredVariant(variant), obs.asAlt))
+                  } else {
+                    Some((DiscoveredVariant(variant), obs.nullOut))
+                  }
                 } else {
                   Some((DiscoveredVariant(variant), obs))
                 }
@@ -275,6 +296,10 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
   private def isDeletion(v: Variant): Boolean = {
     v.getReferenceAllele.length > 1 &&
       v.getAlternateAllele.length == 1
+  }
+
+  private def deletionLength(v: Variant): Int = {
+    v.getReferenceAllele.length - v.getAlternateAllele.length
   }
 
   private def isInsertion(v: Variant): Boolean = {
