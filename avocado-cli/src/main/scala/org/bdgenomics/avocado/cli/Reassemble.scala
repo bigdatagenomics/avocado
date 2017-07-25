@@ -61,6 +61,7 @@ class ReassembleArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs {
 
   // required by ADAMSaveAnyArgs
   var sortFastqOutput: Boolean = false
+  var disableFastConcat: Boolean = false
 }
 
 class Reassemble(

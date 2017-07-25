@@ -618,7 +618,8 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readRdd = AlignmentRecordRDD(
       sc.parallelize(reads),
       SequenceDictionary(SequenceRecord("ctg", 16L)),
-      RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))))
+      RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))),
+      Seq.empty)
 
     val gts = BiallelicGenotyper.discoverAndCall(readRdd,
       2).rdd.collect

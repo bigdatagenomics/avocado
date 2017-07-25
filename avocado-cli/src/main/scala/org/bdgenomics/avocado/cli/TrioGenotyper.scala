@@ -185,6 +185,7 @@ class TrioGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs
   var sortFastqOutput: Boolean = false
   var asSingleFile: Boolean = false
   var deferMerging: Boolean = false
+  var disableFastConcat: Boolean = false
 }
 
 class TrioGenotyper(
@@ -199,11 +200,11 @@ class TrioGenotyper(
       AlignmentRecordField.origQual,
       AlignmentRecordField.recordGroupName))
     val firstParentReads = sc.loadAlignments(args.firstParentPath,
-      projection = projection)
+      optProjection = projection)
     val secondParentReads = sc.loadAlignments(args.secondParentPath,
-      projection = projection)
+      optProjection = projection)
     val childReads = sc.loadAlignments(args.childPath,
-      projection = projection)
+      optProjection = projection)
 
     // get sample IDs
     val firstParentId = TrioCaller.extractSampleId(firstParentReads)
@@ -211,15 +212,7 @@ class TrioGenotyper(
     val childId = TrioCaller.extractSampleId(childReads)
 
     // merge reads
-    val reads = AlignmentRecordRDD(sc.union(firstParentReads.rdd,
-      secondParentReads.rdd,
-      childReads.rdd),
-      (firstParentReads.sequences ++
-        secondParentReads.sequences ++
-        childReads.sequences),
-      (firstParentReads.recordGroups ++
-        secondParentReads.recordGroups ++
-        childReads.recordGroups))
+    val reads = firstParentReads.union(secondParentReads, childReads)
 
     // filter reads
     val filteredReads = PrefilterReads(reads, args)
@@ -251,7 +244,7 @@ class TrioGenotyper(
       variants,
       args.ploidy)
 
-    val genotypes = GenotypeRDD(sc.union(firstParentGenotypes.rdd,
+    /*val genotypes = GenotypeRDD(sc.union(firstParentGenotypes.rdd,
       secondParentGenotypes.rdd,
       childGenotypes.rdd),
       variants.sequences,
@@ -271,6 +264,6 @@ class TrioGenotyper(
       childId)
 
     // save the variant calls
-    trioGenotypes.saveAsParquet(args)
+    trioGenotypes.saveAsParquet(args)*/
   }
 }

@@ -118,7 +118,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
           .setSampleId(s)
           .setName(s)
           .build()
-      }).toSeq)
+      }).toSeq, org.bdgenomics.adam.converters.DefaultHeaderLines.allHeaderLines)
   }
 
   /**
@@ -591,15 +591,15 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
     // merge likelihoods
     val likelihoods = obs.alleleLogLikelihoods.length
-    val gl = new Array[java.lang.Float](likelihoods)
-    val ol = new Array[java.lang.Float](likelihoods)
+    val gl = new Array[java.lang.Double](likelihoods)
+    val ol = new Array[java.lang.Double](likelihoods)
     def mergeArrays(a1: Array[Double],
                     a2: Array[Double],
-                    oa: Array[java.lang.Float]) {
+                    oa: Array[java.lang.Double]) {
       var idx1 = 0
       var idx2 = likelihoods - 1
       while (idx1 < likelihoods) {
-        oa(idx1) = (a1(idx1) + a2(idx2)).toFloat
+        oa(idx1) = (a1(idx1) + a2(idx2))
         idx1 += 1
         idx2 -= 1
       }

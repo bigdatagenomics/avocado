@@ -247,7 +247,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
         snpFilters,
         indelFilters,
         filterRefGenotypes))
-    }).copy(headerLines = (grdd.headerLines ++ filterHeaders).distinct)
+    }).addHeaderLines(filterHeaders)
   }
 
   /**
