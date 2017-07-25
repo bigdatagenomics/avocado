@@ -28,8 +28,10 @@ import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.formats.avro.{
+  AlignmentRecord,
   Genotype,
   GenotypeAllele,
+  ProcessingStep,
   Variant
 }
 import scala.collection.JavaConversions._
@@ -37,9 +39,10 @@ import scala.collection.JavaConversions._
 class TrioCallerSuite extends AvocadoFunSuite {
 
   def makeRdd(recordGroups: RecordGroupDictionary): AlignmentRecordRDD = {
-    AlignmentRecordRDD(sc.emptyRDD,
+    AlignmentRecordRDD(sc.emptyRDD[AlignmentRecord],
       SequenceDictionary.empty,
-      recordGroups)
+      recordGroups,
+      Seq.empty[ProcessingStep])
   }
 
   sparkTest("cannot have a sample with no record groups") {
@@ -237,12 +240,12 @@ class TrioCallerSuite extends AvocadoFunSuite {
     val inputVcf = resourceUrl("trio.1_837214.vcf")
     val compVcf = resourceUrl("trio.1_837214.phased.vcf")
     val outputVcf = tmpFile("trio.vcf")
-    println(outputVcf)
 
     val gts = sc.loadGenotypes(inputVcf.toString)
 
     TrioCaller(gts, "NA12891", "NA12892", "NA12878")
-      .saveAsVcf(outputVcf, true, ValidationStringency.STRICT)
+      .toVariantContextRDD
+      .saveAsVcf(outputVcf, true, false, false, ValidationStringency.STRICT)
 
     checkFiles(outputVcf, compVcf.getPath)
   }

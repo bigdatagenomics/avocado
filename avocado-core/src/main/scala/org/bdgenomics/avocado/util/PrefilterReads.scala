@@ -82,10 +82,8 @@ private[avocado] object PrefilterReads extends Serializable {
       .filter(r => contigFn(r.name)))
 
     // filter reads and construct a new rdd
-    val readRdd = rdd.rdd.filter(readFn)
-
-    // construct a new aligned read rdd
-    AlignmentRecordRDD(readRdd, sequences, rdd.recordGroups)
+    rdd.transform(_.filter(readFn))
+      .replaceSequences(sequences)
   }
 
   /**

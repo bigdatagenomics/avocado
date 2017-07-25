@@ -56,7 +56,8 @@ object DiscoverVariants extends Serializable with Logging {
     VariantRDD(variantsInRdd(aRdd.rdd,
       optPhredThreshold = optPhredThreshold,
       optMinObservations = optMinObservations),
-      aRdd.sequences)
+      aRdd.sequences,
+      org.bdgenomics.adam.converters.DefaultHeaderLines.allHeaderLines)
   }
 
   /**

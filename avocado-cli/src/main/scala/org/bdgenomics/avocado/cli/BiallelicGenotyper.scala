@@ -191,6 +191,7 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
   var sortFastqOutput: Boolean = false
   var asSingleFile: Boolean = false
   var deferMerging: Boolean = false
+  var disableFastConcat: Boolean = false
 }
 
 class BiallelicGenotyper(
@@ -205,7 +206,7 @@ class BiallelicGenotyper(
       AlignmentRecordField.origQual,
       AlignmentRecordField.recordGroupName))
     val reads = sc.loadAlignments(args.inputPath,
-      projection = projection)
+      optProjection = projection)
 
     // filter reads
     val filteredReads = PrefilterReads(reads, args)

@@ -238,7 +238,8 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
         SequenceRecord("1", 50L),
         SequenceRecord("2", 40L),
         SequenceRecord("3", 30L)),
-      RecordGroupDictionary.empty)
+      RecordGroupDictionary.empty,
+      Seq.empty)
 
     val variantRdd = DiscoverVariants(readRdd)
 

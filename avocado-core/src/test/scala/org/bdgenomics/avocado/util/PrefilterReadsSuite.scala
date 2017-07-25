@@ -239,7 +239,7 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
 
   def testRdd(args: PrefilterReadsArgs, numReads: Int, numContigs: Int) {
 
-    val readRdd = AlignmentRecordRDD(sc.parallelize(reads), sequences, RecordGroupDictionary.empty)
+    val readRdd = AlignmentRecordRDD(sc.parallelize(reads), sequences, RecordGroupDictionary.empty, Seq.empty)
     val filteredRdd = PrefilterReads(readRdd, args)
 
     assert(filteredRdd.rdd.count === numReads)

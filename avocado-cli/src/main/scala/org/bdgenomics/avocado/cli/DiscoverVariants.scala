@@ -59,6 +59,6 @@ class DiscoverVariants(
     val variants = DiscoverVariantsFromRDD(reads)
 
     // save the variants
-    variants.save(args.outputPath)
+    //variants.save(args.outputPath)
   }
 }

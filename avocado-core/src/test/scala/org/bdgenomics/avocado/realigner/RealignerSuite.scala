@@ -194,7 +194,8 @@ class RealignerSuite extends AvocadoFunSuite {
                         kmerLength: Int): Array[AlignmentRecord] = {
     val gRdd = AlignmentRecordRDD(sc.parallelize(reads),
       SequenceDictionary(SequenceRecord("ctg", 50L)),
-      RecordGroupDictionary(Seq(RecordGroup("rg", "rg"))))
+      RecordGroupDictionary(Seq(RecordGroup("rg", "rg"))),
+      Seq.empty)
 
     // realign the genomic rdd
     val realignedRdd = Realigner.realign(gRdd, kmerLength)
