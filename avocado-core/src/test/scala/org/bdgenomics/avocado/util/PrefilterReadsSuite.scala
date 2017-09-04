@@ -27,8 +27,7 @@ import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.formats.avro.AlignmentRecord
 
-case class TestPrefilterReadsArgs(var isNotGrc: Boolean = false,
-                                  var autosomalOnly: Boolean = false,
+case class TestPrefilterReadsArgs(var autosomalOnly: Boolean = false,
                                   var keepMitochondrialChromosome: Boolean = false,
                                   var keepDuplicates: Boolean = true,
                                   var minMappingQuality: Int = -1,
@@ -119,30 +118,18 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
     testChromosomeHelper(PrefilterReads.filterNonGrcMitochondrial, 7)
   }
 
-  test("filter autosomal chromosomes with grc names from generator") {
-    testChromosomeHelper(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(autosomalOnly = true)), 0)
+  test("filter autosomal chromosomes from generator") {
+    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(autosomalOnly = true)), Set(0, 1))
   }
 
-  test("filter autosomal + sex chromosomes with grc names from generator") {
-    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs()), Set(0, 2, 4))
+  test("filter autosomal + sex chromosomes from generator") {
+    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs()), Set(0, 1,
+      2, 3,
+      4, 5))
   }
 
-  test("filter all chromosomes with grc names from generator") {
-    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(keepMitochondrialChromosome = true)), Set(0, 2, 4, 6))
-  }
-
-  test("filter autosomal chromosomes with hg names from generator") {
-    testChromosomeHelper(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(isNotGrc = true,
-      autosomalOnly = true)), 1)
-  }
-
-  test("filter autosomal + sex chromosomes with hg names from generator") {
-    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(isNotGrc = true)), Set(1, 3, 5))
-  }
-
-  test("filter all chromosomes with hg names from generator") {
-    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(isNotGrc = true,
-      keepMitochondrialChromosome = true)), Set(1, 3, 5, 7))
+  test("filter all chromosomes from generator") {
+    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(keepMitochondrialChromosome = true)), Set(0, 1, 2, 3, 4, 5, 6, 7))
   }
 
   val reads = Seq(AlignmentRecord.newBuilder()
@@ -172,66 +159,34 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
       .foreach(p => assertIdx(p._2, p._1))
   }
 
-  test("filter reads mapped to autosomal chromosomes with grc names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(autosomalOnly = true), Set(8, 16))
+  test("filter reads mapped to autosomal chromosomes from generator") {
+    testReadHelperSet(TestPrefilterReadsArgs(autosomalOnly = true), Set(8, 9, 16, 17))
   }
 
-  test("filter reads mapped to autosomal + sex chromosomes with grc names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(), Set(8, 10, 12, 16, 18, 20))
+  test("filter reads mapped to autosomal + sex chromosomes from generator") {
+    testReadHelperSet(TestPrefilterReadsArgs(), Set(8, 9, 10, 11, 12, 13,
+      16, 17, 18, 19, 20, 21))
   }
 
-  test("filter reads mapped to all chromosomes with grc names from generator") {
+  test("filter reads mapped to all chromosomes from generator") {
     testReadHelperSet(TestPrefilterReadsArgs(keepMitochondrialChromosome = true),
-      Set(8, 10, 12, 14, 16, 18, 20, 22))
+      Set(8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23))
   }
 
-  test("filter reads mapped to autosomal chromosomes with hg names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(isNotGrc = true,
-      autosomalOnly = true), Set(9, 17))
-  }
-
-  test("filter reads mapped to autosomal + sex chromosomes with hg names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(isNotGrc = true), Set(9, 11, 13, 17, 19, 21))
-  }
-
-  test("filter reads mapped to all chromosomes with hg names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(isNotGrc = true,
-      keepMitochondrialChromosome = true),
-      Set(9, 11, 13, 15, 17, 19, 21, 23))
-  }
-
-  test("filter reads uniquely mapped to autosomal chromosomes with grc names from generator") {
+  test("filter reads uniquely mapped to autosomal chromosomes from generator") {
     testReadHelperSet(TestPrefilterReadsArgs(keepDuplicates = false,
-      autosomalOnly = true), Set(16))
+      autosomalOnly = true), Set(16, 17))
   }
 
-  test("filter reads uniquely mapped to autosomal + sex chromosomes with grc names from generator") {
+  test("filter reads uniquely mapped to autosomal + sex chromosomes from generator") {
     testReadHelperSet(TestPrefilterReadsArgs(keepDuplicates = false),
-      Set(16, 18, 20))
+      Set(16, 17, 18, 19, 20, 21))
   }
 
-  test("filter reads uniquely mapped to all chromosomes with grc names from generator") {
+  test("filter reads uniquely mapped to all chromosomes from generator") {
     testReadHelperSet(TestPrefilterReadsArgs(keepDuplicates = false,
       keepMitochondrialChromosome = true),
-      Set(16, 18, 20, 22))
-  }
-
-  test("filter reads uniquely mapped to autosomal chromosomes with hg names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(keepDuplicates = false,
-      isNotGrc = true,
-      autosomalOnly = true), Set(17))
-  }
-
-  test("filter reads uniquely mapped to autosomal + sex chromosomes with hg names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(keepDuplicates = false,
-      isNotGrc = true), Set(17, 19, 21))
-  }
-
-  test("filter reads uniquely mapped to all chromosomes with hg names from generator") {
-    testReadHelperSet(TestPrefilterReadsArgs(keepDuplicates = false,
-      isNotGrc = true,
-      keepMitochondrialChromosome = true),
-      Set(17, 19, 21, 23))
+      Set(16, 17, 18, 19, 20, 21, 22, 23))
   }
 
   val sequences = new SequenceDictionary(contigNames.map(cn => SequenceRecord(cn, 10L))
@@ -246,64 +201,31 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
     assert(filteredRdd.sequences.records.size === numContigs)
   }
 
-  sparkTest("filter rdd of reads mapped to autosomal chromosomes with grc names from generator") {
-    testRdd(TestPrefilterReadsArgs(autosomalOnly = true), 2, 1)
+  sparkTest("filter rdd of reads mapped to autosomal chromosomes from generator") {
+    testRdd(TestPrefilterReadsArgs(autosomalOnly = true), 4, 2)
   }
 
-  sparkTest("filter rdd of reads mapped to autosomal + sex chromosomes with grc names from generator") {
-    testRdd(TestPrefilterReadsArgs(), 6, 3)
+  sparkTest("filter rdd of reads mapped to autosomal + sex chromosomes from generator") {
+    testRdd(TestPrefilterReadsArgs(), 12, 6)
   }
 
-  sparkTest("filter rdd of reads mapped to all chromosomes with grc names from generator") {
-    testRdd(TestPrefilterReadsArgs(keepMitochondrialChromosome = true), 8, 4)
+  sparkTest("filter rdd of reads mapped to all chromosomes from generator") {
+    testRdd(TestPrefilterReadsArgs(keepMitochondrialChromosome = true), 16, 8)
   }
 
-  sparkTest("filter rdd of reads mapped to autosomal chromosomes with hg names from generator") {
-    testRdd(TestPrefilterReadsArgs(isNotGrc = true,
-      autosomalOnly = true), 2, 1)
-  }
-
-  sparkTest("filter rdd of reads mapped to autosomal + sex chromosomes with hg names from generator") {
-    testRdd(TestPrefilterReadsArgs(isNotGrc = true), 6, 3)
-  }
-
-  sparkTest("filter rdd of reads mapped to all chromosomes with hg names from generator") {
-    testRdd(TestPrefilterReadsArgs(isNotGrc = true,
-      keepMitochondrialChromosome = true),
-      8, 4)
-  }
-
-  sparkTest("filter rdd of reads uniquely mapped to autosomal chromosomes with grc names from generator") {
+  sparkTest("filter rdd of reads uniquely mapped to autosomal chromosomes from generator") {
     testRdd(TestPrefilterReadsArgs(keepDuplicates = false,
-      autosomalOnly = true), 1, 1)
+      autosomalOnly = true), 2, 2)
   }
 
-  sparkTest("filter rdd of reads uniquely mapped to autosomal + sex chromosomes with grc names from generator") {
+  sparkTest("filter rdd of reads uniquely mapped to autosomal + sex chromosomes from generator") {
     testRdd(TestPrefilterReadsArgs(keepDuplicates = false),
-      3, 3)
+      6, 6)
   }
 
-  sparkTest("filter rdd of reads uniquely mapped to all chromosomes with grc names from generator") {
+  sparkTest("filter rdd of reads uniquely mapped to all chromosomes from generator") {
     testRdd(TestPrefilterReadsArgs(keepDuplicates = false,
       keepMitochondrialChromosome = true),
-      4, 4)
-  }
-
-  sparkTest("filter rdd of reads uniquely mapped to autosomal chromosomes with hg names from generator") {
-    testRdd(TestPrefilterReadsArgs(keepDuplicates = false,
-      isNotGrc = true,
-      autosomalOnly = true), 1, 1)
-  }
-
-  sparkTest("filter rdd of reads uniquely mapped to autosomal + sex chromosomes with hg names from generator") {
-    testRdd(TestPrefilterReadsArgs(keepDuplicates = false,
-      isNotGrc = true), 3, 3)
-  }
-
-  sparkTest("filter rdd of reads uniquely mapped to all chromosomes with hg names from generator") {
-    testRdd(TestPrefilterReadsArgs(keepDuplicates = false,
-      isNotGrc = true,
-      keepMitochondrialChromosome = true),
-      4, 4)
+      8, 8)
   }
 }
