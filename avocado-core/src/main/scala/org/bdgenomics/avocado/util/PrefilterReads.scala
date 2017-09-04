@@ -21,12 +21,7 @@ import org.bdgenomics.adam.models.SequenceDictionary
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.formats.avro.AlignmentRecord
 
-private[avocado] trait PrefilterReadsArgs extends Serializable {
-
-  /**
-   * True if a genome build is not from the Genome Reference Consortium.
-   */
-  var isNotGrc: Boolean
+trait PrefilterReadsArgs extends Serializable {
 
   /**
    * True if we want to restrict our reads to the autosomal chromosomes.
@@ -58,7 +53,7 @@ private[avocado] trait PrefilterReadsArgs extends Serializable {
  * Reifies an input AlignmentRecordRDD down to the contigs and reads we
  * want to genotype.
  */
-private[avocado] object PrefilterReads extends Serializable {
+object PrefilterReads extends Serializable {
 
   /**
    * Filters out reads and contigs that should not be processed.
@@ -92,12 +87,10 @@ private[avocado] object PrefilterReads extends Serializable {
    *   should be kept.
    */
   protected[util] def contigFilterFn(args: PrefilterReadsArgs): (String => Boolean) = {
-    val fns = if (args.isNotGrc) {
-      Iterable(filterNonGrcAutosome(_), filterNonGrcSex(_), filterNonGrcMitochondrial(_))
-    } else {
-      Iterable(filterGrcAutosome(_), filterGrcSex(_), filterGrcMitochondrial(_))
-    }
-    val filteredFns = Iterable(true, !args.autosomalOnly, args.keepMitochondrialChromosome)
+    val fns = Iterable(filterNonGrcAutosome(_), filterNonGrcSex(_), filterNonGrcMitochondrial(_),
+      filterGrcAutosome(_), filterGrcSex(_), filterGrcMitochondrial(_))
+    val filteredFns = Iterable(true, !args.autosomalOnly, args.keepMitochondrialChromosome,
+      true, !args.autosomalOnly, args.keepMitochondrialChromosome)
       .zip(fns)
       .filter(_._1)
       .map(_._2)
@@ -105,7 +98,7 @@ private[avocado] object PrefilterReads extends Serializable {
     assert(filteredFns.nonEmpty)
 
     def filterFn(s: String): Boolean = {
-      filteredFns.map(fn => fn(s)).reduce(_ || _)
+      filteredFns.exists(fn => fn(s))
     }
 
     filterFn(_)
