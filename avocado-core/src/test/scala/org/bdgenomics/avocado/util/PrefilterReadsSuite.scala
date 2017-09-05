@@ -132,6 +132,20 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
     testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(keepMitochondrialChromosome = true)), Set(0, 1, 2, 3, 4, 5, 6, 7))
   }
 
+  test("update a read whose mate is mapped to a filtered contig") {
+    val read = AlignmentRecord.newBuilder()
+      .setReadPaired(true)
+      .setMateMapped(true)
+      .setMateContigName("notARealContig")
+      .build
+
+    val filters = PrefilterReads.contigFilterFn(TestPrefilterReadsArgs())
+    val nullified = PrefilterReads.maybeNullifyMate(read, filters)
+
+    assert(!nullified.getMateMapped)
+    assert(nullified.getMateContigName == null)
+  }
+
   val reads = Seq(AlignmentRecord.newBuilder()
     .setReadMapped(false),
     AlignmentRecord.newBuilder()

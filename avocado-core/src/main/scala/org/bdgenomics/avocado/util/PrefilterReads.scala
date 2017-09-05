@@ -77,8 +77,42 @@ object PrefilterReads extends Serializable {
       .filter(r => contigFn(r.name)))
 
     // filter reads and construct a new rdd
-    rdd.transform(_.filter(readFn))
-      .replaceSequences(sequences)
+    rdd.transform(r => {
+      r.filter(readFn)
+        .map(maybeNullifyMate(_, contigFn))
+    }).replaceSequences(sequences)
+  }
+
+  /**
+   * Nullifies the mate mapping info for reads whose mate is filtered.
+   *
+   * Needed to generate SAM/BAM/CRAM files containing filtered reads.
+   * If this isn't run, the conversion will error as the mate contig
+   * names are not found in the sequence dictionary.
+   *
+   * @param read Read to check for filtered mate.
+   * @param filterFn The function to use to filter contig names.
+   * @return Returns a read whose mate mapping info has been nullified if the
+   *   mate mapping fields indicate that the mate is mapped to a contig that has
+   *   been filtered out.
+   */
+  private[util] def maybeNullifyMate(
+    read: AlignmentRecord,
+    filterFn: (String) => Boolean): AlignmentRecord = {
+
+    if (read.getReadPaired &&
+      read.getMateMapped) {
+      if (filterFn(read.getMateContigName)) {
+        read
+      } else {
+        AlignmentRecord.newBuilder(read)
+          .setMateMapped(false)
+          .setMateContigName(null)
+          .build
+      }
+    } else {
+      read
+    }
   }
 
   /**
