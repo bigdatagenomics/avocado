@@ -68,10 +68,10 @@ object TrioCaller extends Serializable {
             secondParentId: String,
             childId: String): GenotypeRDD = {
 
-    apply(rdd.toVariantContextRDD,
+    apply(rdd.toVariantContexts,
       firstParentId,
       secondParentId,
-      childId).toGenotypeRDD
+      childId).toGenotypes
   }
 
   /**
