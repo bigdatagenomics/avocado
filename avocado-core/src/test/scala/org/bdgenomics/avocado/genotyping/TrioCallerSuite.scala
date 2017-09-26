@@ -244,7 +244,7 @@ class TrioCallerSuite extends AvocadoFunSuite {
     val gts = sc.loadGenotypes(inputVcf.toString)
 
     TrioCaller(gts, "NA12891", "NA12892", "NA12878")
-      .toVariantContextRDD
+      .toVariantContexts
       .saveAsVcf(outputVcf, true, false, false, ValidationStringency.STRICT)
 
     checkFiles(outputVcf, compVcf.getPath)
