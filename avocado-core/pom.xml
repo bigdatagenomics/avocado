@@ -158,14 +158,6 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.seqdoop</groupId>
-      <artifactId>hadoop-bam</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.github.samtools</groupId>
-      <artifactId>htsjdk</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.bdgenomics.bdg-formats</groupId>
       <artifactId>bdg-formats</artifactId>
     </dependency>
