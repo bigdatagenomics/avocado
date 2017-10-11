@@ -55,6 +55,17 @@ object LogUtils extends Serializable {
   }
 
   /**
+   * Normalizes an array of log likelihoods.
+   *
+   * @param pArray The array to normalize.
+   * @return Returns a normalized array.
+   */
+  def logNormalize(pArray: Array[Double]): Array[Double] = {
+    val sum = sumLogProbabilities(pArray)
+    pArray.map(_ - sum)
+  }
+
+  /**
    * This is a nifty little trick for summing logs. Not sure exactly where it's
    * originally from, but apparently Durbin et al '98 features it. evidently:
    * log(p + q) = log(p(1 + q/p)
