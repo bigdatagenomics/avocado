@@ -85,7 +85,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
            ploidy: Int,
            optDesiredPartitionCount: Option[Int] = None,
            optDesiredPartitionSize: Option[Int] = None,
-           optDesiredMaxCoverage: Option[Int] = None): GenotypeRDD = CallGenotypes.time {
+           optDesiredMaxCoverage: Option[Int] = None,
+           useShuffleJoin: Boolean = false): GenotypeRDD = CallGenotypes.time {
 
     // validate metadata
     require(variants.sequences.isCompatibleWith(reads.sequences),
@@ -97,12 +98,17 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         samples.mkString(", ")))
 
     // join reads against variants
-    val joinedRdd = JoinReadsAndVariants.time {
-      TreeRegionJoin.joinAndGroupByRight(
-        variants.rdd.keyBy(v => ReferenceRegion(v)),
-        reads.rdd.flatMap(r => {
-          ReferenceRegion.opt(r).map(rr => (rr, r))
-        })).map(_.swap)
+    val joinedRdd: RDD[(AlignmentRecord, Iterable[Variant])] = JoinReadsAndVariants.time {
+      if (useShuffleJoin) {
+        reads.shuffleRegionJoinAndGroupByLeft(variants)
+          .rdd
+      } else {
+        TreeRegionJoin.joinAndGroupByRight(
+          variants.rdd.keyBy(v => ReferenceRegion(v)),
+          reads.rdd.flatMap(r => {
+            ReferenceRegion.opt(r).map(rr => (rr, r))
+          })).map(_.swap)
+      }
     }
 
     // score variants and get observations
@@ -141,7 +147,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
                       optPhredThreshold: Option[Int] = None,
                       optMinObservations: Option[Int] = None,
                       optDesiredPartitionSize: Option[Int] = None,
-                      optDesiredMaxCoverage: Option[Int] = None): GenotypeRDD = {
+                      optDesiredMaxCoverage: Option[Int] = None,
+                      useShuffleJoin: Boolean = false): GenotypeRDD = {
 
     // get rdd storage level and warn if not persisted
     val readSl = reads.rdd.getStorageLevel
@@ -157,7 +164,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     // "force" call the variants we have discovered in the input reads
     call(reads, variants, ploidy,
       optDesiredPartitionCount = optDesiredPartitionCount,
-      optDesiredPartitionSize = optDesiredPartitionSize)
+      optDesiredPartitionSize = optDesiredPartitionSize,
+      useShuffleJoin = useShuffleJoin)
   }
 
   /**

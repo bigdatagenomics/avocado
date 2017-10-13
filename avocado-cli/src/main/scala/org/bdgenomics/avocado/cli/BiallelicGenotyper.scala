@@ -182,6 +182,10 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     name = "-disable_het_indel_rewriting",
     usage = "If true, disables rewriting of high allelic fraction het INDELs as hom alt INDELs.")
   var disableHetIndelRewriting: Boolean = false
+  @Args4jOption(required = false,
+    name = "-use_shuffle_join",
+    usage = "If true, uses a shuffle join instead of a broadcast join.")
+  var useShuffleJoin: Boolean = false
 
   // required by HardFilterGenotypesArgs
   var maxSnpPhredStrandBias: Float = -1.0f
@@ -232,7 +236,8 @@ class BiallelicGenotyper(
         optPhredThreshold = Some(args.minPhredForDiscovery),
         optMinObservations = Some(args.minObservationsForDiscovery),
         optDesiredPartitionSize = optDesiredPartitionSize,
-        optDesiredMaxCoverage = optDesiredMaxCoverage)
+        optDesiredMaxCoverage = optDesiredMaxCoverage,
+        useShuffleJoin = args.useShuffleJoin)
     })(vPath => {
 
       // load variants
@@ -243,7 +248,8 @@ class BiallelicGenotyper(
         args.ploidy,
         optDesiredPartitionCount = optDesiredPartitionCount,
         optDesiredPartitionSize = optDesiredPartitionSize,
-        optDesiredMaxCoverage = optDesiredMaxCoverage)
+        optDesiredMaxCoverage = optDesiredMaxCoverage,
+        useShuffleJoin = args.useShuffleJoin)
     })
 
     // hard filter the genotypes
