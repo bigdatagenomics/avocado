@@ -21,7 +21,10 @@ import htsjdk.samtools.ValidationStringency
 import org.apache.spark.SparkContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMSaveAnyArgs
-import org.bdgenomics.avocado.genotyping.JointAnnotatorCaller
+import org.bdgenomics.avocado.genotyping.{
+  JointAnnotatorCaller,
+  SquareOffReferenceModel
+}
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Argument, Option => Args4jOption }
 
@@ -46,6 +49,11 @@ class JointerArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs {
     usage = "Location to write the squared off VCF",
     index = 1)
   var outputPath: String = null
+
+  @Args4jOption(required = false,
+    name = "-from_gvcf",
+    usage = "Provide if input is gVCF with reference model, and not already squared off.")
+  var fromGvcf: Boolean = false
 
   @Args4jOption(required = false,
     name = "-single",
@@ -80,10 +88,25 @@ class Jointer(
 
     val stringency = ValidationStringency.valueOf(args.stringency)
 
-    // load variants, drop duplicates, save
-    JointAnnotatorCaller(sc.loadGenotypes(args.inputPath))
-      .transform(_.cache)
-      .sort()
-      .saveAsVcf(args, stringency = stringency)
+    // load in input genotypes
+    val genotypes = sc.loadGenotypes(args.inputPath)
+
+    // are these in gVCF? if so, we must square off the variant matrix
+    // once we've squared off, we can call
+    if (args.fromGvcf) {
+
+      val squaredOff = SquareOffReferenceModel(genotypes)
+
+      // squaring off gives us sorted variants, so we need not resort at the end
+      JointAnnotatorCaller(squaredOff)
+        .saveAsVcf(args, stringency = stringency)
+    } else {
+
+      // load variants, drop duplicates, save
+      JointAnnotatorCaller(genotypes)
+        .transform(_.cache)
+        .sort()
+        .saveAsVcf(args, stringency = stringency)
+    }
   }
 }

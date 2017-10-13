@@ -50,8 +50,17 @@ object JointAnnotatorCaller extends Serializable {
    * @return Returns a squared off and annotated set of variant contexts.
    */
   def apply(genotypes: GenotypeRDD): VariantContextRDD = {
-    genotypes.toVariantContexts
-      .transform(_.flatMap(annotateSite))
+    apply(genotypes.toVariantContexts)
+  }
+
+  /**
+   * Jointly calls variants and computes variant annotations.
+   *
+   * @param variantContexts The squared off sites to process.
+   * @return Returns a squared off and annotated set of variant contexts.
+   */
+  def apply(variantContexts: VariantContextRDD): VariantContextRDD = {
+    variantContexts.transform(_.flatMap(annotateSite))
   }
 
   /**
