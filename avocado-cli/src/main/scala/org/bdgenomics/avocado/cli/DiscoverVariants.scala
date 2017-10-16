@@ -43,6 +43,14 @@ class DiscoverVariantsArgs extends Args4jBase {
     usage = "Location to write the variants",
     index = 1)
   var outputPath: String = null
+  @Args4jOption(required = false,
+    name = "-min_phred_to_discover_variant",
+    usage = "Minimum quality needed to discover a variant. Defaults to phred 25.")
+  var minPhredForDiscovery: Int = 25
+  @Args4jOption(required = false,
+    name = "-min_observations_to_discover_variant",
+    usage = "Minimum number of times a variant must be seen to be discovered. Defaults to phred 5.")
+  var minObservationsForDiscovery: Int = 5
 }
 
 class DiscoverVariants(
@@ -56,7 +64,9 @@ class DiscoverVariants(
     val reads = sc.loadAlignments(args.inputPath)
 
     // extract the variants
-    val variants = DiscoverVariantsFromRDD(reads)
+    val variants = DiscoverVariantsFromRDD(reads,
+      optPhredThreshold = Some(args.minPhredForDiscovery),
+      optMinObservations = Some(args.minObservationsForDiscovery))
 
     // save the variants
     variants.saveAsParquet(args.outputPath)
