@@ -28,6 +28,7 @@ import org.bdgenomics.avocado.genotyping.{
   DiscoverVariants => Discover,
   TrioCaller
 }
+import org.bdgenomics.avocado.models.CopyNumberMap
 import org.bdgenomics.avocado.util.{
   HardFilterGenotypes,
   HardFilterGenotypesArgs,
@@ -229,25 +230,27 @@ class TrioGenotyper(
       sc.loadVariants(vPath)
     })
 
+    val copyNumber = CopyNumberMap.empty(args.ploidy)
+
     val firstParentGenotypes = Biallelic.call(
       PrefilterReads(firstParentReads, args),
       variants,
-      args.ploidy,
+      copyNumber,
       false)
 
     val secondParentGenotypes = Biallelic.call(
       PrefilterReads(secondParentReads, args),
       variants,
-      args.ploidy,
+      copyNumber,
       false)
 
     val childGenotypes = Biallelic.call(
       PrefilterReads(childReads, args),
       variants,
-      args.ploidy,
+      copyNumber,
       false)
 
-    /*val genotypes = GenotypeRDD(sc.union(firstParentGenotypes.rdd,
+    val genotypes = GenotypeRDD(sc.union(firstParentGenotypes.rdd,
       secondParentGenotypes.rdd,
       childGenotypes.rdd),
       variants.sequences,
@@ -267,6 +270,6 @@ class TrioGenotyper(
       childId)
 
     // save the variant calls
-    trioGenotypes.saveAsParquet(args)*/
+    trioGenotypes.saveAsParquet(args)
   }
 }

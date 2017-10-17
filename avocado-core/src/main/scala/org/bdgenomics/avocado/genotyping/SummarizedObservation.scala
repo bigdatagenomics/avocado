@@ -38,8 +38,19 @@ private[genotyping] case class SummarizedObservation(isRef: Boolean,
                                                      forwardStrand: Boolean,
                                                      optQuality: Option[Int],
                                                      mapQ: Int,
+                                                     copyNumber: Option[Int] = None,
                                                      isOther: Boolean = false,
                                                      isNonRef: Boolean = false) {
+
+  /**
+   * Associates a copy number with this observation.
+   *
+   * @param copyNumber The copy number of this site.
+   * @return Returns a new observation with known copy number.
+   */
+  def addCopyNumber(copyNumber: Int): SummarizedObservation = {
+    copy(copyNumber = Some(copyNumber))
+  }
 
   /**
    * @return Returns an observation that agrees with the reference allele.
@@ -94,7 +105,8 @@ private[genotyping] case class SummarizedObservation(isRef: Boolean,
         score.optQuality == optQuality &&
         score.mapQ == mapQ &&
         score.isOther == isOther &&
-        score.isNonRef == isNonRef
+        score.isNonRef == isNonRef &&
+        copyNumber.fold(true)(cn => cn == score.copyNumber)
     })
     assert(optScore.isDefined)
     val score = optScore.get
@@ -109,6 +121,7 @@ private[genotyping] case class SummarizedObservation(isRef: Boolean,
       score.alleleCoverage,
       score.otherCoverage,
       score.totalCoverage,
-      score.isRef)
+      score.isRef,
+      score.copyNumber)
   }
 }

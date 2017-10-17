@@ -102,4 +102,8 @@ case class DiscoveredVariant(
   def overlaps(v: DiscoveredVariant): Boolean = {
     contigName == v.contigName && start < v.end && end > v.start
   }
+
+  def overlaps(rr: ReferenceRegion): Boolean = {
+    contigName == rr.referenceName && start < rr.end && end > rr.start
+  }
 }

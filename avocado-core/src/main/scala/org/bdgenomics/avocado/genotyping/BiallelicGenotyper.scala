@@ -32,7 +32,7 @@ import org.bdgenomics.adam.rdd.variant.{
 }
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.Timers._
-import org.bdgenomics.avocado.models.Observation
+import org.bdgenomics.avocado.models.{ CopyNumberMap, Observation }
 import org.bdgenomics.avocado.util.{
   HardLimiter,
   LogPhred,
@@ -63,8 +63,7 @@ import scala.math.{ exp, log => mathLog, log10, sqrt }
  *   association mapping and population genetical parameter estimation from
  *   sequencing data." Bioinformatics 27.21 (2011): 2987-2993.
  *
- * Assumes no prior in favor of/against the reference, and that there is no
- * copy number variation in the sample (all sites have consistent ploidy).
+ * Assumes no prior in favor of/against the reference.
  */
 private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
@@ -73,7 +72,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    *
    * @param reads The reads to use as evidence.
    * @param variants The variants to force call.
-   * @param ploidy The assumed copy number at each site.
+   * @param copyNumber A class holding information about copy number across the
+   *   genome.
    * @param scoreAllSites If true, generates a gVCF style genotype dataset by
    *   scoring genotype likelihoods for all sites.
    * @param optDesiredPartitionCount Optional parameter for setting the number
@@ -81,15 +81,19 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * @param optDesiredPartitionSize An optional number of reads per partition to
    *   target.
    * @param optDesiredMaxCoverage An optional cap for coverage per site.
+   * @param maxQuality The highest base quality to allow.
+   * @param maxMapQ The highest mapping quality to allow.
    * @return Returns genotype calls.
    */
   def call(reads: AlignmentRecordRDD,
            variants: VariantRDD,
-           ploidy: Int,
+           copyNumber: CopyNumberMap,
            scoreAllSites: Boolean,
            optDesiredPartitionCount: Option[Int] = None,
            optDesiredPartitionSize: Option[Int] = None,
-           optDesiredMaxCoverage: Option[Int] = None): GenotypeRDD = CallGenotypes.time {
+           optDesiredMaxCoverage: Option[Int] = None,
+           maxQuality: Int = 93,
+           maxMapQ: Int = 93): GenotypeRDD = CallGenotypes.time {
 
     // validate metadata
     require(variants.sequences.isCompatibleWith(reads.sequences),
@@ -110,7 +114,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     }
 
     // score variants and get observations
-    val observationRdd = readsToObservations(joinedRdd, ploidy, scoreAllSites)
+    val observationRdd = readsToObservations(joinedRdd,
+      copyNumber,
+      scoreAllSites,
+      maxQuality = maxQuality,
+      maxMapQ = maxMapQ)
 
     // genotype observations
     val genotypeRdd = observationsToGenotypes(observationRdd,
@@ -130,7 +138,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * Discovers variants and calls genotypes from the input read dataset.
    *
    * @param reads The reads to use as evidence.
-   * @param ploidy The assumed copy number at each site.
+   * @param copyNumber A class holding information about copy number across the
+   *   genome.
    * @param scoreAllSites If true, generates a gVCF style genotype dataset by
    *   scoring genotype likelihoods for all sites.
    * @param optDesiredPartitionCount Optional parameter for setting the number
@@ -140,16 +149,20 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * @param optDesiredPartitionSize An optional number of reads per partition to
    *   target.
    * @param optDesiredMaxCoverage An optional cap for coverage per site.
+   * @param maxQuality The highest base quality to allow.
+   * @param maxMapQ The highest mapping quality to allow.
    * @return Returns genotype calls.
    */
   def discoverAndCall(reads: AlignmentRecordRDD,
-                      ploidy: Int,
+                      copyNumber: CopyNumberMap,
                       scoreAllSites: Boolean,
                       optDesiredPartitionCount: Option[Int] = None,
                       optPhredThreshold: Option[Int] = None,
                       optMinObservations: Option[Int] = None,
                       optDesiredPartitionSize: Option[Int] = None,
-                      optDesiredMaxCoverage: Option[Int] = None): GenotypeRDD = {
+                      optDesiredMaxCoverage: Option[Int] = None,
+                      maxQuality: Int = 93,
+                      maxMapQ: Int = 93): GenotypeRDD = {
 
     // get rdd storage level and warn if not persisted
     val readSl = reads.rdd.getStorageLevel
@@ -163,28 +176,34 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       optMinObservations = optMinObservations)
 
     // "force" call the variants we have discovered in the input reads
-    call(reads, variants, ploidy, scoreAllSites,
+    call(reads, variants, copyNumber, scoreAllSites,
       optDesiredPartitionCount = optDesiredPartitionCount,
-      optDesiredPartitionSize = optDesiredPartitionSize)
+      optDesiredPartitionSize = optDesiredPartitionSize,
+      maxQuality = maxQuality,
+      maxMapQ = maxMapQ)
   }
 
   /**
    * Scores the putative variants covered by a read against a single read.
    *
    * @param readAndVariants A tuple pairing a read with the variants it covers.
-   * @param copyNumber The number of copies of this locus expected to exist at
-   *   this site.
+   * @param copyNumberVariants Any known copy number variants that exist at this site.
    * @param scoreAllSites If true, calculates likelihoods for all sites, and not
    *   just variant sites.
    * @return Returns an iterable collection of (Variant, Observation) pairs.
    */
   private[genotyping] def readToObservations(
     readAndVariants: (AlignmentRecord, Iterable[Variant]),
-    copyNumber: Int,
+    copyNumber: CopyNumberMap,
     scoreAllSites: Boolean): Iterable[(DiscoveredVariant, SummarizedObservation)] = ObserveRead.time {
 
     // unpack tuple
     val (read, variants) = readAndVariants
+
+    // extract copy number info
+    val baseCopyNumber = copyNumber.basePloidy
+    val copyNumberVariants = copyNumber.overlappingVariants(
+      ReferenceRegion.unstranded(read))
 
     if (variants.isEmpty && !scoreAllSites) {
       Iterable.empty
@@ -192,7 +211,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       try {
 
         // observe this read
-        val observations = Observer.observeRead(read, copyNumber)
+        val observations = Observer.observeRead(read)
           .map(kv => {
             val ((rr, allele, _), obs) = kv
             (rr, allele, obs)
@@ -337,7 +356,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
           })
 
           // check for overlapping other-alts
-          obsMap.map(p => {
+          val obsAfterOtherAlts = obsMap.map(p => {
             val (dv, observed) = p
             if (observed.isNonRef) {
               val overlappingObs = obsMap.filter(kv => kv._1.overlaps(dv))
@@ -351,6 +370,16 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
             } else {
               p
             }
+          })
+
+          // adjust copy number
+          obsAfterOtherAlts.map(p => {
+            val (dv, observed) = p
+
+            (dv, copyNumberVariants.find((cn: (ReferenceRegion, Int)) => dv.overlaps(cn._1))
+              .fold(observed.addCopyNumber(baseCopyNumber))(cn => {
+                observed.addCopyNumber(cn._2)
+              }))
           })
         }
       } catch {
@@ -387,17 +416,24 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    *
    * @param rdd An RDD containing the product of joining variants against reads
    *   and then grouping by the reads.
-   * @param ploidy The assumed copy number at each site.
+   * @param copyNumber A class holding information about copy number across the
+   *   genome.
    * @param scoreAllSites If true, calculates likelihoods for all sites, and not
    *   just variant sites.
+   * @param maxQuality The highest base quality to allow.
+   * @param maxMapQ The highest mapping quality to allow.
    * @return Returns an RDD of (Variant, Observation) pairs.
    */
   private[genotyping] def readsToObservations(
     rdd: RDD[(AlignmentRecord, Iterable[Variant])],
-    ploidy: Int,
-    scoreAllSites: Boolean): RDD[(Variant, Observation)] = ObserveReads.time {
+    copyNumber: CopyNumberMap,
+    scoreAllSites: Boolean,
+    maxQuality: Int = 93,
+    maxMapQ: Int = 93): RDD[(Variant, Observation)] = ObserveReads.time {
 
-    val observations = rdd.flatMap(readToObservations(_, ploidy, scoreAllSites))
+    val observations = rdd.flatMap(r => {
+      readToObservations(r, copyNumber, scoreAllSites)
+    })
 
     // convert to dataframe
     val sqlContext = SQLContext.getOrCreate(rdd.context)
@@ -415,12 +451,15 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       observationsDf("_2.optQuality").as("optQuality"),
       observationsDf("_2.mapQ").as("mapQ"),
       observationsDf("_2.isOther").as("isOther"),
-      observationsDf("_2.isNonRef").as("isNonRef"))
+      observationsDf("_2.isNonRef").as("isNonRef"),
+      observationsDf("_2.copyNumber").as("copyNumber"))
     val flatObservationsDf = observationsDf.select(flatFields: _*)
 
     // create scored table and prepare for join
+    val maxPloidy = copyNumber.maxPloidy
     val scoredDf = broadcast(ScoredObservation.createFlattenedScores(
-      rdd.context, 93, 93, ploidy))
+      rdd.context, maxQuality, maxMapQ,
+      (copyNumber.minPloidy to maxPloidy).toSeq))
 
     // run the join
     val joinedObservationsDf = scoredDf.join(flatObservationsDf,
@@ -429,29 +468,31 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         "isNonRef",
         "forwardStrand",
         "optQuality",
-        "mapQ"))
+        "mapQ",
+        "copyNumber"))
 
     // run aggregation
     val aggCols = Seq(
       sum("alleleForwardStrand").as("alleleForwardStrand"),
       sum("otherForwardStrand").as("otherForwardStrand"),
-      sum("squareMapQ").as("squareMapQ")) ++ (0 to ploidy).map(i => {
+      sum("squareMapQ").as("squareMapQ")) ++ (0 to maxPloidy).map(i => {
         val field = "referenceLogLikelihoods%d".format(i)
         sum(field).as(field)
-      }).toSeq ++ (0 to ploidy).map(i => {
+      }).toSeq ++ (0 to maxPloidy).map(i => {
         val field = "alleleLogLikelihoods%d".format(i)
         sum(field).as(field)
-      }).toSeq ++ (0 to ploidy).map(i => {
+      }).toSeq ++ (0 to maxPloidy).map(i => {
         val field = "otherLogLikelihoods%d".format(i)
         sum(field).as(field)
-      }).toSeq ++ (0 to ploidy).map(i => {
+      }).toSeq ++ (0 to maxPloidy).map(i => {
         val field = "nonRefLogLikelihoods%d".format(i)
         sum(field).as(field)
       }).toSeq ++ Seq(
         sum("alleleCoverage").as("alleleCoverage"),
         sum("otherCoverage").as("otherCoverage"),
         sum("totalCoverage").as("totalCoverage"),
-        first("isRef").as("isRef"))
+        first("isRef").as("isRef"),
+        first("copyNumber").as("copyNumber"))
     val aggregatedObservationsDf = joinedObservationsDf.groupBy("contigName",
       "start",
       "referenceAllele",
@@ -471,22 +512,22 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         .cast(IntegerType)
         .as("otherForwardStrand"),
       aggregatedObservationsDf("squareMapQ"), {
-        val fields = (0 to ploidy).map(i => {
+        val fields = (0 to maxPloidy).map(i => {
           aggregatedObservationsDf("referenceLogLikelihoods%d".format(i))
         })
         array(fields: _*).as("referenceLogLikelihoods")
       }, {
-        val fields = (0 to ploidy).map(i => {
+        val fields = (0 to maxPloidy).map(i => {
           aggregatedObservationsDf("alleleLogLikelihoods%d".format(i))
         })
         array(fields: _*).as("alleleLogLikelihoods")
       }, {
-        val fields = (0 to ploidy).map(i => {
+        val fields = (0 to maxPloidy).map(i => {
           aggregatedObservationsDf("otherLogLikelihoods%d".format(i))
         })
         array(fields: _*).as("otherLogLikelihoods")
       }, {
-        val fields = (0 to ploidy).map(i => {
+        val fields = (0 to maxPloidy).map(i => {
           aggregatedObservationsDf("nonRefLogLikelihoods%d".format(i))
         })
         array(fields: _*).as("nonRefLogLikelihoods")
@@ -500,7 +541,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       aggregatedObservationsDf("totalCoverage")
         .cast(IntegerType)
         .as("totalCoverage"),
-      aggregatedObservationsDf("isRef"))
+      aggregatedObservationsDf("isRef"),
+      aggregatedObservationsDf("copyNumber"))
     val aggregatedNestedDf = aggregatedObservationsDf.select(firstField,
       struct(secondFields: _*))
 
@@ -537,7 +579,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
   private[genotyping] def genotypeStateAndQuality(
     obs: Observation): (Int, Int, Int, Double) = {
 
-    val states = obs.referenceLogLikelihoods.size
+    val states = obs.copyNumber + 1
     val scoreArray = new Array[Double](states)
 
     def blend(array1: Array[Double],
@@ -669,7 +711,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       .build
 
     // merge likelihoods
-    val likelihoods = obs.alleleLogLikelihoods.length
+    val likelihoods = obs.copyNumber + 1
     val gl = new Array[java.lang.Double](likelihoods)
     val ol = new Array[java.lang.Double](likelihoods)
     def mergeArrays(a1: Array[Double],

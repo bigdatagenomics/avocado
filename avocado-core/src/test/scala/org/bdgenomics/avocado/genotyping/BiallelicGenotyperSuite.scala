@@ -24,15 +24,18 @@ import org.bdgenomics.adam.models.{
   SequenceRecord
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.variant.VariantRDD
 import org.bdgenomics.avocado.AvocadoFunSuite
-import org.bdgenomics.avocado.models.Observation
+import org.bdgenomics.avocado.models.{ CopyNumberMap, Observation }
 import org.bdgenomics.avocado.util.{
   HardFilterGenotypes,
   TestHardFilterGenotypesArgs
 }
 import org.bdgenomics.formats.avro.{
   AlignmentRecord,
+  Feature,
   GenotypeAllele,
   Variant
 }
@@ -43,7 +46,7 @@ import scala.math.log
 class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
   val os = new ObserverSuite()
-  lazy val summaryObservations = ScoredObservation.createScores(sc, 90, 90, 2)
+  lazy val summaryObservations = ScoredObservation.createScores(sc, 90, 90, Seq(2))
     .collect()
     .toSeq
 
@@ -60,7 +63,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     .build
 
   val snpRead = AlignmentRecord.newBuilder(perfectRead)
-    .setMismatchingPositions("6A8")
+    .setMismatchingPositions("6C8")
     .setSequence("ATGGTCAACGAATAA")
     .setMapq(40)
     .setReadNegativeStrand(true)
@@ -72,6 +75,28 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     .setEnd(17L)
     .setReferenceAllele("C")
     .setAlternateAllele("A")
+    .build
+
+  val cnSnp = Variant.newBuilder
+    .setContigName("1")
+    .setStart(17L)
+    .setEnd(18L)
+    .setReferenceAllele("A")
+    .setAlternateAllele("T")
+    .build
+
+  val cnvDup = Feature.newBuilder
+    .setContigName("1")
+    .setStart(17L)
+    .setEnd(18L)
+    .setFeatureType("DUP")
+    .build
+
+  val cnvDel = Feature.newBuilder
+    .setContigName("1")
+    .setStart(17L)
+    .setEnd(18L)
+    .setFeatureType("DEL")
     .build
 
   test("properly handle haploid genotype state") {
@@ -100,17 +125,98 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
   test("scoring read that overlaps no variants should return empty observations in variant only mode") {
     val perfectScores = BiallelicGenotyper.readToObservations(
-      (perfectRead, Iterable.empty), 2, false)
+      (perfectRead, Iterable.empty), CopyNumberMap.empty(2), false)
     assert(perfectScores.isEmpty)
 
     val snpScores = BiallelicGenotyper.readToObservations(
-      (snpRead, Iterable.empty), 2, false)
+      (snpRead, Iterable.empty), CopyNumberMap.empty(2), false)
+  }
+
+  test("scoring read that overlaps no variants should return empty observations") {
+    val perfectScores = BiallelicGenotyper.readToObservations((perfectRead, Iterable.empty),
+      CopyNumberMap.empty(2), false)
+    assert(perfectScores.isEmpty)
+
+    val snpScores = BiallelicGenotyper.readToObservations((snpRead, Iterable.empty),
+      CopyNumberMap.empty(2), false)
     assert(snpScores.isEmpty)
+  }
+
+  sparkTest("score snps in a read overlapping a copy number dup boundary") {
+    val genotypes = BiallelicGenotyper.call(
+      AlignmentRecordRDD(sc.parallelize(Seq(snpRead)),
+        SequenceDictionary.empty,
+        RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))),
+        Seq.empty),
+      VariantRDD(sc.parallelize(Seq(snp, cnSnp)),
+        SequenceDictionary.empty,
+        Seq.empty),
+      CopyNumberMap(2,
+        FeatureRDD(sc.parallelize(Seq(cnvDup)),
+          SequenceDictionary.empty)),
+      false,
+      maxQuality = 40,
+      maxMapQ = 40)
+    val gts = genotypes.rdd.collect
+    assert(gts.length === 2)
+
+    val gts16 = gts.filter(_.getStart == 16L)
+    assert(gts16.size === 1)
+    val gt16 = gts16.head
+    assert(gt16.getGenotypeLikelihoods.size === 3)
+    assert(MathUtils.fpEquals(gt16.getGenotypeLikelihoods.get(0), os.logL(0, 2, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt16.getGenotypeLikelihoods.get(1), os.logL(1, 2, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt16.getGenotypeLikelihoods.get(2), os.logL(2, 2, 0.9999, 0.9999)))
+
+    val gts17 = gts.filter(_.getStart == 17L)
+    assert(gts17.size === 1)
+    val gt17 = gts17.head
+    assert(gt17.getGenotypeLikelihoods.size === 4)
+    assert(MathUtils.fpEquals(gt17.getGenotypeLikelihoods.get(0), os.logL(3, 3, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt17.getGenotypeLikelihoods.get(1), os.logL(2, 3, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt17.getGenotypeLikelihoods.get(2), os.logL(1, 3, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt17.getGenotypeLikelihoods.get(3), os.logL(0, 3, 0.9999, 0.9999)))
+  }
+
+  sparkTest("score snps in a read overlapping a copy number del boundary") {
+    val genotypes = BiallelicGenotyper.call(
+      AlignmentRecordRDD(sc.parallelize(Seq(snpRead)),
+        SequenceDictionary.empty,
+        RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))),
+        Seq.empty),
+      VariantRDD(sc.parallelize(Seq(snp, cnSnp)),
+        SequenceDictionary.empty,
+        Seq.empty),
+      CopyNumberMap(2,
+        FeatureRDD(sc.parallelize(Seq(cnvDel)),
+          SequenceDictionary.empty)),
+      false,
+      maxQuality = 40,
+      maxMapQ = 40)
+    val gts = genotypes.rdd.collect
+    assert(gts.length === 2)
+
+    val gts16 = gts.filter(_.getStart == 16L)
+    assert(gts16.size === 1)
+    val gt16 = gts16.head
+    assert(gt16.getGenotypeLikelihoods.size === 3)
+    assert(MathUtils.fpEquals(gt16.getGenotypeLikelihoods.get(0), os.logL(0, 2, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt16.getGenotypeLikelihoods.get(1), os.logL(1, 2, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt16.getGenotypeLikelihoods.get(2), os.logL(2, 2, 0.9999, 0.9999)))
+
+    val gts17 = gts.filter(_.getStart == 17L)
+    assert(gts17.size === 1)
+    val gt17 = gts17.head
+    assert(gt17.getGenotypeLikelihoods.size === 2)
+    assert(MathUtils.fpEquals(gt17.getGenotypeLikelihoods.get(0), os.logL(1, 1, 0.9999, 0.9999)))
+    assert(MathUtils.fpEquals(gt17.getGenotypeLikelihoods.get(1), os.logL(0, 1, 0.9999, 0.9999)))
   }
 
   sparkTest("score snp in a read with no evidence of the snp") {
     val scores = BiallelicGenotyper.readToObservations(
-      (perfectRead, Iterable(snp)), 2, false)
+      (perfectRead, Iterable(snp)),
+      CopyNumberMap.empty(2),
+      false)
     assert(scores.size === 1)
 
     val (snpVariant, snpSumObservation) = scores.head
@@ -129,7 +235,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
   sparkTest("score snp in a read with evidence of the snp") {
     val scores = BiallelicGenotyper.readToObservations(
-      (snpRead, Iterable(snp)), 2, false)
+      (snpRead, Iterable(snp)), CopyNumberMap.empty(2), false)
     assert(scores.size === 1)
 
     val (snpVariant, snpSumObservation) = scores.head
@@ -148,7 +254,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
   sparkTest("score snp in a read with evidence of the snp, and non-variant bases") {
     val scores = BiallelicGenotyper.readToObservations(
-      (snpRead, Iterable(snp)), 2, true)
+      (snpRead, Iterable(snp)), CopyNumberMap.empty(2), true)
     assert(scores.size === 15)
     assert(scores.count(_._1.alternateAllele.isDefined) === 1)
 
@@ -232,7 +338,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
     val genotypes = BiallelicGenotyper.call(reads,
       variants,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optDesiredPartitionCount = Some(26))
     val gts = genotypes.rdd.collect
@@ -282,7 +388,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optDesiredPartitionCount = Some(26))
       .transform(rdd => {
@@ -311,7 +417,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       true,
       optMinObservations = Some(6))
       .transform(rdd => {
@@ -344,7 +450,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optDesiredPartitionCount = Some(26))
     val filteredGenotypes = HardFilterGenotypes(genotypes,
@@ -378,7 +484,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optDesiredPartitionCount = Some(26))
     val filteredGenotypes = HardFilterGenotypes(genotypes,
@@ -433,7 +539,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(variants.size === 1)
 
     val obs = BiallelicGenotyper.readToObservations((reads.rdd.first,
-      variants.toIterable), 2, false)
+      variants.toIterable), CopyNumberMap.empty(2), false)
 
     assert(obs.size === 1)
   }
@@ -457,7 +563,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
     assert(variants.rdd.count === 1)
 
-    val gts = BiallelicGenotyper.call(reads, variants, 2, false)
+    val gts = BiallelicGenotyper.call(reads, variants, CopyNumberMap.empty(2), false)
     val gtArray = gts.rdd.collect
     assert(gtArray.size === 1)
     val gt = gtArray.head
@@ -483,7 +589,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
     assert(variants.rdd.count === 1)
 
-    val gts = BiallelicGenotyper.call(reads, variants, 2, false)
+    val gts = BiallelicGenotyper.call(reads, variants, CopyNumberMap.empty(2), false)
     val gtArray = gts.rdd.collect
     assert(gtArray.size === 1)
     val gt = gtArray.head
@@ -498,7 +604,10 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
         rdd.filter(_.getMapq > 0)
       })
 
-    val gts = BiallelicGenotyper.discoverAndCall(reads, 2, false, optMinObservations = Some(3))
+    val gts = BiallelicGenotyper.discoverAndCall(reads,
+      CopyNumberMap.empty(2),
+      false,
+      optMinObservations = Some(3))
     val gtArray = gts.rdd.collect
     assert(gtArray.size === 1)
     val gt = gtArray.head
@@ -513,7 +622,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.1_1067596.sam")
     val reads = sc.loadAlignments(readPath.toString)
 
-    val gts = BiallelicGenotyper.discoverAndCall(reads, 2, false)
+    val gts = BiallelicGenotyper.discoverAndCall(reads, CopyNumberMap.empty(2), false)
       .transform(rdd => {
         rdd.filter(gt => gt.getStart == 1067595)
       })
@@ -531,7 +640,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
         rdd.filter(_.getMapq > 0)
       })
 
-    val gts = BiallelicGenotyper.discoverAndCall(reads, 2, false)
+    val gts = BiallelicGenotyper.discoverAndCall(reads, CopyNumberMap.empty(2), false)
       .transform(rdd => {
         rdd.filter(gt => gt.getStart == 877714)
       })
@@ -549,7 +658,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
         rdd.filter(_.getMapq > 0)
       })
 
-    val gts = BiallelicGenotyper.discoverAndCall(reads, 2, false)
+    val gts = BiallelicGenotyper.discoverAndCall(reads, CopyNumberMap.empty(2), false)
       .transform(rdd => {
         rdd.filter(gt => gt.getStart == 886048)
       })
@@ -568,7 +677,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optPhredThreshold = Some(30)).transform(rdd => {
         rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.REF))
@@ -600,7 +709,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       }).realignIndels()
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optPhredThreshold = Some(30)).transform(rdd => {
         rdd.filter(gt => gt.getAlleles.forall(_ == GenotypeAllele.ALT))
@@ -615,7 +724,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optPhredThreshold = Some(30)).transform(rdd => {
         rdd.filter(gt => {
@@ -642,7 +751,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       true,
       optMinObservations = Some(4),
       optPhredThreshold = Some(30))
@@ -676,7 +785,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optPhredThreshold = Some(30)).transform(rdd => {
         rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.REF))
@@ -700,7 +809,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optPhredThreshold = Some(25)).transform(rdd => {
         rdd.filter(gt => !gt.getAlleles.forall(_ == GenotypeAllele.REF))
@@ -742,7 +851,8 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
       Seq.empty)
 
     val gts = BiallelicGenotyper.discoverAndCall(readRdd,
-      2, false).rdd.collect
+      CopyNumberMap.empty(2), false).rdd.collect
+
     assert(gts.size === 2)
     assert(gts.forall(gt => gt.getAlleles.size == 2))
     assert(gts.forall(gt => gt.getAlleles.count(_ == GenotypeAllele.ALT) == 1))
@@ -757,7 +867,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val reads = sc.loadAlignments(readPath.toString)
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optPhredThreshold = Some(18),
       optMinObservations = Some(3)).transform(rdd => {
@@ -782,12 +892,11 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val reads = sc.loadAlignments(readPath.toString)
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
-      2,
+      CopyNumberMap.empty(2),
       false,
       optPhredThreshold = Some(18),
       optMinObservations = Some(3)).rdd.collect
 
-    gts.foreach(println)
     assert(gts.size === 2)
     assert(gts.forall(_.getStart == 5274546L))
     assert(gts.forall(_.getVariant.getAlternateAllele == "T"))

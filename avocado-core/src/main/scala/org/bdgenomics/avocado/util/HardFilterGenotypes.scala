@@ -175,7 +175,8 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    */
   def apply(grdd: GenotypeRDD,
             args: HardFilterGenotypesArgs,
-            filterRefGenotypes: Boolean = true): GenotypeRDD = {
+            filterRefGenotypes: Boolean = true,
+            emitAllGenotypes: Boolean = false): GenotypeRDD = {
 
     // make snp and indel filters
     val snpFilters = buildSnpHardFilters(args)
@@ -246,7 +247,8 @@ private[avocado] object HardFilterGenotypes extends Serializable {
         minQuality,
         snpFilters,
         indelFilters,
-        filterRefGenotypes))
+        filterRefGenotypes,
+        emitAllGenotypes))
     }).addHeaderLines(filterHeaders)
   }
 
@@ -632,11 +634,16 @@ private[avocado] object HardFilterGenotypes extends Serializable {
     minQuality: Int,
     snpFilters: Iterable[Genotype => Option[String]],
     indelFilters: Iterable[Genotype => Option[String]],
-    filterRefGenotypes: Boolean): Option[Genotype] = {
+    filterRefGenotypes: Boolean,
+    emitAllGenotypes: Boolean = false): Option[Genotype] = {
 
     // first, apply emission filters
-    val optGenotype = Some(genotype)
-      .filter(emitGenotypeFilter(_, minQuality, filterRefGenotypes))
+    val optGenotype = if (emitAllGenotypes) {
+      Some(genotype)
+    } else {
+      Some(genotype)
+        .filter(emitGenotypeFilter(_, minQuality, filterRefGenotypes))
+    }
 
     // then, check whether we are a snp or indel and apply hard filters
     if (genotype.getVariant.getAlternateAllele != null) {
