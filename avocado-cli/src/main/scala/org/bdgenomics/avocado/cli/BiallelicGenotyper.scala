@@ -22,6 +22,7 @@ import org.bdgenomics.adam.projections.{ AlignmentRecordField, Filter }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMSaveAnyArgs
 import org.bdgenomics.avocado.genotyping.{ BiallelicGenotyper => Biallelic }
+import org.bdgenomics.avocado.models.CopyNumberMap
 import org.bdgenomics.avocado.util.{
   HardFilterGenotypes,
   HardFilterGenotypesArgs,
@@ -186,6 +187,14 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     name = "-score_all_sites",
     usage = "If provided, scores all sites, even non-variant sites. Emits a gVCF styled output.")
   var scoreAllSites = false
+  @Args4jOption(required = false,
+    name = "-cnvs",
+    usage = "Copy number variant calls for this sample.")
+  var cnvCalls: String = null
+  @Args4jOption(required = false,
+    name = "-emit_all_genotypes",
+    usage = "If true, emits all genotyped sites. Use if joint calling.")
+  var emitAllGenotypes = false
 
   // required by HardFilterGenotypesArgs
   var maxSnpPhredStrandBias: Float = -1.0f
@@ -211,6 +220,9 @@ class BiallelicGenotyper(
       AlignmentRecordField.recordGroupName))
     val reads = sc.loadAlignments(args.inputPath,
       optProjection = projection)
+    val samples = reads.recordGroups.recordGroups.map(_.sample).toSet
+    require(samples.size <= 1,
+      "Saw more than one sample (%s) attached to input.".format(samples.mkString(", ")))
 
     // filter reads
     val filteredReads = PrefilterReads(reads, args)
@@ -227,11 +239,20 @@ class BiallelicGenotyper(
     val optDesiredMaxCoverage = Option(args.desiredMaxCoverage)
       .filter(_ >= 1)
 
+    // has the user provided copy number variant calls?
+    val copyNumber = Option(args.cnvCalls)
+      .fold(CopyNumberMap.empty(args.ploidy))(p => {
+        // select cnv calls where the source is a known sample ID
+        val features = sc.loadFeatures(p)
+          .transform(_.filter(f => samples(f.getSource)))
+        CopyNumberMap(args.ploidy, features)
+      })
+
     // were we provided variants? if so, load them and call.
     // else, discover variants and call
     val genotypes = Option(args.variantsToCall).fold({
       Biallelic.discoverAndCall(filteredReads,
-        args.ploidy,
+        copyNumber,
         args.scoreAllSites,
         optDesiredPartitionCount = optDesiredPartitionCount,
         optPhredThreshold = Some(args.minPhredForDiscovery),
@@ -245,7 +266,7 @@ class BiallelicGenotyper(
 
       Biallelic.call(filteredReads,
         variants,
-        args.ploidy,
+        copyNumber,
         args.scoreAllSites,
         optDesiredPartitionCount = optDesiredPartitionCount,
         optDesiredPartitionSize = optDesiredPartitionSize,
@@ -253,8 +274,10 @@ class BiallelicGenotyper(
     })
 
     // hard filter the genotypes
-    val filteredGenotypes = HardFilterGenotypes(genotypes, args,
-      filterRefGenotypes = !args.scoreAllSites)
+    val filteredGenotypes = HardFilterGenotypes(RewriteHets(genotypes, args),
+      args,
+      filterRefGenotypes = !args.scoreAllSites,
+      emitAllGenotypes = args.emitAllGenotypes)
 
     // save the variant calls
     filteredGenotypes.saveAsParquet(args)

@@ -25,7 +25,7 @@ import scala.math.{ log, pow, sqrt }
 
 class ObserverSuite extends AvocadoFunSuite {
 
-  lazy val summaryObservations = ScoredObservation.createScores(sc, 90, 90, 2)
+  lazy val summaryObservations = ScoredObservation.createScores(sc, 90, 90, Seq(2))
     .collect()
     .toSeq
 
@@ -42,7 +42,7 @@ class ObserverSuite extends AvocadoFunSuite {
       .setMismatchingPositions("0")
       .build()
 
-    assert(Observer.observeRead(read, 2).isEmpty)
+    assert(Observer.observeRead(read).isEmpty)
   }
 
   def eps(g: Int,
@@ -81,7 +81,8 @@ class ObserverSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample")
       .build()
 
-    val obs = Observer.observeRead(read, 2)
+    val obs = Observer.observeRead(read)
+      .map(p => (p._1, p._2.addCopyNumber(2)))
       .toSeq
       .map(p => (p._1, p._2.toObservation(summaryObservations)))
 
@@ -127,7 +128,8 @@ class ObserverSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample")
       .build()
 
-    val obs = Observer.observeRead(read, 2)
+    val obs = Observer.observeRead(read)
+      .map(p => (p._1, p._2.addCopyNumber(2)))
       .toSeq
       .map(p => (p._1, p._2.toObservation(summaryObservations)))
 
@@ -185,7 +187,8 @@ class ObserverSuite extends AvocadoFunSuite {
       .setRecordGroupSample("sample")
       .build()
 
-    val obs = Observer.observeRead(read, 2)
+    val obs = Observer.observeRead(read)
+      .map(p => (p._1, p._2.addCopyNumber(2)))
       .toSeq
       .map(p => (p._1, p._2.toObservation(summaryObservations)))
 

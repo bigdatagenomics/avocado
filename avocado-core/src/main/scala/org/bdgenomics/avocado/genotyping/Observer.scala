@@ -42,12 +42,10 @@ private[genotyping] object Observer extends Serializable {
    * Emits a likelihood for each allele seen in this read.
    *
    * @param read Read to observe.
-   * @param ploidy Sample ploidy to assume.
    * @return Returns an iterable collection of observations, keyed by (site,
    *   allele, sample ID).
    */
-  def observeRead(read: AlignmentRecord,
-                  ploidy: Int): Iterable[((ReferenceRegion, String, String), SummarizedObservation)] = {
+  def observeRead(read: AlignmentRecord): Iterable[((ReferenceRegion, String, String), SummarizedObservation)] = {
 
     // extract cigar
     val alignment = ObservationOperator.extractAlignmentOperators(read)
@@ -152,11 +150,14 @@ private[genotyping] object Observer extends Serializable {
    */
   private[genotyping] def likelihoods(copyNumber: Int,
                                       mapSuccessProb: Double,
-                                      baseQuality: Option[Int]): (Array[Double], Array[Double]) = {
+                                      baseQuality: Option[Int],
+                                      optMaxCopyNumber: Option[Int] = None): (Array[Double], Array[Double]) = {
+
+    val maxCopyNumber = optMaxCopyNumber.getOrElse(copyNumber)
 
     // build allele/other likelihood arrays
-    val alleleArray = new Array[Double](copyNumber + 1)
-    val otherArray = new Array[Double](copyNumber + 1)
+    val alleleArray = new Array[Double](maxCopyNumber + 1)
+    val otherArray = new Array[Double](maxCopyNumber + 1)
 
     // go base quality to phred
     val baseSuccessProb = baseQuality.fold(1.0)(
@@ -172,6 +173,11 @@ private[genotyping] object Observer extends Serializable {
       val mMinusG = copyNumber - g
       alleleArray(g) = log(mMinusG * epsilon + g * oneMinusEpsilon)
       otherArray(g) = log(mMinusG * oneMinusEpsilon + g * epsilon)
+      g += 1
+    }
+    while (g <= maxCopyNumber) {
+      alleleArray(g) = 0.0
+      otherArray(g) = 0.0
       g += 1
     }
 

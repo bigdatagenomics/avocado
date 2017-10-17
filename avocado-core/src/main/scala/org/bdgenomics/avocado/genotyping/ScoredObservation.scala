@@ -39,7 +39,7 @@ private[genotyping] object ScoredObservation extends Serializable {
    * @param forwardStrand Was this on the forward strand?
    * @param optQuality What is the quality of this observation, if defined?
    * @param mapQ What is the mapping quality of the read this is from?
-   * @param ploidy How many copies of chromosomes exist at this site?
+   * @param copyNumber How many copies of chromosomes exist at this site?
    * @return Returns a scored observation.
    */
   def apply(isRef: Boolean,
@@ -48,14 +48,16 @@ private[genotyping] object ScoredObservation extends Serializable {
             forwardStrand: Boolean,
             optQuality: Option[Int],
             mapQ: Int,
-            ploidy: Int): ScoredObservation = {
+            copyNumber: Int,
+            maxCopyNumber: Int): ScoredObservation = {
     val mapSuccessProbability = PhredUtils.phredToSuccessProbability(mapQ)
     val (altLikelihoods, _) = Observer.likelihoods(
-      ploidy,
+      copyNumber,
       mapSuccessProbability,
-      optQuality)
+      optQuality,
+      optMaxCopyNumber = Some(maxCopyNumber))
 
-    val zeros = Array.fill(ploidy + 1)({ 0.0 })
+    val zeros = Array.fill(maxCopyNumber + 1)({ 0.0 })
     val (referenceLikelihoods, alleleLikelihoods, otherLikelihoods, nonRefLikelihoods) = if (isOther) {
       (zeros, zeros, altLikelihoods, zeros)
     } else if (isNonRef) {
@@ -83,7 +85,8 @@ private[genotyping] object ScoredObservation extends Serializable {
       nonRefLikelihoods,
       if (!isRef && !isOther) 1 else 0,
       if (isRef) 1 else 0,
-      1)
+      1,
+      copyNumber)
   }
 
   /**
@@ -92,68 +95,71 @@ private[genotyping] object ScoredObservation extends Serializable {
    * @param sc A SparkContext to use to access the Spark SQL APIs.
    * @param maxQuality The highest base quality score to allow.
    * @param maxMapQ The highest mapping quality score to allow.
-   * @param ploidy The number of chromosomes to build in the table.
+   * @param copyNumbers The number of chromosomes to build in the table.
    * @return Returns a Dataset of ScoredObservations.
    */
   def createScores(sc: SparkContext,
                    maxQuality: Int,
                    maxMapQ: Int,
-                   ploidy: Int): Dataset[ScoredObservation] = {
+                   copyNumbers: Seq[Int]): Dataset[ScoredObservation] = {
+    val maxCopyNumber = copyNumbers.max
     val sqlContext = SQLContext.getOrCreate(sc)
     import sqlContext.implicits._
     sqlContext.createDataset(
       (Seq(None.asInstanceOf[Option[Int]]) ++
         (1 to maxQuality).map(q => Some(q))).flatMap(optQ => {
           (1 to maxMapQ).flatMap(mq => {
-            Seq(
-              ScoredObservation(true, true, true, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, true, true, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(true, false, true, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, false, true, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(true, true, false, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, true, false, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(true, false, false, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, false, false, true,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(true, true, true, false,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, true, true, false,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(true, false, true, false,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, false, true, false,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(true, true, false, false,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, true, false, false,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(true, false, false, false,
-                optQ, mq,
-                ploidy),
-              ScoredObservation(false, false, false, false,
-                optQ, mq,
-                ploidy))
+            copyNumbers.flatMap(copyNumber => {
+              Seq(
+                ScoredObservation(true, true, true, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, true, true, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(true, false, true, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, false, true, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(true, true, false, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, true, false, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(true, false, false, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, false, false, true,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(true, true, true, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, true, true, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(true, false, true, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, false, true, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(true, true, false, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, true, false, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(true, false, false, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber),
+                ScoredObservation(false, false, false, false,
+                  optQ, mq,
+                  copyNumber, maxCopyNumber))
+            })
           })
         }))
   }
@@ -164,16 +170,18 @@ private[genotyping] object ScoredObservation extends Serializable {
    * @param sc A SparkContext to use to access the Spark SQL APIs.
    * @param maxQuality The highest base quality score to allow.
    * @param maxMapQ The highest mapping quality score to allow.
-   * @param ploidy The number of chromosomes to build in the table.
+   * @param copyNumber The number of chromosomes to build in the table.
    * @return Returns a DataFrame of ScoredObservations, with the arrays in the
    *   schema flattened.
    */
   def createFlattenedScores(sc: SparkContext,
                             maxQuality: Int,
                             maxMapQ: Int,
-                            ploidy: Int): DataFrame = {
-    val scoreDf = createScores(sc, maxQuality, maxMapQ, ploidy)
+                            copyNumberRange: Seq[Int]): DataFrame = {
+    val scoreDf = createScores(sc, maxQuality, maxMapQ, copyNumberRange)
       .toDF
+
+    val maxCopyNumber = copyNumberRange.max
 
     scoreDf.select((
       Seq(scoreDf("isRef"),
@@ -184,21 +192,22 @@ private[genotyping] object ScoredObservation extends Serializable {
         scoreDf("mapQ"),
         scoreDf("alleleForwardStrand"),
         scoreDf("otherForwardStrand"),
-        scoreDf("squareMapQ")) ++ (0 to ploidy).map(p => {
+        scoreDf("squareMapQ")) ++ (0 to maxCopyNumber).map(p => {
           scoreDf("referenceLogLikelihoods").getItem(p)
             .as("referenceLogLikelihoods%d".format(p))
-        }) ++ (0 to ploidy).map(p => {
+        }) ++ (0 to maxCopyNumber).map(p => {
           scoreDf("alleleLogLikelihoods").getItem(p)
             .as("alleleLogLikelihoods%d".format(p))
-        }) ++ (0 to ploidy).map(p => {
+        }) ++ (0 to maxCopyNumber).map(p => {
           scoreDf("otherLogLikelihoods").getItem(p)
             .as("otherLogLikelihoods%d".format(p))
-        }) ++ (0 to ploidy).map(p => {
+        }) ++ (0 to maxCopyNumber).map(p => {
           scoreDf("nonRefLogLikelihoods").getItem(p)
             .as("nonRefLogLikelihoods%d".format(p))
         }) ++ Seq(scoreDf("alleleCoverage"),
           scoreDf("otherCoverage"),
-          scoreDf("totalCoverage"))): _*)
+          scoreDf("totalCoverage"),
+          scoreDf("copyNumber"))): _*)
   }
 }
 
@@ -229,6 +238,7 @@ private[genotyping] object ScoredObservation extends Serializable {
  * @param otherCoverage The total number of reads observed that cover the site
  *   but that do not match the allele.
  * @param totalCoverage The total number of reads that cover the site.
+ * @param copyNumber The number of chromosomes seen at this site.
  */
 private[genotyping] case class ScoredObservation(
     isRef: Boolean,
@@ -246,5 +256,6 @@ private[genotyping] case class ScoredObservation(
     nonRefLogLikelihoods: Array[Double],
     alleleCoverage: Int,
     otherCoverage: Int,
-    totalCoverage: Int) {
+    totalCoverage: Int,
+    copyNumber: Int) {
 }

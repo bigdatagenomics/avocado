@@ -17,6 +17,35 @@
  */
 package org.bdgenomics.avocado.models
 
+object Observation {
+
+  def apply(alleleForwardStrand: Int,
+            otherForwardStrand: Int,
+            squareMapQ: Double,
+            referenceLogLikelihoods: Array[Double],
+            alleleLogLikelihoods: Array[Double],
+            otherLogLikelihoods: Array[Double],
+            nonRefLogLikelihoods: Array[Double],
+            alleleCoverage: Int,
+            otherCoverage: Int,
+            totalCoverage: Int = 1,
+            isRef: Boolean = true): Observation = {
+
+    Observation(alleleForwardStrand,
+      otherForwardStrand,
+      squareMapQ,
+      referenceLogLikelihoods,
+      alleleLogLikelihoods,
+      otherLogLikelihoods,
+      nonRefLogLikelihoods,
+      alleleCoverage,
+      otherCoverage,
+      totalCoverage,
+      isRef,
+      alleleLogLikelihoods.length - 1)
+  }
+}
+
 /**
  * A generic class that stores likelihoods and simple annotations.
  *
@@ -49,11 +78,12 @@ case class Observation(alleleForwardStrand: Int,
                        nonRefLogLikelihoods: Array[Double],
                        alleleCoverage: Int,
                        otherCoverage: Int,
-                       totalCoverage: Int = 1,
-                       isRef: Boolean = true) {
+                       totalCoverage: Int,
+                       isRef: Boolean,
+                       copyNumber: Int) {
 
   override def toString: String = {
-    "Observation(%d, %d, %f, Array(%s), Array(%s), Array(%s), Array(%s), %d, %d, %d, %s)".format(
+    "Observation(%d, %d, %f, Array(%s), Array(%s), Array(%s), Array(%s), %d, %d, %d, %s, %d)".format(
       alleleForwardStrand,
       otherForwardStrand,
       squareMapQ,
@@ -64,7 +94,8 @@ case class Observation(alleleForwardStrand: Int,
       alleleCoverage,
       otherCoverage,
       totalCoverage,
-      isRef)
+      isRef,
+      copyNumber)
   }
 
   /**
@@ -72,13 +103,8 @@ case class Observation(alleleForwardStrand: Int,
    */
   def coverage: Int = alleleCoverage + otherCoverage
 
-  /**
-   * @return The copy number of this site.
-   */
-  def copyNumber = alleleLogLikelihoods.length - 1
-
-  assert(copyNumber == (otherLogLikelihoods.length - 1) &&
-    copyNumber == (referenceLogLikelihoods.length - 1) &&
+  assert(copyNumber <= (otherLogLikelihoods.length - 1) &&
+    copyNumber <= (referenceLogLikelihoods.length - 1) &&
     copyNumber > 0)
   assert(squareMapQ >= 0.0)
   assert(alleleCoverage >= 0 && otherCoverage >= 0 && coverage >= 0 && totalCoverage > 0)
@@ -99,7 +125,8 @@ case class Observation(alleleForwardStrand: Int,
       alleleCoverage,
       otherCoverage,
       totalCoverage = totalCoverage,
-      isRef = setRef.getOrElse(isRef))
+      isRef = setRef.getOrElse(isRef),
+      copyNumber = copyNumber)
   }
 
   /**
@@ -118,7 +145,8 @@ case class Observation(alleleForwardStrand: Int,
       otherCoverage,
       alleleCoverage,
       totalCoverage = totalCoverage,
-      isRef = !isRef)
+      isRef = !isRef,
+      copyNumber = copyNumber)
   }
 
   /**
@@ -138,6 +166,7 @@ case class Observation(alleleForwardStrand: Int,
       0,
       0,
       totalCoverage = totalCoverage,
-      isRef = false)
+      isRef = false,
+      copyNumber = copyNumber)
   }
 }
