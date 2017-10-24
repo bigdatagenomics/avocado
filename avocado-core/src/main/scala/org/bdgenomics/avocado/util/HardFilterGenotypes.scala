@@ -171,11 +171,13 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    * @param grdd GenotypeRDD to filter.
    * @param args The hard filter configuration to apply.
    * @param filterRefGenotypes If true, discards homozygous ref calls.
+   * @param emitAllGenotypes If true, emits all genotypes.
    * @return A new GenotypeRDD of hard filtered genotypes.
    */
   def apply(grdd: GenotypeRDD,
             args: HardFilterGenotypesArgs,
-            filterRefGenotypes: Boolean = true): GenotypeRDD = {
+            filterRefGenotypes: Boolean = true,
+            emitAllGenotypes: Boolean = true): GenotypeRDD = {
 
     // make snp and indel filters
     val snpFilters = buildSnpHardFilters(args)
@@ -246,7 +248,8 @@ private[avocado] object HardFilterGenotypes extends Serializable {
         minQuality,
         snpFilters,
         indelFilters,
-        filterRefGenotypes))
+        filterRefGenotypes,
+        emitAllGenotypes = emitAllGenotypes))
     }).addHeaderLines(filterHeaders)
   }
 
@@ -624,6 +627,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
    * @param snpFilters Collection of filters to apply to emitted SNPs.
    * @param indelFilters Collection of filters to apply to emitted INDELs.
    * @param filterRefGenotypes If true, discards hom-ref calls.
+   * @param emitAllGenotypes If true, emits all genotypes.
    * @return If genotype is high enough quality to emit, a hard filtered
    *   genotype.
    */
@@ -632,11 +636,16 @@ private[avocado] object HardFilterGenotypes extends Serializable {
     minQuality: Int,
     snpFilters: Iterable[Genotype => Option[String]],
     indelFilters: Iterable[Genotype => Option[String]],
-    filterRefGenotypes: Boolean): Option[Genotype] = {
+    filterRefGenotypes: Boolean,
+    emitAllGenotypes: Boolean = false): Option[Genotype] = {
 
     // first, apply emission filters
-    val optGenotype = Some(genotype)
-      .filter(emitGenotypeFilter(_, minQuality, filterRefGenotypes))
+    val optGenotype = if (emitAllGenotypes) {
+      Some(genotype)
+    } else {
+      Some(genotype)
+        .filter(emitGenotypeFilter(_, minQuality, filterRefGenotypes))
+    }
 
     // then, check whether we are a snp or indel and apply hard filters
     if (genotype.getVariant.getAlternateAllele != null) {
