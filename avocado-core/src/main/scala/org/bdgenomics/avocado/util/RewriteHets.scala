@@ -97,24 +97,29 @@ object RewriteHets extends Serializable {
                                   maxIndelAllelicFraction: Float,
                                   rewriteHetSnps: Boolean,
                                   rewriteHetIndels: Boolean): Boolean = {
-    val isSnp = ((gt.getVariant.getReferenceAllele.length == 1) &&
-      (gt.getVariant.getAlternateAllele.length == 1))
-    val numAlts = gt.getAlleles.count(_ == GenotypeAllele.ALT)
-    val isHet = (numAlts != 0) && (numAlts != gt.getAlleles.length)
-
-    def checkAf(af: Float): Boolean = {
-      (Option(gt.getReadDepth), Option(gt.getAlternateReadDepth)) match {
-        case (Some(dp), Some(alt)) => (alt.toFloat / dp.toFloat) >= af
-        case _                     => false
-      }
-    }
-
-    if (rewriteHetSnps && isSnp && isHet) {
-      checkAf(maxSnpAllelicFraction)
-    } else if (rewriteHetIndels && !isSnp && isHet) {
-      checkAf(maxIndelAllelicFraction)
-    } else {
+    if (gt.getVariant.getAlternateAllele == null) {
       false
+    } else {
+
+      val isSnp = ((gt.getVariant.getReferenceAllele.length == 1) &&
+        (gt.getVariant.getAlternateAllele.length == 1))
+      val numAlts = gt.getAlleles.count(_ == GenotypeAllele.ALT)
+      val isHet = (numAlts != 0) && (numAlts != gt.getAlleles.length)
+
+      def checkAf(af: Float): Boolean = {
+        (Option(gt.getReadDepth), Option(gt.getAlternateReadDepth)) match {
+          case (Some(dp), Some(alt)) => (alt.toFloat / dp.toFloat) >= af
+          case _                     => false
+        }
+      }
+
+      if (rewriteHetSnps && isSnp && isHet) {
+        checkAf(maxSnpAllelicFraction)
+      } else if (rewriteHetIndels && !isSnp && isHet) {
+        checkAf(maxIndelAllelicFraction)
+      } else {
+        false
+      }
     }
   }
 
