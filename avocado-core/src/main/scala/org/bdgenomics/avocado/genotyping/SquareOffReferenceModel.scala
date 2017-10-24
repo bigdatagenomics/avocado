@@ -64,7 +64,9 @@ object SquareOffReferenceModel {
     // join variants back against genotypes
     val sites = variants.shuffleRegionJoinAndGroupByLeft(genotypes)
 
-    sites.transmute(_.map(s => squareOffSite(s._1, s._2)))
+    val calls = sites.transmute(_.map(s => squareOffSite(s._1, s._2)))
+
+    calls.replaceSamples(genotypes.samples)
   }
 
   /**
