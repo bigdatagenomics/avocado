@@ -230,6 +230,7 @@ object JointAnnotatorCaller extends Serializable {
 
       Genotype.newBuilder(gt)
         .setVariantCallingAnnotations(vca)
+        .setNonReferenceLikelihoods(Seq[java.lang.Double]())
         .setGenotypeQuality(quality.toInt)
         .setAlleles(alleles)
         .build
@@ -250,9 +251,13 @@ object JointAnnotatorCaller extends Serializable {
 
       Genotype.newBuilder(gt)
         .setVariantCallingAnnotations(vca)
+        .setNonReferenceLikelihoods(Seq[java.lang.Double]())
         .build
     } else {
-      gt
+      // WAR for bigdatagenomics/ADAM#1776
+      Genotype.newBuilder(gt)
+        .setNonReferenceLikelihoods(Seq[java.lang.Double]())
+        .build
     }
   }
 
