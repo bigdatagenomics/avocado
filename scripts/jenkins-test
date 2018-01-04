@@ -111,7 +111,7 @@ mvn -U \
 find ${AVOCADO_MVN_TMP_DIR}
 rm -rf ${AVOCADO_MVN_TMP_DIR}
 
-f [ ${SCALAVER} == 2.11 ];
+if [ ${SCALAVER} == 2.11 ];
 then
     echo "Rewriting POM.xml files back to Scala 2.10."
     ./scripts/move_to_scala_2.10.sh
