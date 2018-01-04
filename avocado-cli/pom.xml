@@ -149,7 +149,7 @@
   <dependencies>
     <dependency>
       <groupId>org.bdgenomics.utils</groupId>
-      <artifactId>utils-cli_2.10</artifactId>
+      <artifactId>utils-cli-spark2_2.10</artifactId>
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.avocado</groupId>
@@ -159,7 +159,7 @@
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.utils</groupId>
-      <artifactId>utils-misc_2.10</artifactId>
+      <artifactId>utils-misc-spark2_2.10</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
@@ -183,11 +183,11 @@
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.adam</groupId>
-      <artifactId>adam-core_2.10</artifactId>
+      <artifactId>adam-core-spark2_2.10</artifactId>
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.adam</groupId>
-      <artifactId>adam-cli_2.10</artifactId>
+      <artifactId>adam-cli-spark2_2.10</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
