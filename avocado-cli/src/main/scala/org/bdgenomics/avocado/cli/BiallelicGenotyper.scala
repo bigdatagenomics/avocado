@@ -186,6 +186,10 @@ class BiallelicGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with Parque
     name = "-score_all_sites",
     usage = "If provided, scores all sites, even non-variant sites. Emits a gVCF styled output.")
   var scoreAllSites = false
+  @Args4jOption(required = false,
+    name = "-emit_all_genotypes",
+    usage = "Emits genotypes for all sites that were discovered.")
+  var emitAllGenotypes = false
 
   // required by HardFilterGenotypesArgs
   var maxSnpPhredStrandBias: Float = -1.0f
@@ -254,7 +258,8 @@ class BiallelicGenotyper(
 
     // hard filter the genotypes
     val filteredGenotypes = HardFilterGenotypes(genotypes, args,
-      filterRefGenotypes = !args.scoreAllSites)
+      filterRefGenotypes = !args.scoreAllSites,
+      emitAllGenotypes = (args.scoreAllSites || args.emitAllGenotypes))
 
     // save the variant calls
     filteredGenotypes.saveAsParquet(args)
