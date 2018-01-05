@@ -61,8 +61,23 @@ object SquareOffReferenceModel {
 
     val variants = extractVariants(genotypes)
 
+    SquareOffReferenceModel(genotypes, variants)
+  }
+
+  /**
+   * Squares off genotypes containing both called sites and reference models.
+   *
+   * @param genotypes Genotypes containing both called sites and reference models.
+   * @return A set of variant contexts where at least one copy of the alternate
+   *   allele was called across all samples, with genotype likelihood models for
+   *   all samples that had data at the site.
+   */
+  def apply(genotypes: GenotypeRDD,
+            variants: VariantRDD): VariantContextRDD = {
+
     // join variants back against genotypes
     val sites = variants.shuffleRegionJoinAndGroupByLeft(genotypes)
+    variants.rdd.unpersist()
 
     val calls = sites.transmute(_.map(s => squareOffSite(s._1, s._2)))
 
@@ -108,7 +123,7 @@ object SquareOffReferenceModel {
    * @param genotypes Genotypes containing both called sites and reference models.
    * @return Returns sites where a variant was seen in at least one sample.
    */
-  private[genotyping] def extractVariants(genotypes: GenotypeRDD): VariantRDD = {
+  def extractVariants(genotypes: GenotypeRDD): VariantRDD = {
 
     genotypes.transmute(_.flatMap(gt => {
 

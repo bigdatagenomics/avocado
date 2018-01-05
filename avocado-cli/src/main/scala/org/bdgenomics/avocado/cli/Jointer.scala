@@ -56,6 +56,21 @@ class JointerArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs {
   var fromGvcf: Boolean = false
 
   @Args4jOption(required = false,
+    name = "-extract_only",
+    usage = "Extracts variants only, doesn't joint call variants.")
+  var extractOnly: Boolean = false
+
+  @Args4jOption(required = false,
+    name = "-variants_to_extract",
+    usage = "Variants to extract from a file with reference models.")
+  var variantsToExtract: String = null
+
+  @Args4jOption(required = false,
+    name = "-coalesce",
+    usage = "Number of partitions to coalesce to, if requested.")
+  var coalescePartitions = -1
+
+  @Args4jOption(required = false,
     name = "-single",
     usage = "Save as a single VCF file.")
   var asSingleFile: Boolean = false
@@ -89,17 +104,38 @@ class Jointer(
     val stringency = ValidationStringency.valueOf(args.stringency)
 
     // load in input genotypes
-    val genotypes = sc.loadGenotypes(args.inputPath)
+    val genotypes = if (args.coalescePartitions <= 0) {
+      sc.loadGenotypes(args.inputPath)
+    } else {
+      sc.loadGenotypes(args.inputPath).transform(_.coalesce(args.coalescePartitions))
+    }
 
     // are these in gVCF? if so, we must square off the variant matrix
     // once we've squared off, we can call
     if (args.fromGvcf) {
 
-      val squaredOff = SquareOffReferenceModel(genotypes)
+      if (args.extractOnly) {
 
-      // squaring off gives us sorted variants, so we need not resort at the end
-      JointAnnotatorCaller(squaredOff)
-        .saveAsVcf(args, stringency = stringency)
+        val variantSites = SquareOffReferenceModel.extractVariants(genotypes)
+
+        variantSites.saveAsParquet(args)
+      } else if (args.variantsToExtract != null) {
+
+        val variants = sc.loadVariants(args.variantsToExtract)
+
+        val squaredGenotypes = SquareOffReferenceModel(genotypes,
+          variants)
+
+        squaredGenotypes.toGenotypes.saveAsParquet(args)
+
+      } else {
+        val squaredOff = SquareOffReferenceModel(genotypes)
+
+        // squaring off gives us sorted variants, so we need not resort at the end
+        val jc = JointAnnotatorCaller(squaredOff)
+
+        jc.saveAsVcf(args, stringency = stringency)
+      }
     } else {
 
       // load variants, drop duplicates, save
