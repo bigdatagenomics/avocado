@@ -5,21 +5,55 @@ avocado
 
 # A Variant Caller, Distributed
 
-This README represents the TL;DR docs for avocado. More detailed documentation is under the `docs` folder.
+This README represents the TL;DR docs for avocado. More detailed documentation
+is hosted at [Read the Docs](http://bdg-avocado.readthedocs.io/).
 
 # Who/What/When/Where/Why avocado?
 
-avocado is a distributed variant caller built on top of the [ADAM format and pipeline](http://www.github.com/bigdatagenomics/adam) and [Apache Spark](http://spark.incubator.apache.org/). Currently, avocado is a research project, that is being built up to production level quality. avocado is open source and is covered by the Apache license.
+Avocado is a distributed variant caller built on top of the [ADAM format and
+APIs](http://www.github.com/bigdatagenomics/adam) and [Apache
+Spark](http://spark.apache.org/). Avocado is an open source project and is
+released under the [Apache 2.0 license](https://github.com/bigdatagenomics/avocado/blob/master/LICENSE).
 
-There are several reasons that we are building avocado:
-
-* As the price of genetic sequencing drops, we will need to be able to process greater and greater sums of genetic data. Ideally, we'll also want to process it more quickly. By using best-of-breed distributed systems design techniques, we hope to build a system that can scale to satisfy these domains.
-* There is a dearth of well maintained open-source variant calling systems out there. We hope to build a system on which bioinformaticians can quickly and easily implement, test, and iterate on new algorithms, without needing to build their own infrastructure.
-* 
-Avocado is currently in its infancy, but we hope to have something interesting to show very soon!
+Avocado can be used for single sample germline variant calling, trio calling,
+and joint variant calling. Avocado has >99% SNP calling accuracy, and >96%
+INDEL calling accuracy when paired with ADAM's INDEL realignment pipeline.
+When run on a single 32 core machine, Avocado can call variants on a 60x
+coverage whole genome sequencing (WGS) dataset in approximately 7 hours. By
+using Apache Spark to scale across multiple machines, Avocado can process the
+same WGS dataset in approximately 15 minutes when using 1,024 cores.
 
 # How avocado?
 
-## Building avocado
+## Building Avocado
 
-avocado uses [Maven](http://maven.apache.org/) to build. To build avocado, cd into the repository and run "mvn package".
+Avocado uses [Maven](http://maven.apache.org/) to build. To build avocado, cd
+into the repository and run "mvn package".
+
+## Avocado binaries
+
+Nightly builds of Avocado are available from the [OSS Sonatype
+repository](https://oss.sonatype.org/content/repositories/snapshots/org/bdgenomics/avocado/).
+Additionally, we make a Docker image available from [Quay](https://quay.io/repository/ucsc_cgl/avocado?tag=latest&tab=tags).
+
+# License
+
+ADAM is released under the [Apache License, Version 2.0](LICENSE.txt).
+
+# Citing Avocado
+
+Avocado has been described in a PhD thesis. To cite this thesis, please cite:
+
+```
+@article{nothaft17,
+  title={Scalable Systems and Algorithms for Genomic Variant Analysis},
+  author={Nothaft, Frank Austin},
+  school = {EECS Department, University of California, Berkeley},
+  uear = {2017},
+  month = {Dec},
+  URL = {http://www2.eecs.berkeley.edu/Pubs/TechRpts/2017/EECS-2017-204.html},
+  number = {UCB/EECS-2017-204}
+}
+```
+
+A preprint describing Avocado should be released by the end of January 2018.
