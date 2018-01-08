@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.bdgenomics.avocado</groupId>
     <artifactId>avocado-parent_2.10</artifactId>
-    <version>0.0.3-SNAPSHOT</version>
+    <version>0.1.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>avocado-cli_2.10</artifactId>
-  <version>0.0.3-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>jar</packaging>
   <name>avocado-cli: Command line interface for a distributed variant caller</name>
 
@@ -40,7 +40,7 @@
             </goals>
             <configuration>
               <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
               </transformers>
             </configuration>
           </execution>
