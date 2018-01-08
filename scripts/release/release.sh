@@ -67,7 +67,8 @@ mvn --batch-mode \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.11-${release} \
   -DpreparationGoals=clean \
-  release:perform
+  release:clean \
+  release:prepare
 
 mvn --batch-mode \
   -P distribution \
