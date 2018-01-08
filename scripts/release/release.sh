@@ -48,8 +48,6 @@ mvn --batch-mode \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.10-${release} \
   -Darguments="-DskipTests -Dmaven.skip.test=true" \
-  -DskipTests \
-  -DpreparationGoals=clean \
   release:perform
 
 if [ $? != 0 ]; then
@@ -81,8 +79,6 @@ mvn --batch-mode \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.11-${release} \
   -Darguments="-DskipTests -Dmaven.skip.test=true" \
-  -DskipTests \
-  -DpreparationGoals=clean \
   release:perform
 
 if [ $? != 0 ]; then
