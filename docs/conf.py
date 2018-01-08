@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# bdgenomics.workflows documentation build configuration file, created by
+# bdgenomics.avocado documentation build configuration file, created by
 # sphinx-quickstart on Tue Aug 25 12:37:16 2015.
 #
 # This file is execfile()d with the current directory set to its
@@ -94,7 +94,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'bdgenomics.workflows'
+project = u'bdgenomics.avocado'
 copyright = u'2017 – %i Big Data Genomics' % datetime.now().year
 author = u'Big Data Genomics'
 
@@ -163,7 +163,7 @@ html_theme = 'alabaster'
 html_theme_options = {
     "github_banner": True,
     "github_user": "bdgenomics",
-    "github_repo": "workflows",
+    "github_repo": "avocado",
     "caption_font_size": "24px"
 }
 
@@ -279,7 +279,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  (master_doc, 'workflows.tex', u'bdgenomics.workflows Documentation',
+  (master_doc, 'avocado.tex', u'bdgenomics.avocado Documentation',
    u'Big Data Genomics', 'manual'),
 ]
 
@@ -309,7 +309,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'bdgenomics.workflows', u'bdgenomics.workflows Documentation',
+    (master_doc, 'bdgenomics.avocado', u'bdgenomics.avocado Documentation',
      [author], 1)
 ]
 
@@ -323,8 +323,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  (master_doc, 'Workflows', u'bdgenomics.workflows Documentation',
-   author, 'Workflows', 'Toil workflows for running Big Data Genomics tools.',
+  (master_doc, 'Avocado', u'bdgenomics.avocado Documentation',
+   author, 'Avocado', 'Avocado: A Variant Caller, Distributed`,
    'Miscellaneous'),
 ]
 
