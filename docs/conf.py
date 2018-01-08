@@ -324,7 +324,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   (master_doc, 'Avocado', u'bdgenomics.avocado Documentation',
-   author, 'Avocado', 'Avocado: A Variant Caller, Distributed`,
+   author, 'Avocado', 'Avocado: A Variant Caller, Distributed',
    'Miscellaneous'),
 ]
 

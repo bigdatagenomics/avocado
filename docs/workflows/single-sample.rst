@@ -84,15 +84,20 @@ Avocado applies hard filters separately to SNPs and INDELs. The following hard
 filters can be applied:
 
 -  ``min`` and ``max``:
+
   -  ``depth``: The read depth covering the site.
   -  ``rms_mapping_quality``: The `RMS <https://en.wikipedia.org/wiki/Root_mean_square>`__
      quality of reads mapped at the site.
+
 -  ``min`` and ``max``, separately for ``het`` and ``hom`` genotypes:
+   
   -  ``allelic_fraction``: The fraction of reads that support the major vs.
      minor allele. E.g., if 25 reads support the major (reference) allele and
      75 reads support the minor (alternate) allele, the site has an allelic
      fraction of 0.75. For ``hom`` genotypes, only ``min`` is supported.
+     
 -  ``min`` only, separately for ``het`` and ``hom`` genotypes:
+   
   -  ``quality_by_depth``: The genotype quality divided by the read depth. Sites
      with a low quality-by-depth may be highly covered (leading to high quality),
      but with low quality reads.
