@@ -66,13 +66,5 @@
       <directoryMode>0755</directoryMode>
       <fileMode>0755</fileMode>
     </fileSet>
-    <fileSet>
-      <directory>../docs</directory>
-      <outputDirectory>docs</outputDirectory>
-      <includes>
-        <include>*.pdf</include>
-        <include>*.html</include>
-      </includes>
-    </fileSet>
   </fileSets>
 </assembly>
