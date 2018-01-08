@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.bdgenomics.avocado</groupId>
     <artifactId>avocado-parent_2.11</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   
