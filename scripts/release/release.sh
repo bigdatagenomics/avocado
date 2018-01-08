@@ -34,10 +34,11 @@ mvn --batch-mode \
   -DreleaseVersion=${release} \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.10-${release} \
+  -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -DpreparationGoals=clean \
   release:clean \
   release:prepare \
-  release:perform \
-  -Darguments="-DskipTests"
+  release:perform
 
 if [ $? != 0 ]; then
   echo "Releasing Scala 2.10 version failed."
@@ -55,10 +56,11 @@ mvn --batch-mode \
   -DreleaseVersion=${release} \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.11-${release} \
+  -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -DpreparationGoals=clean \
   release:clean \
   release:prepare \
-  release:perform \
-  -Darguments="-DskipTests"
+  release:perform
 
 if [ $? != 0 ]; then
   echo "Releasing Scala 2.11 version failed."
