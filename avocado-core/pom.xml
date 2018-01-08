@@ -4,12 +4,12 @@
 
   <parent>
     <groupId>org.bdgenomics.avocado</groupId>
-    <artifactId>avocado-parent_2.10</artifactId>
+    <artifactId>avocado-parent_2.11</artifactId>
     <version>0.0.3-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>avocado-core_2.10</artifactId>
+  <artifactId>avocado-core_2.11</artifactId>
   <version>0.0.3-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>avocado-core: Core variant calling algorithms</name>
@@ -113,15 +113,15 @@
   <dependencies>
     <dependency>
       <groupId>org.bdgenomics.utils</groupId>
-      <artifactId>utils-metrics-spark2_2.10</artifactId>
+      <artifactId>utils-metrics-spark2_2.11</artifactId>
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.utils</groupId>
-      <artifactId>utils-serialization-spark2_2.10</artifactId>
+      <artifactId>utils-serialization-spark2_2.11</artifactId>
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.utils</groupId>
-      <artifactId>utils-misc-spark2_2.10</artifactId>
+      <artifactId>utils-misc-spark2_2.11</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
@@ -137,7 +137,7 @@
     </dependency>
     <dependency>
       <groupId>org.bdgenomics.adam</groupId>
-      <artifactId>adam-core-spark2_2.10</artifactId>
+      <artifactId>adam-core-spark2_2.11</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -154,7 +154,7 @@
     </dependency>
     <dependency>
       <groupId>org.scalanlp</groupId>
-      <artifactId>breeze_2.10</artifactId>
+      <artifactId>breeze_2.11</artifactId>
     </dependency>
   </dependencies>
 </project>
