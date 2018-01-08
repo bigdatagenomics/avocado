@@ -160,6 +160,16 @@
           <artifactId>build-helper-maven-plugin</artifactId>
           <version>1.10</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-release-plugin</artifactId>
+          <version>2.5.3</version>
+          <configuration>
+            <mavenExecutorId>forked-path</mavenExecutorId>
+            <useReleaseProfile>false</useReleaseProfile>
+            <arguments>-Psonatype-oss-release</arguments>
+          </configuration>
+        </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
