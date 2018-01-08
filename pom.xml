@@ -167,7 +167,7 @@
           <configuration>
             <mavenExecutorId>forked-path</mavenExecutorId>
             <useReleaseProfile>false</useReleaseProfile>
-            <arguments>-Psonatype-oss-release</arguments>
+            <arguments>-Psonatype-oss-release -DskipTests</arguments>
           </configuration>
         </plugin>
       </plugins>
