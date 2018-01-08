@@ -35,9 +35,21 @@ mvn --batch-mode \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.10-${release} \
   -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -DskipTests \
   -DpreparationGoals=clean \
   release:clean \
-  release:prepare \
+  release:prepare
+
+mvn --batch-mode \
+  -P distribution \
+  -Dresume=false \
+  -Dtag=avocado-parent_2.10-${release} \
+  -DreleaseVersion=${release} \
+  -DdevelopmentVersion=${devel} \
+  -DbranchName=avocado_2.10-${release} \
+  -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -DskipTests \
+  -DpreparationGoals=clean \
   release:perform
 
 if [ $? != 0 ]; then
@@ -57,9 +69,20 @@ mvn --batch-mode \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.11-${release} \
   -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -DskipTests \
   -DpreparationGoals=clean \
-  release:clean \
-  release:prepare \
+  release:perform
+
+mvn --batch-mode \
+  -P distribution \
+  -Dresume=false \
+  -Dtag=avocado-parent_2.11-${release} \
+  -DreleaseVersion=${release} \
+  -DdevelopmentVersion=${devel} \
+  -DbranchName=avocado_2.11-${release} \
+  -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -DskipTests \
+  -DpreparationGoals=clean \
   release:perform
 
 if [ $? != 0 ]; then
