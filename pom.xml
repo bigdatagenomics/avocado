@@ -10,7 +10,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.bdgenomics.avocado</groupId>
   <artifactId>avocado-parent_2.10</artifactId>
-  <version>0.0.3-SNAPSHOT</version>
+  <version>0.1.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>avocado: A Variant Caller, Distributed</name>
   

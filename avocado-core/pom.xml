@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.bdgenomics.avocado</groupId>
     <artifactId>avocado-parent_2.10</artifactId>
-    <version>0.0.3-SNAPSHOT</version>
+    <version>0.1.1-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>avocado-core_2.10</artifactId>
-  <version>0.0.3-SNAPSHOT</version>
+  <version>0.1.1-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>avocado-core: Core variant calling algorithms</name>
 
