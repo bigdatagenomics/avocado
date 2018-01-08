@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -x -v
+
 # do we have enough arguments?
 if [ $# < 3 ]; then
     echo "Usage:"
@@ -34,8 +36,6 @@ mvn --batch-mode \
   -DreleaseVersion=${release} \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.10-${release} \
-  -Darguments="-DskipTests -Dmaven.skip.test=true" \
-  -DskipTests \
   -DpreparationGoals=clean \
   release:clean \
   release:prepare
@@ -47,7 +47,7 @@ mvn --batch-mode \
   -DreleaseVersion=${release} \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.10-${release} \
-  -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -Darguments='-DskipTests' \
   release:perform
 
 if [ $? != 0 ]; then
@@ -66,8 +66,6 @@ mvn --batch-mode \
   -DreleaseVersion=${release} \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.11-${release} \
-  -Darguments="-DskipTests -Dmaven.skip.test=true" \
-  -DskipTests \
   -DpreparationGoals=clean \
   release:perform
 
@@ -78,7 +76,7 @@ mvn --batch-mode \
   -DreleaseVersion=${release} \
   -DdevelopmentVersion=${devel} \
   -DbranchName=avocado_2.11-${release} \
-  -Darguments="-DskipTests -Dmaven.skip.test=true" \
+  -Darguments='-DskipTests' \
   release:perform
 
 if [ $? != 0 ]; then
