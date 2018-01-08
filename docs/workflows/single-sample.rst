@@ -22,16 +22,17 @@ phase, and the hard filters that Avocado applies to the called genotypes.
 Reads to Evaluate
 -----------------
 
-By default, Avocado only calls variants in autosomal regions. Avocado does this
+By default, Avocado filters the mitochondrial chromosome, and decoy/unplaced contigs.
+Avocado does this
 by inspecting the names of the contigs that the reads are mapped to. Avocado
 assumes that the contig names start with ``chr`` prefixes. If your reference build
 does not have these prefixes (i.e., chromosome 1 is ``1``, instead of ``chr1``), you
-need to pass the ``-is_not_grc`` option. To enable calling non-autosomal regions,
+need to pass the ``-no_chr_prefixes`` option. To change what regions are called,
 you can pass:
 
 -  ``-keep_mitochondrial_chromosome``: to call variants on the mitochondrial
    chromosome.
--  ``-autosomal_only``: to call variants on the sex chromosomes.
+-  ``-autosomal_only``: to disable calling variants on the sex chromosomes.
 
 Additionally, we apply several read quality filters. To disable these filters,
 you can pass:

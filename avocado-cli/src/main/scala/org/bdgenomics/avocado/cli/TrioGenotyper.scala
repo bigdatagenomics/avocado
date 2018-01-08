@@ -78,8 +78,8 @@ class TrioGenotyperArgs extends Args4jBase with ADAMSaveAnyArgs with ParquetArgs
     usage = "Optional previously discovered variants to call. Will skip variant discovery.")
   var variantsToCall: String = _
   @Args4jOption(required = false,
-    name = "-is_not_grc",
-    usage = "True if the genome build is not from the GRC, or does not have GRC chr prefixes")
+    name = "-no_chr_prefixes",
+    usage = "True if the genome build does not have chr prefixes")
   var isNotGrc: Boolean = false
   @Args4jOption(required = false,
     name = "-autosomal_only",
