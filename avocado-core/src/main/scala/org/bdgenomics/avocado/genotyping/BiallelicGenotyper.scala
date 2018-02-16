@@ -428,8 +428,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     rdd: RDD[(AlignmentRecord, Iterable[Variant])],
     copyNumber: CopyNumberMap,
     scoreAllSites: Boolean,
-    maxQuality: Int = 93,
-    maxMapQ: Int = 93): RDD[(Variant, Observation)] = ObserveReads.time {
+    maxQuality: Int = 60,
+    maxMapQ: Int = 60): RDD[(Variant, Observation)] = ObserveReads.time {
 
     val observations = rdd.flatMap(r => {
       readToObservations(r, copyNumber, scoreAllSites)
@@ -448,8 +448,8 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       observationsDf("_1.alternateAllele").as("alternateAllele"),
       observationsDf("_2.isRef").as("isRef"),
       observationsDf("_2.forwardStrand").as("forwardStrand"),
-      observationsDf("_2.optQuality").as("optQuality"),
-      observationsDf("_2.mapQ").as("mapQ"),
+      least(lit(maxQuality), observationsDf("_2.optQuality")).as("optQuality"),
+      least(lit(maxMapQ), observationsDf("_2.mapQ")).as("mapQ"),
       observationsDf("_2.isOther").as("isOther"),
       observationsDf("_2.isNonRef").as("isNonRef"),
       observationsDf("_2.copyNumber").as("copyNumber"))
