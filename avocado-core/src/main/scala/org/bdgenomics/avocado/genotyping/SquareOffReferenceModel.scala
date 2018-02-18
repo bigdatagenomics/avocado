@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.avocado.genotyping
 
+import org.apache.spark.sql.functions._
 import org.bdgenomics.adam.models.{ ReferenceRegion, VariantContext }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.variant.{
@@ -24,6 +25,7 @@ import org.bdgenomics.adam.rdd.variant.{
   VariantRDD,
   VariantContextRDD
 }
+import org.bdgenomics.adam.sql.{ Variant => VariantProduct }
 import org.bdgenomics.formats.avro.{ Genotype, GenotypeAllele, Variant }
 import scala.annotation.tailrec
 
@@ -125,34 +127,40 @@ object SquareOffReferenceModel {
    */
   def extractVariants(genotypes: GenotypeRDD): VariantRDD = {
 
-    genotypes.transmute(_.flatMap(gt => {
+    val altString = GenotypeAllele.ALT.toString()
 
-      if (gt.getAlleles.contains(GenotypeAllele.ALT) &&
-        gt.getVariant.getAlternateAllele != null) {
+    def isVariant(alleles: Seq[String]): Boolean = {
+      alleles.exists(_ == altString)
+    }
 
-        // trim the alleles so that we have a canonical result
-        val toTrimFromRight = trimRight(gt.getVariant.getReferenceAllele,
-          gt.getVariant.getAlternateAllele)
+    val isVariantUdf = udf((a: Seq[String]) => isVariant(a))
+    val trimUdf = udf((a: String, b: String) => trimRight(a, b))
+    val trimmerUdf = udf((a: String, b: Int) => a.dropRight(b))
 
-        Some(Variant.newBuilder
-          .setContigName(gt.getContigName)
-          .setStart(gt.getStart)
-          .setEnd(gt.getEnd - toTrimFromRight)
-          .setReferenceAllele(gt.getVariant
-            .getReferenceAllele
-            .dropRight(toTrimFromRight))
-          .setAlternateAllele(gt.getVariant
-            .getAlternateAllele
-            .dropRight(toTrimFromRight))
-          .build)
-      } else {
-        None
-      }
-    })).transformDataset(_.dropDuplicates("start",
-      "end",
-      "contigName",
-      "referenceAllele",
-      "alternateAllele"))
+    genotypes.transmuteDataset(ds => {
+
+      import ds.sparkSession.implicits._
+
+      val variants = ds.where(isVariantUdf(ds("alleles")) && ds("alleles").isNotNull)
+        .select($"variant.*")
+        .as[VariantProduct]
+
+      val variantsToTrim = variants.withColumn("trimBy", trimUdf($"referenceAllele",
+        $"alternateAllele"))
+
+      // trim the alleles so that we have a canonical result
+      val trimmedVariants = variantsToTrim.withColumn("end", $"end" - $"trimBy")
+        .withColumn("referenceAllele", trimmerUdf($"referenceAllele", $"trimBy"))
+        .withColumn("alternateAllele", trimmerUdf($"alternateAllele", $"trimBy"))
+        .drop($"trimBy")
+        .as[VariantProduct]
+
+      trimmedVariants.dropDuplicates("start",
+        "end",
+        "contigName",
+        "referenceAllele",
+        "alternateAllele")
+    })
   }
 
   /**
