@@ -20,7 +20,7 @@ import scala.collection.mutable
  */
 object PosAlleleStats extends Serializable with Logging {
 
-  case class AlleleCounts(var A: Int, var C: Int, var G: Int, var T: Int)
+  case class AlleleCounts(var A: Int, var C: Int, var G: Int, var T: Int, var N: Int, var ins: Int, var del: Int)
 
   def runPosAlleleStats(alignmentRecordRDD: AlignmentRecordRDD, phredThreshold: Int = 33): RDD[(org.bdgenomics.adam.models.ReferencePosition, org.bdgenomics.avocado.genotyping.PosAlleleStats.AlleleCounts)] = {
 
@@ -51,8 +51,12 @@ object PosAlleleStats extends Serializable with Logging {
           var idx = 0
 
           // get the read sequence, contig, etc
-          val sequence = read.getSequence
-          val qual = read.getQual
+          val sequence: String = read.getSequence
+          val qual: String = read.getQual
+
+          println(sequence)
+          println(qual)
+
           val contigName = read.getContigName
 
           // advance to the first alignment match
@@ -93,26 +97,30 @@ object PosAlleleStats extends Serializable with Logging {
 
           val opsIter = fastForward(ops.toIterator.buffered)
 
-          def incrementBaseCount(i: Char, pos: ReferencePosition): Unit = {
+          def incrementBaseCount(i: Char, pos: ReferencePosition, qual: Int): Unit = {
 
             if (!x.isDefinedAt(pos)) {
-              x(pos) = AlleleCounts(0, 0, 0, 0)
+              x(pos) = AlleleCounts(0, 0, 0, 0, 0, 0, 0)
             }
 
-            if (i.toUpper == 'A') {
-              x(pos).A += 1
-            } else if (i.toUpper == 'C') {
-              x(pos).C += 1
-            } else if (i.toUpper == 'G') {
-              x(pos).G += 1
-            } else if (i.toUpper == 'T') {
-              x(pos).T += 1
+            if (qual >= phredThreshold) {
+              if (i.toUpper == 'A') {
+                x(pos).A += 1
+              } else if (i.toUpper == 'C') {
+                x(pos).C += 1
+              } else if (i.toUpper == 'G') {
+                x(pos).G += 1
+              } else if (i.toUpper == 'T') {
+                x(pos).T += 1
+              }
+            } else {
+              x(pos).N += 1
             }
           }
 
           @tailrec def recordAlleles(iter: Iterator[ObservationOperator],
                                      lastRef: String = "",
-                                     variants: List[DiscoveredVariant] = List.empty /*phredThreshold: Int = 30 */ ): Unit = {
+                                     variants: List[DiscoveredVariant] = List.empty): Unit = {
 
             if (!iter.hasNext) {
               variants.toIterable
@@ -128,25 +136,17 @@ object PosAlleleStats extends Serializable with Logging {
                 }
                 case Match(length, optRef) => {
                   val kv = optRef.fold({
-                    (0 until length).foreach(i => if (qual(i).toInt - 33 >= phredThreshold) {
-
-                      incrementBaseCount(sequence(idx + i), ReferencePosition(contigName, pos + i))
+                    (0 until length).foreach(i => if (true /*qual(idx + i).toInt - 33 >= phredThreshold */ ) {
+                      incrementBaseCount(sequence(idx + i), ReferencePosition(contigName, pos + i), qual(idx + i).toInt - 33)
+                      println("test qual i:" + i + " idx:" + idx + " alt: " + qual(i).toString + " fixed_alt: " + qual(i + idx) + " qual: " + (qual(idx + i).toInt - 33))
                     })
-
-                    //x(ReferencePosition(contigName,pos+1))=(1,1,1,1) })
-                    /*
-                  (0 until length).flatMap( i => if (qual(i).toInt - 33 >= phredThreshold) {
-                    x(ReferencePosition(contigName,pos+1))=(1,1,1,1)
-                    None } else {
-                    None} )
-                  */
-
                     (sequence(idx + length - 1).toString, variants)
                   })((ref: String) => {
                     val newVars = (0 until length).flatMap(i => {
-                      if (qual(i).toInt - 33 >= phredThreshold) {
-                        ///x(ReferencePosition(contigName,pos+i)) = (1,1,1,1)
-                        incrementBaseCount(sequence(idx + i), ReferencePosition(contigName, pos + i))
+                      if (true /*qual(idx + i).toInt - 33 >= phredThreshold*/ ) {
+                        println("test qual i:" + i + " idx:" + idx + " ref:" + ref(i).toString() + " alt: " + qual(i).toString + " fixed_alt: " + qual(i + idx) + " qual: " + (qual(idx + i).toInt - 33))
+
+                        incrementBaseCount(sequence(idx + i), ReferencePosition(contigName, pos + i), qual(idx + i).toInt - 33)
                         Some(DiscoveredVariant(
                           contigName,
                           pos + i,
