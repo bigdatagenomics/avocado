@@ -24,7 +24,6 @@ sys.path.insert(0, os.path.abspath('../src'))
 
 # This makes the modules located in docs/vendor available to import
 sys.path.insert(0, os.path.abspath('./vendor'))
-import sphinxcontrib.fulltoc
 
 
 def real_dir_name(p, n=1):
@@ -54,8 +53,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
-    'sphinx.ext.mathjax',
-    'sphinxcontrib.fulltoc',
+    'sphinx.ext.mathjax'
 ]
 
 intersphinx_mapping = {
