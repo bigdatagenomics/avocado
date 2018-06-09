@@ -17,6 +17,8 @@
  */
 package org.bdgenomics.avocado.genotyping
 
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.functions._
 import org.bdgenomics.adam.models.{ ReferenceRegion, VariantContext }
 import org.bdgenomics.adam.rdd.ADAMContext._
@@ -25,7 +27,11 @@ import org.bdgenomics.adam.rdd.variant.{
   VariantRDD,
   VariantContextRDD
 }
-import org.bdgenomics.adam.sql.{ Variant => VariantProduct }
+import org.bdgenomics.adam.sql.{
+  Genotype => GenotypeProduct,
+  Variant => VariantProduct,
+  VariantContext => VariantContextProduct
+}
 import org.bdgenomics.formats.avro.{ Genotype, GenotypeAllele, Variant }
 import scala.annotation.tailrec
 
@@ -81,7 +87,8 @@ object SquareOffReferenceModel {
     val sites = variants.shuffleRegionJoinAndGroupByLeft(genotypes)
     variants.rdd.unpersist()
 
-    val calls = sites.transmute(_.map(s => squareOffSite(s._1, s._2)))
+    val calls = sites.transmute[VariantContext, VariantContextProduct, VariantContextRDD](
+      (rdd: RDD[(Variant, Iterable[Genotype])]) => rdd.map(s => squareOffSite(s._1, s._2)))
 
     calls.replaceSamples(genotypes.samples)
   }
@@ -137,7 +144,7 @@ object SquareOffReferenceModel {
     val trimUdf = udf((a: String, b: String) => trimRight(a, b))
     val trimmerUdf = udf((a: String, b: Int) => a.dropRight(b))
 
-    genotypes.transmuteDataset(ds => {
+    genotypes.transmuteDataset[Variant, VariantProduct, VariantRDD]((ds: Dataset[GenotypeProduct]) => {
 
       import ds.sparkSession.implicits._
 

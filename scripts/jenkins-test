@@ -37,35 +37,6 @@ then
     exit 1
 fi
 
-# this next line is supposed to fail
-set +e
-
-./scripts/move_to_scala_2.10.sh
-if [[ $? == 0 ]];
-then
-    echo "Running move_to_scala_2.10.sh when POMs are set up for Scala 2.10 should fail, but error code was 0 (success)."
-    exit 1
-fi
-
-set -e
-
-# are we testing for scala 2.11? if so, we need to rewrite our poms to 2.11 first
-if [ ${SCALAVER} == 2.11 ];
-then
-    echo "Rewriting POM.xml files for Scala 2.11."
-    ./scripts/move_to_scala_2.11.sh
-
-    # shouldn't be able to move to scala 2.11 twice
-    set +e
-    ./scripts/move_to_scala_2.11.sh
-    if [[ $? == 0 ]];
-    then
-        echo "We have already moved to Scala 2.11, so running move_to_scala_2.11.sh a second time should fail, but error code was 0 (success)."
-        exit 1
-    fi
-    set -e
-fi
-
 # print versions
 echo "Testing AVOCADO version ${VERSION} on Spark ${SPARK_VERSION} and Hadoop ${HADOOP_VERSION}"
 
@@ -110,12 +81,6 @@ mvn -U \
 # we are done with maven, so clean up the maven temp dir
 find ${AVOCADO_MVN_TMP_DIR}
 rm -rf ${AVOCADO_MVN_TMP_DIR}
-
-if [ ${SCALAVER} == 2.11 ];
-then
-    echo "Rewriting POM.xml files back to Scala 2.10."
-    ./scripts/move_to_scala_2.10.sh
-fi
 
 find . -name pom.xml \
     -exec sed -i.bak \
