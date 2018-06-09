@@ -221,6 +221,8 @@ class BiallelicGenotyper(
     val reads = sc.loadAlignments(args.inputPath,
       optProjection = projection)
     val samples = reads.recordGroups.recordGroups.map(_.sample).toSet
+    require(samples.nonEmpty,
+      "Didn't see any samples attached to input. Did you forget to add read groups?")
     require(samples.size <= 1,
       "Saw more than one sample (%s) attached to input.".format(samples.mkString(", ")))
 
