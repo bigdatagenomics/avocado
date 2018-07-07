@@ -118,7 +118,7 @@ object Realigner extends Logging {
    * Extracts the reference, segments out the alignment blocks, and realigns.
    *
    * @param read Read to realign.
-   * @param alignment The candidate realignment blocks.
+   * @param realignmentBlocks The candidate realignment blocks.
    * @param kmerLength The length k of the k-mers.
    * @return Returns a read
    */

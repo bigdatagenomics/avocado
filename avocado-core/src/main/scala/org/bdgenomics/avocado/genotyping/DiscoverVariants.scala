@@ -43,7 +43,7 @@ object DiscoverVariants extends Serializable with Logging {
   /**
    * Discovers all variants in an RDD of reads.
    *
-   * @param rdd RDD of reads.
+   * @param aRdd RDD of reads.
    * @param optPhredThreshold An optional threshold that discards all variants
    *   not supported by bases of at least a given phred score.
    * @return Returns an RDD of variants.

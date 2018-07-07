@@ -187,7 +187,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * Scores the putative variants covered by a read against a single read.
    *
    * @param readAndVariants A tuple pairing a read with the variants it covers.
-   * @param copyNumberVariants Any known copy number variants that exist at this site.
+   * @param copyNumber A class holding information about copy number across the genome.
    * @param scoreAllSites If true, calculates likelihoods for all sites, and not
    *   just variant sites.
    * @return Returns an iterable collection of (Variant, Observation) pairs.
@@ -572,7 +572,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
   private val TEN_DIV_LOG10 = 10.0 / mathLog(10.0)
 
   /**
-   * @param logLikelihood The log likelihoods of an observed call.
+   * @param obs A variant observation to get genotype state and quality of.
    * @return Returns a tuple containing the (number of alt, ref, and otheralt
    *   alleles, quality).
    */
@@ -616,7 +616,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
   }
 
   /**
-   * @param logLikelihood The log likelihoods of an observed call.
+   * @param logLikelihoods The log likelihoods of an observed call.
    * @return Returns a tuple containing the (genotype state, quality).
    */
   private[genotyping] def genotypeStateAndQuality(
@@ -766,11 +766,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    *
    * @param otherFwd The number of reads that don't support this allele that are
    *   mapped on the forward strand.
-   * @param otherRef The number of reads that don't support this allele that are
+   * @param otherRev The number of reads that don't support this allele that are
    *   mapped on the reverse strand.
    * @param alleleFwd The number of reads that support this allele that are
    *   mapped on the forward strand.
-   * @param alleleRef The number of reads that support this allele that are
+   * @param alleleRev The number of reads that support this allele that are
    *   mapped on the reverse strand.
    * @return Returns the Phred scaled P-value for whether there is a significant
    *   difference between the strand biases for the two alleles.
@@ -780,18 +780,18 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
                                  alleleFwd: Int,
                                  alleleRev: Int): Float = {
 
-    val numerator = (logFactorial(otherFwd + otherRev) +
+    val numerator = logFactorial(otherFwd + otherRev) +
       logFactorial(otherFwd + alleleFwd) +
       logFactorial(alleleFwd + alleleRev) +
-      logFactorial(otherRev + alleleRev))
-    val denominator = (logFactorial(otherFwd) +
+      logFactorial(otherRev + alleleRev)
+    val denominator = logFactorial(otherFwd) +
       logFactorial(otherRev) +
       logFactorial(alleleFwd) +
       logFactorial(alleleRev) +
       logFactorial(otherFwd +
         otherRev +
         alleleFwd +
-        alleleRev))
+        alleleRev)
 
     LogPhred.logErrorToPhred(numerator - denominator).toFloat
   }

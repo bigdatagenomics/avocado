@@ -60,7 +60,7 @@ object Observation {
  *   allele were observed.
  * @param otherLogLikelihoods The log likelihoods that 0...n copies of another
  *   allele were observed.
- * @param otherLogLikelihoods The log likelihoods that 0...n copies of an
+ * @param nonRefLogLikelihoods The log likelihoods that 0...n copies of an
  *   unknown allele were observed.
  * @param alleleCoverage The total number of reads observed that cover the
  *   site and match the allele.
