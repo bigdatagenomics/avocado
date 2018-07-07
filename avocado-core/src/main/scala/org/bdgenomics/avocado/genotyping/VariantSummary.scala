@@ -119,7 +119,7 @@ private[genotyping] case class VariantSummary(
   /**
    * Converts this summary into a variant annotation.
    *
-   * @param variant The variant to base this annotation on. Used to get the
+   * @param v The variant to base this annotation on. Used to get the
    *   current annotations on the variant.
    * @return Returns a new variant annotation object.
    */

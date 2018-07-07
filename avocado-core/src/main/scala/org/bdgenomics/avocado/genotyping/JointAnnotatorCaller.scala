@@ -111,7 +111,7 @@ object JointAnnotatorCaller extends Serializable {
   /**
    * Calculates the frequency of alternate alleles at a site.
    *
-   * @param The site to compute allele frequency for.
+   * @param site The site to compute allele frequency for.
    * @return The frequency of alternate alleles.
    */
   private[genotyping] def calculateMinorAlleleFrequency(
