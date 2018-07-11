@@ -196,7 +196,7 @@ object DiscoverVariants extends Serializable with Logging {
                 (sequence(idx + length - 1).toString, variants)
               })(ref => {
                 val newVars = (0 until length).flatMap(i => {
-                  if (qual(i).toInt - 33 >= phredThreshold) {
+                  if (qual(idx + i).toInt - 33 >= phredThreshold) {
                     Some(DiscoveredVariant(
                       contigName,
                       pos + i,
