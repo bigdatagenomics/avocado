@@ -153,7 +153,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
         Seq.empty),
       CopyNumberMap(2,
         FeatureRDD(sc.parallelize(Seq(cnvDup)),
-          SequenceDictionary.empty)),
+          SequenceDictionary.empty, Seq.empty)),
       false,
       maxQuality = 40,
       maxMapQ = 40)
@@ -189,7 +189,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
         Seq.empty),
       CopyNumberMap(2,
         FeatureRDD(sc.parallelize(Seq(cnvDel)),
-          SequenceDictionary.empty)),
+          SequenceDictionary.empty, Seq.empty)),
       false,
       maxQuality = 40,
       maxMapQ = 40)
