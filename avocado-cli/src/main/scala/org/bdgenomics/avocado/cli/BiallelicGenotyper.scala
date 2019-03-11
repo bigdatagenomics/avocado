@@ -216,11 +216,11 @@ class BiallelicGenotyper(
 
     // load reads
     val projection = Some(Filter(AlignmentRecordField.attributes,
-      AlignmentRecordField.origQual,
-      AlignmentRecordField.recordGroupName))
+      AlignmentRecordField.originalQuality,
+      AlignmentRecordField.readGroupId))
     val reads = sc.loadAlignments(args.inputPath,
       optProjection = projection)
-    val samples = reads.recordGroups.recordGroups.map(_.sample).toSet
+    val samples = reads.readGroups.readGroups.map(_.sampleId).toSet
     require(samples.nonEmpty,
       "Didn't see any samples attached to input. Did you forget to add read groups?")
     require(samples.size <= 1,

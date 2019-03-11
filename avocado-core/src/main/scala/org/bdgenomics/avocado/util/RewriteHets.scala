@@ -17,7 +17,7 @@
  */
 package org.bdgenomics.avocado.util
 
-import org.bdgenomics.adam.rdd.variant.GenotypeRDD
+import org.bdgenomics.adam.rdd.variant.GenotypeDataset
 import org.bdgenomics.formats.avro.{ Genotype, GenotypeAllele }
 import scala.collection.JavaConversions._
 
@@ -54,15 +54,15 @@ private[avocado] trait RewriteHetsArgs extends Serializable {
 object RewriteHets extends Serializable {
 
   /**
-   * Identifies high allelic fraction het calls in an RDD of genotypes and
+   * Identifies high allelic fraction het calls in an dataset of genotypes and
    * rewrites them as homozygous alt calls.
    *
-   * @param rdd The RDD of genotypes to filter.
+   * @param genotypes The dataset of genotypes to filter.
    * @param args The arguments to configure the rewriter.
-   * @return Returns a new RDD of genotypes.
+   * @return Returns a new dataset of genotypes.
    */
-  def apply(rdd: GenotypeRDD,
-            args: RewriteHetsArgs): GenotypeRDD = {
+  def apply(genotypes: GenotypeDataset,
+            args: RewriteHetsArgs): GenotypeDataset = {
 
     val maxSnpAllelicFraction = args.maxHetSnpAltAllelicFraction
     val maxIndelAllelicFraction = args.maxHetIndelAltAllelicFraction
@@ -70,13 +70,13 @@ object RewriteHets extends Serializable {
     val rewriteHetIndels = !args.disableHetIndelRewriting
 
     if (rewriteHetSnps || rewriteHetIndels) {
-      rdd.transform(gtRdd => gtRdd.map(processGenotype(_,
+      genotypes.transform(gtRdd => gtRdd.map(processGenotype(_,
         maxSnpAllelicFraction,
         maxIndelAllelicFraction,
         rewriteHetSnps,
         rewriteHetIndels)))
     } else {
-      rdd
+      genotypes
     }
   }
 

@@ -19,8 +19,8 @@ package org.bdgenomics.avocado.genotyping
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
-import org.bdgenomics.adam.rdd.variant.VariantRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
+import org.bdgenomics.adam.rdd.variant.VariantDataset
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{
   Clipped,
@@ -41,19 +41,19 @@ import scala.annotation.tailrec
 object DiscoverVariants extends Serializable with Logging {
 
   /**
-   * Discovers all variants in an RDD of reads.
+   * Discovers all variants in an dataset of reads.
    *
-   * @param aRdd RDD of reads.
+   * @param aRdd Dataset of reads.
    * @param optPhredThreshold An optional threshold that discards all variants
    *   not supported by bases of at least a given phred score.
-   * @return Returns an RDD of variants.
+   * @return Returns a dataset of variants.
    */
   private[avocado] def apply(
-    aRdd: AlignmentRecordRDD,
+    aRdd: AlignmentRecordDataset,
     optPhredThreshold: Option[Int] = None,
-    optMinObservations: Option[Int] = None): VariantRDD = DiscoveringVariants.time {
+    optMinObservations: Option[Int] = None): VariantDataset = DiscoveringVariants.time {
 
-    VariantRDD(variantsInRdd(aRdd.rdd,
+    VariantDataset(variantsInRdd(aRdd.rdd,
       optPhredThreshold = optPhredThreshold,
       optMinObservations = optMinObservations),
       aRdd.sequences,
@@ -87,7 +87,7 @@ object DiscoverVariants extends Serializable with Logging {
     val uniqueVariants = optMinObservations.fold({
       variantDs.distinct
     })(mo => {
-      variantDs.groupBy(variantDs("contigName"),
+      variantDs.groupBy(variantDs("referenceName"),
         variantDs("start"),
         variantDs("referenceAllele"),
         variantDs("alternateAllele"))
@@ -132,8 +132,8 @@ object DiscoverVariants extends Serializable with Logging {
 
       // get the read sequence, contig, etc
       val sequence = read.getSequence
-      val qual = read.getQual
-      val contigName = read.getContigName
+      val qual = read.getQuality
+      val referenceName = read.getReferenceName
 
       // advance to the first alignment match
       @tailrec def fastForward(
@@ -198,7 +198,7 @@ object DiscoverVariants extends Serializable with Logging {
                 val newVars = (0 until length).flatMap(i => {
                   if (qual(i).toInt - 33 >= phredThreshold) {
                     Some(DiscoveredVariant(
-                      contigName,
+                      referenceName,
                       pos + i,
                       ref(i).toString,
                       sequence(idx + i).toString))
@@ -216,7 +216,7 @@ object DiscoverVariants extends Serializable with Logging {
               val insQuals = qual.substring(idx - 1, idx + length).map(_.toInt - 33).sum / length
               val newVar = if (insQuals >= phredThreshold) {
                 DiscoveredVariant(
-                  contigName,
+                  referenceName,
                   pos - 1,
                   lastRef,
                   sequence.substring(idx - 1, idx + length)) :: variants
@@ -230,7 +230,7 @@ object DiscoverVariants extends Serializable with Logging {
               val delLength = ref.size
               val newVar = if (qual(idx - 1).toInt - 33 >= phredThreshold) {
                 DiscoveredVariant(
-                  contigName,
+                  referenceName,
                   pos - 1,
                   lastRef + ref,
                   sequence.substring(idx - 1, idx)) :: variants

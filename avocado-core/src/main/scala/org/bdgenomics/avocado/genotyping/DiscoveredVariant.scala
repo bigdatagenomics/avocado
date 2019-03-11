@@ -30,25 +30,25 @@ private[genotyping] object DiscoveredVariant {
    * @return Returns a case class-based representation of the variant.
    */
   def apply(variant: Variant): DiscoveredVariant = {
-    new DiscoveredVariant(variant.getContigName,
+    new DiscoveredVariant(variant.getReferenceName,
       variant.getStart.toInt,
       variant.getReferenceAllele,
       Some(variant.getAlternateAllele))
   }
 
   /**
-   * @param contigName The contig this variant is on.
+   * @param referenceName The contig this variant is on.
    * @param start The position this variant starts at.
    * @param referenceAllele The reference allele this variant varies from.
    * @param alternateAllele The substituted allele.
    * @return Returns a discovered variant with a defined alternate allele.
    */
   def apply(
-    contigName: String,
+    referenceName: String,
     start: Int,
     referenceAllele: String,
     alternateAllele: String): DiscoveredVariant = {
-    new DiscoveredVariant(contigName, start, referenceAllele, Some(alternateAllele))
+    new DiscoveredVariant(referenceName, start, referenceAllele, Some(alternateAllele))
   }
 
   /**
@@ -64,13 +64,13 @@ private[genotyping] object DiscoveredVariant {
 /**
  * A variant site and alleles.
  *
- * @param contigName The contig this variant is on.
+ * @param referenceName The reference this variant is on.
  * @param start The position this variant starts at.
  * @param referenceAllele The reference allele this variant varies from.
  * @param alternateAllele The substituted allele.
  */
 case class DiscoveredVariant(
-    contigName: String,
+    referenceName: String,
     start: Int,
     referenceAllele: String,
     alternateAllele: Option[String]) {
@@ -87,7 +87,7 @@ case class DiscoveredVariant(
    */
   def toVariant: Variant = {
     val builder = Variant.newBuilder
-      .setContigName(contigName)
+      .setReferenceName(referenceName)
       .setStart(start.toLong)
       .setEnd(end.toLong)
       .setReferenceAllele(referenceAllele)
@@ -100,10 +100,10 @@ case class DiscoveredVariant(
   }
 
   def overlaps(v: DiscoveredVariant): Boolean = {
-    contigName == v.contigName && start < v.end && end > v.start
+    referenceName == v.referenceName && start < v.end && end > v.start
   }
 
   def overlaps(rr: ReferenceRegion): Boolean = {
-    contigName == rr.referenceName && start < rr.end && end > rr.start
+    referenceName == rr.referenceName && start < rr.end && end > rr.start
   }
 }

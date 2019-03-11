@@ -26,7 +26,7 @@ class HardLimiterSuite extends AvocadoFunSuite {
 
   val reads = (0 to 5).map(i => {
     AlignmentRecord.newBuilder()
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setStart(i.toLong)
       .setEnd(i.toLong + 3L)
       .build()
@@ -139,10 +139,10 @@ class HardLimiterSuite extends AvocadoFunSuite {
     }
   }
 
-  test("adding a read that is on the wrong contig should fire an assert") {
+  test("adding a read that is on the wrong reference should fire an assert") {
     intercept[AssertionError] {
       val randomRead = AlignmentRecord.newBuilder()
-        .setContigName("random")
+        .setReferenceName("random")
         .setStart(100L)
         .setEnd(101L)
         .build()

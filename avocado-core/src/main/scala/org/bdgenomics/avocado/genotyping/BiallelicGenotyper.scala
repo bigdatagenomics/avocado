@@ -25,10 +25,10 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.types.IntegerType
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.GenomeBins
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.adam.rdd.variant.{
-  GenotypeRDD,
-  VariantRDD
+  GenotypeDataset,
+  VariantDataset
 }
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.Timers._
@@ -85,21 +85,21 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * @param maxMapQ The highest mapping quality to allow.
    * @return Returns genotype calls.
    */
-  def call(reads: AlignmentRecordRDD,
-           variants: VariantRDD,
+  def call(reads: AlignmentRecordDataset,
+           variants: VariantDataset,
            copyNumber: CopyNumberMap,
            scoreAllSites: Boolean,
            optDesiredPartitionCount: Option[Int] = None,
            optDesiredPartitionSize: Option[Int] = None,
            optDesiredMaxCoverage: Option[Int] = None,
            maxQuality: Int = 93,
-           maxMapQ: Int = 93): GenotypeRDD = CallGenotypes.time {
+           maxMapQ: Int = 93): GenotypeDataset = CallGenotypes.time {
 
     // validate metadata
     require(variants.sequences.isCompatibleWith(reads.sequences),
       "Variant sequence dictionary (%s) is not compatible with read dictionary (%s).".format(
         variants.sequences, reads.sequences))
-    val samples = reads.recordGroups.recordGroups.map(_.sample).toSet
+    val samples = reads.readGroups.readGroups.map(_.sampleId).toSet
     require(samples.size == 1,
       "Currently, we only support a single sample. Saw: %s.".format(
         samples.mkString(", ")))
@@ -124,11 +124,11 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
     val genotypeRdd = observationsToGenotypes(observationRdd,
       samples.head)
 
-    GenotypeRDD(genotypeRdd,
+    GenotypeDataset(genotypeRdd,
       variants.sequences,
       samples.map(s => {
         Sample.newBuilder()
-          .setSampleId(s)
+          .setId(s)
           .setName(s)
           .build()
       }).toSeq, org.bdgenomics.adam.converters.DefaultHeaderLines.allHeaderLines)
@@ -153,7 +153,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
    * @param maxMapQ The highest mapping quality to allow.
    * @return Returns genotype calls.
    */
-  def discoverAndCall(reads: AlignmentRecordRDD,
+  def discoverAndCall(reads: AlignmentRecordDataset,
                       copyNumber: CopyNumberMap,
                       scoreAllSites: Boolean,
                       optDesiredPartitionCount: Option[Int] = None,
@@ -162,7 +162,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
                       optDesiredPartitionSize: Option[Int] = None,
                       optDesiredMaxCoverage: Option[Int] = None,
                       maxQuality: Int = 93,
-                      maxMapQ: Int = 93): GenotypeRDD = {
+                      maxMapQ: Int = 93): GenotypeDataset = {
 
     // get rdd storage level and warn if not persisted
     val readSl = reads.rdd.getStorageLevel
@@ -442,7 +442,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
 
     // flatten schema
     val flatFields = Seq(
-      observationsDf("_1.contigName").as("contigName"),
+      observationsDf("_1.referenceName").as("referenceName"),
       observationsDf("_1.start").as("start"),
       observationsDf("_1.referenceAllele").as("referenceAllele"),
       observationsDf("_1.alternateAllele").as("alternateAllele"),
@@ -493,14 +493,14 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
         sum("totalCoverage").as("totalCoverage"),
         first("isRef").as("isRef"),
         first("copyNumber").as("copyNumber"))
-    val aggregatedObservationsDf = joinedObservationsDf.groupBy("contigName",
+    val aggregatedObservationsDf = joinedObservationsDf.groupBy("referenceName",
       "start",
       "referenceAllele",
       "alternateAllele")
       .agg(aggCols.head, aggCols.tail: _*)
 
     // re-nest the output
-    val firstField = struct(aggregatedObservationsDf("contigName"),
+    val firstField = struct(aggregatedObservationsDf("referenceName"),
       aggregatedObservationsDf("start"),
       aggregatedObservationsDf("referenceAllele"),
       aggregatedObservationsDf("alternateAllele"))
@@ -733,7 +733,7 @@ private[avocado] object BiallelicGenotyper extends Serializable with Logging {
       .setVariantCallingAnnotations(vcAnnotations)
       .setStart(v.getStart)
       .setEnd(v.getEnd)
-      .setContigName(v.getContigName)
+      .setReferenceName(v.getReferenceName)
       .setSampleId(sample)
       .setStrandBiasComponents(sbComponents
         .map(i => i: java.lang.Integer))

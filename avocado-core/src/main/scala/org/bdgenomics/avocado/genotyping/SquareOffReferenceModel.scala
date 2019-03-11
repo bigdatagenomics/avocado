@@ -23,9 +23,9 @@ import org.apache.spark.sql.functions._
 import org.bdgenomics.adam.models.{ ReferenceRegion, VariantContext }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.variant.{
-  GenotypeRDD,
-  VariantRDD,
-  VariantContextRDD
+  GenotypeDataset,
+  VariantDataset,
+  VariantContextDataset
 }
 import org.bdgenomics.adam.sql.{
   Genotype => GenotypeProduct,
@@ -65,7 +65,7 @@ object SquareOffReferenceModel {
    *   allele was called across all samples, with genotype likelihood models for
    *   all samples that had data at the site.
    */
-  def apply(genotypes: GenotypeRDD): VariantContextRDD = {
+  def apply(genotypes: GenotypeDataset): VariantContextDataset = {
 
     val variants = extractVariants(genotypes)
 
@@ -80,14 +80,14 @@ object SquareOffReferenceModel {
    *   allele was called across all samples, with genotype likelihood models for
    *   all samples that had data at the site.
    */
-  def apply(genotypes: GenotypeRDD,
-            variants: VariantRDD): VariantContextRDD = {
+  def apply(genotypes: GenotypeDataset,
+            variants: VariantDataset): VariantContextDataset = {
 
     // join variants back against genotypes
     val sites = variants.shuffleRegionJoinAndGroupByLeft(genotypes)
     variants.rdd.unpersist()
 
-    val calls = sites.transmute[VariantContext, VariantContextProduct, VariantContextRDD](
+    val calls = sites.transmute[VariantContext, VariantContextProduct, VariantContextDataset](
       (rdd: RDD[(Variant, Iterable[Genotype])]) => rdd.map(s => squareOffSite(s._1, s._2)))
 
     calls.replaceSamples(genotypes.samples)
@@ -132,7 +132,7 @@ object SquareOffReferenceModel {
    * @param genotypes Genotypes containing both called sites and reference models.
    * @return Returns sites where a variant was seen in at least one sample.
    */
-  def extractVariants(genotypes: GenotypeRDD): VariantRDD = {
+  def extractVariants(genotypes: GenotypeDataset): VariantDataset = {
 
     val altString = GenotypeAllele.ALT.toString()
 
@@ -144,7 +144,7 @@ object SquareOffReferenceModel {
     val trimUdf = udf((a: String, b: String) => trimRight(a, b))
     val trimmerUdf = udf((a: String, b: Int) => a.dropRight(b))
 
-    genotypes.transmuteDataset[Variant, VariantProduct, VariantRDD]((ds: Dataset[GenotypeProduct]) => {
+    genotypes.transmuteDataset[Variant, VariantProduct, VariantDataset]((ds: Dataset[GenotypeProduct]) => {
 
       import ds.sparkSession.implicits._
 
@@ -164,7 +164,7 @@ object SquareOffReferenceModel {
 
       trimmedVariants.dropDuplicates("start",
         "end",
-        "contigName",
+        "referenceName",
         "referenceAllele",
         "alternateAllele")
     })
@@ -210,7 +210,7 @@ object SquareOffReferenceModel {
     genotypes.find(gt => {
       gt.getStart == variant.getStart &&
         gt.getEnd == variant.getEnd &&
-        gt.getContigName == variant.getContigName &&
+        gt.getReferenceName == variant.getReferenceName &&
         gt.getVariant.getReferenceAllele == variant.getReferenceAllele &&
         gt.getVariant.getAlternateAllele == variant.getAlternateAllele
     })

@@ -18,15 +18,15 @@
 package org.bdgenomics.avocado.genotyping
 
 import org.bdgenomics.adam.models.{
-  RecordGroup,
-  RecordGroupDictionary,
+  ReadGroup,
+  ReadGroupDictionary,
   SequenceDictionary,
   SequenceRecord
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.feature.FeatureRDD
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
-import org.bdgenomics.adam.rdd.variant.VariantRDD
+import org.bdgenomics.adam.rdd.feature.FeatureDataset
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
+import org.bdgenomics.adam.rdd.variant.VariantDataset
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.models.{ CopyNumberMap, Observation }
 import org.bdgenomics.avocado.util.{
@@ -51,26 +51,26 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     .toSeq
 
   val perfectRead = AlignmentRecord.newBuilder
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(10L)
     .setEnd(25L)
     .setCigar("15M")
     .setMismatchingPositions("15")
     .setSequence("ATGGTCCACGAATAA")
-    .setQual("DEFGHIIIIIHGFED")
-    .setMapq(50)
+    .setQuality("DEFGHIIIIIHGFED")
+    .setMappingQuality(50)
     .setReadMapped(true)
     .build
 
   val snpRead = AlignmentRecord.newBuilder(perfectRead)
     .setMismatchingPositions("6C8")
     .setSequence("ATGGTCAACGAATAA")
-    .setMapq(40)
+    .setMappingQuality(40)
     .setReadNegativeStrand(true)
     .build
 
   val snp = Variant.newBuilder
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(16L)
     .setEnd(17L)
     .setReferenceAllele("C")
@@ -78,7 +78,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     .build
 
   val cnSnp = Variant.newBuilder
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(17L)
     .setEnd(18L)
     .setReferenceAllele("A")
@@ -86,14 +86,14 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     .build
 
   val cnvDup = Feature.newBuilder
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(17L)
     .setEnd(18L)
     .setFeatureType("DUP")
     .build
 
   val cnvDel = Feature.newBuilder
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(17L)
     .setEnd(18L)
     .setFeatureType("DEL")
@@ -144,16 +144,16 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
   sparkTest("score snps in a read overlapping a copy number dup boundary") {
     val genotypes = BiallelicGenotyper.call(
-      AlignmentRecordRDD(sc.parallelize(Seq(snpRead)),
+      AlignmentRecordDataset(sc.parallelize(Seq(snpRead)),
         SequenceDictionary.empty,
-        RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))),
+        ReadGroupDictionary(Seq(ReadGroup("rg1", "rg1"))),
         Seq.empty),
-      VariantRDD(sc.parallelize(Seq(snp, cnSnp)),
+      VariantDataset(sc.parallelize(Seq(snp, cnSnp)),
         SequenceDictionary.empty,
         Seq.empty),
       CopyNumberMap(2,
-        FeatureRDD(sc.parallelize(Seq(cnvDup)),
-          SequenceDictionary.empty)),
+        FeatureDataset(sc.parallelize(Seq(cnvDup)),
+          SequenceDictionary.empty, Seq.empty)),
       false,
       maxQuality = 40,
       maxMapQ = 40)
@@ -180,16 +180,16 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
   sparkTest("score snps in a read overlapping a copy number del boundary") {
     val genotypes = BiallelicGenotyper.call(
-      AlignmentRecordRDD(sc.parallelize(Seq(snpRead)),
+      AlignmentRecordDataset(sc.parallelize(Seq(snpRead)),
         SequenceDictionary.empty,
-        RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))),
+        ReadGroupDictionary(Seq(ReadGroup("rg1", "rg1"))),
         Seq.empty),
-      VariantRDD(sc.parallelize(Seq(snp, cnSnp)),
+      VariantDataset(sc.parallelize(Seq(snp, cnSnp)),
         SequenceDictionary.empty,
         Seq.empty),
       CopyNumberMap(2,
-        FeatureRDD(sc.parallelize(Seq(cnvDel)),
-          SequenceDictionary.empty)),
+        FeatureDataset(sc.parallelize(Seq(cnvDel)),
+          SequenceDictionary.empty, Seq.empty)),
       false,
       maxQuality = 40,
       maxMapQ = 40)
@@ -307,7 +307,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(genotype.getVariant === snp)
     assert(genotype.getStart === snp.getStart)
     assert(genotype.getEnd === snp.getEnd)
-    assert(genotype.getContigName === snp.getContigName)
+    assert(genotype.getReferenceName === snp.getReferenceName)
     assert(genotype.getSampleId === "sample")
     assert(genotype.getGenotypeQuality === 73)
     assert(genotype.getAlleles.size === 2)
@@ -327,7 +327,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.104160.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val variants = DiscoverVariants(reads)
@@ -384,7 +384,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878_snp_A2G_chr20_225058.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
@@ -413,7 +413,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878_snp_A2G_chr20_225058.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
@@ -446,7 +446,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.832736.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
@@ -480,7 +480,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.839395.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
@@ -548,7 +548,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.567239.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val variants = DiscoverVariants(reads)
@@ -575,7 +575,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.875159.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val variants = DiscoverVariants(reads)
@@ -601,7 +601,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.1_1777263.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
@@ -637,7 +637,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.877715.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads, CopyNumberMap.empty(2), false)
@@ -655,7 +655,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.886049.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads, CopyNumberMap.empty(2), false)
@@ -673,7 +673,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.889159.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
@@ -705,7 +705,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.866511.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       }).realignIndels()
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
@@ -720,7 +720,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.905130.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
@@ -735,7 +735,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
     assert(gts.size === 1)
     val gt = gts.head
-    assert(gt.getVariant.getContigName === "1")
+    assert(gt.getVariant.getReferenceName === "1")
     assert(gt.getVariant.getStart === 905129L)
     assert(gt.getVariant.getEnd === 905132L)
     assert(gt.getVariant.getReferenceAllele === "ATG")
@@ -747,7 +747,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.905130.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val genotypes = BiallelicGenotyper.discoverAndCall(reads,
@@ -770,7 +770,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     assert(refCountByGt.count(_ == 0) === 2)
 
     val gt = gts.filter(_.getVariant.getStart == 905129L).head
-    assert(gt.getVariant.getContigName === "1")
+    assert(gt.getVariant.getReferenceName === "1")
     assert(gt.getVariant.getEnd === 905132L)
     assert(gt.getVariant.getReferenceAllele === "ATG")
     assert(gt.getVariant.getAlternateAllele === "A")
@@ -781,7 +781,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.907170.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 0)
+        rdd.filter(_.getMappingQuality > 0)
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
@@ -793,7 +793,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
     assert(gts.size === 1)
     val gt = gts.head
-    assert(gt.getVariant.getContigName === "1")
+    assert(gt.getVariant.getReferenceName === "1")
     assert(gt.getVariant.getStart === 907169L)
     assert(gt.getVariant.getEnd === 907171L)
     assert(gt.getVariant.getReferenceAllele === "AG")
@@ -805,7 +805,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     val readPath = resourceUrl("NA12878.chr1.240898.sam")
     val reads = sc.loadAlignments(readPath.toString)
       .transform(rdd => {
-        rdd.filter(_.getMapq > 10)
+        rdd.filter(_.getMappingQuality > 10)
       })
 
     val gts = BiallelicGenotyper.discoverAndCall(reads,
@@ -817,7 +817,7 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
     assert(gts.size === 1)
     val gt = gts.head
-    assert(gt.getVariant.getContigName === "1")
+    assert(gt.getVariant.getReferenceName === "1")
     assert(gt.getVariant.getStart === 240897L)
     assert(gt.getVariant.getEnd === 240898L)
     assert(gt.getVariant.getReferenceAllele === "T")
@@ -829,14 +829,14 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
     def makeRead(allele: Char): AlignmentRecord = {
       assert(allele != 'T')
       AlignmentRecord.newBuilder
-        .setContigName("ctg")
+        .setReferenceName("ctg")
         .setStart(10L)
         .setEnd(15L)
         .setSequence("AC%sTG".format(allele))
         .setCigar("5M")
         .setMismatchingPositions("2T2")
-        .setQual(Seq(50, 50, 50, 50, 50).map(q => (q + 33).toInt).mkString)
-        .setMapq(50)
+        .setQuality(Seq(50, 50, 50, 50, 50).map(q => (q + 33).toInt).mkString)
+        .setMappingQuality(50)
         .setReadMapped(true)
         .setPrimaryAlignment(true)
         .build
@@ -844,10 +844,10 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
     val reads = Seq(makeRead('A'), makeRead('A'), makeRead('A'), makeRead('A'),
       makeRead('C'), makeRead('C'), makeRead('C'), makeRead('C'))
-    val readRdd = AlignmentRecordRDD(
+    val readRdd = AlignmentRecordDataset(
       sc.parallelize(reads),
       SequenceDictionary(SequenceRecord("ctg", 16L)),
-      RecordGroupDictionary(Seq(RecordGroup("rg1", "rg1"))),
+      ReadGroupDictionary(Seq(ReadGroup("rg1", "rg1"))),
       Seq.empty)
 
     val gts = BiallelicGenotyper.discoverAndCall(readRdd,
@@ -876,12 +876,12 @@ class BiallelicGenotyperSuite extends AvocadoFunSuite {
 
     assert(gts.size === 2)
     val taaaGt = gts.filter(_.getVariant.getAlternateAllele === "TAAA").head
-    assert(taaaGt.getVariant.getContigName === "1")
+    assert(taaaGt.getVariant.getReferenceName === "1")
     assert(taaaGt.getVariant.getReferenceAllele === "T")
     assert(taaaGt.getVariant.getAlternateAllele === "TAAA")
     assert(taaaGt.getAlleles.count(_ == GenotypeAllele.ALT) === 2)
     val caaaGt = gts.filter(_.getVariant.getAlternateAllele === "CAAA").head
-    assert(caaaGt.getVariant.getContigName === "1")
+    assert(caaaGt.getVariant.getReferenceName === "1")
     assert(caaaGt.getVariant.getReferenceAllele === "T")
     assert(caaaGt.getVariant.getAlternateAllele === "CAAA")
     assert(caaaGt.getAlleles.count(_ == GenotypeAllele.OTHER_ALT) === 2)

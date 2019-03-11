@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.util
 
 import org.bdgenomics.adam.models.SequenceDictionary
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.formats.avro.AlignmentRecord
 
 trait PrefilterReadsArgs extends Serializable {
@@ -50,36 +50,36 @@ trait PrefilterReadsArgs extends Serializable {
 }
 
 /**
- * Reifies an input AlignmentRecordRDD down to the contigs and reads we
+ * Reifies an input AlignmentRecordDataset down to the references and reads we
  * want to genotype.
  */
 object PrefilterReads extends Serializable {
 
   /**
-   * Filters out reads and contigs that should not be processed.
+   * Filters out reads and references that should not be processed.
    *
-   * @param rdd RDD of reads and associated metadata.
+   * @param reads Dataset of reads and associated metadata.
    * @param args Arguments specifying the filters to apply.
-   * @return Returns a new AlignmentRecordRDD where reads that we don't want
-   *   to use in genotyping have been discarded, and where contigs that we
+   * @return Returns a new AlignmentRecordDataset where reads that we don't want
+   *   to use in genotyping have been discarded, and where references that we
    *   don't want to genotype have been removed.
    */
-  def apply(rdd: AlignmentRecordRDD,
-            args: PrefilterReadsArgs): AlignmentRecordRDD = {
+  def apply(reads: AlignmentRecordDataset,
+            args: PrefilterReadsArgs): AlignmentRecordDataset = {
 
     // get filter functions
-    val contigFn = contigFilterFn(args)
-    val readFn = readFilterFn(args, contigFn)
+    val referenceFn = referenceFilterFn(args)
+    val readFn = readFilterFn(args, referenceFn)
 
-    // filter contigs and construct a new sequence dictionary
-    val sequences = new SequenceDictionary(rdd.sequences
+    // filter references and construct a new sequence dictionary
+    val sequences = new SequenceDictionary(reads.sequences
       .records
-      .filter(r => contigFn(r.name)))
+      .filter(r => referenceFn(r.name)))
 
-    // filter reads and construct a new rdd
-    rdd.transform(r => {
+    // filter reads and construct a new dataset
+    reads.transform(r => {
       r.filter(readFn)
-        .map(maybeNullifyMate(_, contigFn))
+        .map(maybeNullifyMate(_, referenceFn))
     }).replaceSequences(sequences)
   }
 
@@ -87,13 +87,13 @@ object PrefilterReads extends Serializable {
    * Nullifies the mate mapping info for reads whose mate is filtered.
    *
    * Needed to generate SAM/BAM/CRAM files containing filtered reads.
-   * If this isn't run, the conversion will error as the mate contig
+   * If this isn't run, the conversion will error as the mate reference
    * names are not found in the sequence dictionary.
    *
    * @param read Read to check for filtered mate.
-   * @param filterFn The function to use to filter contig names.
+   * @param filterFn The function to use to filter reference names.
    * @return Returns a read whose mate mapping info has been nullified if the
-   *   mate mapping fields indicate that the mate is mapped to a contig that has
+   *   mate mapping fields indicate that the mate is mapped to a reference that has
    *   been filtered out.
    */
   private[util] def maybeNullifyMate(
@@ -102,12 +102,12 @@ object PrefilterReads extends Serializable {
 
     if (read.getReadPaired &&
       read.getMateMapped) {
-      if (filterFn(read.getMateContigName)) {
+      if (filterFn(read.getMateReferenceName)) {
         read
       } else {
         AlignmentRecord.newBuilder(read)
           .setMateMapped(false)
-          .setMateContigName(null)
+          .setMateReferenceName(null)
           .build
       }
     } else {
@@ -116,11 +116,11 @@ object PrefilterReads extends Serializable {
   }
 
   /**
-   * @param args The arguments specifying which contigs to keep.
-   * @return Returns a function that returns true if a contig with a given name
+   * @param args The arguments specifying which references to keep.
+   * @return Returns a function that returns true if a reference with a given name
    *   should be kept.
    */
-  protected[util] def contigFilterFn(args: PrefilterReadsArgs): (String => Boolean) = {
+  protected[util] def referenceFilterFn(args: PrefilterReadsArgs): (String => Boolean) = {
     val fns = Iterable(filterNonGrcAutosome(_), filterNonGrcSex(_), filterNonGrcMitochondrial(_),
       filterGrcAutosome(_), filterGrcSex(_), filterGrcMitochondrial(_))
     val filteredFns = Iterable(true, !args.autosomalOnly, args.keepMitochondrialChromosome,
@@ -140,18 +140,18 @@ object PrefilterReads extends Serializable {
 
   /**
    * @param args The arguments specifying which reads to keep.
-   * @param contigFilterFn A function that determines which contigs should be
-   *   kept, given the contig name.
+   * @param referenceFilterFn A function that determines which references should be
+   *   kept, given the reference name.
    * @return Returns a function that returns true if a read should be kept.
    */
   protected[util] def readFilterFn(
     args: PrefilterReadsArgs,
-    contigFilterFn: (String => Boolean)): (AlignmentRecord => Boolean) = {
+    referenceFilterFn: (String => Boolean)): (AlignmentRecord => Boolean) = {
 
     def baseFilterFn(r: AlignmentRecord): Boolean = {
       (filterMapped(r, args.keepNonPrimary) &&
         filterMappingQuality(r, args.minMappingQuality) &&
-        contigFilterFn(r.getContigName))
+        referenceFilterFn(r.getReferenceName))
     }
 
     if (args.keepDuplicates) {
@@ -190,76 +190,76 @@ object PrefilterReads extends Serializable {
    */
   protected[util] def filterMappingQuality(read: AlignmentRecord,
                                            minMappingQuality: Int): Boolean = {
-    // if mapq is not set, ignore
-    if (read.getMapq == null) {
+    // if mappingQuality is not set, ignore
+    if (read.getMappingQuality == null) {
       true
     } else {
-      read.getMapq > minMappingQuality
+      read.getMappingQuality > minMappingQuality
     }
   }
 
   /**
-   * @param contigName Contig name to test for filtration.
-   * @return Returns true if the contig matches the naming scheme for GRCh
+   * @param referenceName Reference name to test for filtration.
+   * @return Returns true if the reference matches the naming scheme for GRCh
    *   autosomal chromosomes.
    */
-  protected[util] def filterGrcAutosome(contigName: String): Boolean = {
-    contigName != null &&
-      contigName.size >= 4 &&
-      contigName.startsWith("chr") && contigName.drop(3).forall(_.isDigit)
+  protected[util] def filterGrcAutosome(referenceName: String): Boolean = {
+    referenceName != null &&
+      referenceName.size >= 4 &&
+      referenceName.startsWith("chr") && referenceName.drop(3).forall(_.isDigit)
   }
 
   /**
-   * @param contigName Contig name to test for filtration.
-   * @return Returns true if the contig matches the naming scheme for GRCh
+   * @param referenceName Reference name to test for filtration.
+   * @return Returns true if the reference matches the naming scheme for GRCh
    *   sex chromosomes.
    */
-  protected[util] def filterGrcSex(contigName: String): Boolean = {
-    if (contigName != null &&
-      contigName.length == 4 &&
-      contigName.startsWith("chr")) {
-      contigName(3) == 'X' || contigName(3) == 'Y' ||
-        contigName(3) == 'Z' || contigName(3) == 'W'
+  protected[util] def filterGrcSex(referenceName: String): Boolean = {
+    if (referenceName != null &&
+      referenceName.length == 4 &&
+      referenceName.startsWith("chr")) {
+      referenceName(3) == 'X' || referenceName(3) == 'Y' ||
+        referenceName(3) == 'Z' || referenceName(3) == 'W'
     } else {
       false
     }
   }
 
   /**
-   * @param contigName Contig name to test for filtration.
-   * @return Returns true if the contig matches the GRCh mitochondrial
+   * @param referenceName Reference name to test for filtration.
+   * @return Returns true if the reference matches the GRCh mitochondrial
    *   chromosome name.
    */
-  protected[util] def filterGrcMitochondrial(contigName: String): Boolean = {
-    contigName != null && contigName == "chrM"
+  protected[util] def filterGrcMitochondrial(referenceName: String): Boolean = {
+    referenceName != null && referenceName == "chrM"
   }
 
   /**
-   * @param contigName Contig name to test for filtration.
-   * @return Returns true if the contig matches the naming scheme for HG/UCSC
+   * @param referenceName Reference name to test for filtration.
+   * @return Returns true if the reference matches the naming scheme for HG/UCSC
    *   autosomal chromosomes.
    */
-  protected[util] def filterNonGrcAutosome(contigName: String): Boolean = {
-    contigName != null && contigName.forall(_.isDigit)
+  protected[util] def filterNonGrcAutosome(referenceName: String): Boolean = {
+    referenceName != null && referenceName.forall(_.isDigit)
   }
 
   /**
-   * @param contigName Contig name to test for filtration.
-   * @return Returns true if the contig matches the naming scheme for HG/UCSC
+   * @param referenceName Reference name to test for filtration.
+   * @return Returns true if the reference matches the naming scheme for HG/UCSC
    *   sex chromosomes.
    */
-  protected[util] def filterNonGrcSex(contigName: String): Boolean = {
-    contigName != null &&
-      (contigName == "X" || contigName == "Y" ||
-        contigName == "Z" || contigName == "W")
+  protected[util] def filterNonGrcSex(referenceName: String): Boolean = {
+    referenceName != null &&
+      (referenceName == "X" || referenceName == "Y" ||
+        referenceName == "Z" || referenceName == "W")
   }
 
   /**
-   * @param contigName Contig name to test for filtration.
-   * @return Returns true if the contig matches the HG/UCSC mitochondrial
+   * @param referenceName Reference name to test for filtration.
+   * @return Returns true if the reference matches the HG/UCSC mitochondrial
    *   chromosome name.
    */
-  protected[util] def filterNonGrcMitochondrial(contigName: String): Boolean = {
-    contigName != null && contigName == "MT"
+  protected[util] def filterNonGrcMitochondrial(referenceName: String): Boolean = {
+    referenceName != null && referenceName == "MT"
   }
 }

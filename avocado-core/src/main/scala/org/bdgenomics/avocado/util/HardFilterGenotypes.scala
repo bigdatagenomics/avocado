@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.util
 
 import htsjdk.variant.vcf.{ VCFFilterHeaderLine, VCFHeaderLine }
-import org.bdgenomics.adam.rdd.variant.GenotypeRDD
+import org.bdgenomics.adam.rdd.variant.GenotypeDataset
 import org.bdgenomics.formats.avro.{
   Genotype,
   GenotypeAllele,
@@ -166,17 +166,17 @@ private[avocado] trait HardFilterGenotypesArgs extends Serializable {
 private[avocado] object HardFilterGenotypes extends Serializable {
 
   /**
-   * Applies hard filters to a GenotypeRDD.
+   * Applies hard filters to a GenotypeDataset.
    *
-   * @param grdd GenotypeRDD to filter.
+   * @param genotypes GenotypeDataset to filter.
    * @param args The hard filter configuration to apply.
    * @param filterRefGenotypes If true, discards homozygous ref calls.
-   * @return A new GenotypeRDD of hard filtered genotypes.
+   * @return A new GenotypeDataset of hard filtered genotypes.
    */
-  def apply(grdd: GenotypeRDD,
+  def apply(genotypes: GenotypeDataset,
             args: HardFilterGenotypesArgs,
             filterRefGenotypes: Boolean = true,
-            emitAllGenotypes: Boolean = false): GenotypeRDD = {
+            emitAllGenotypes: Boolean = false): GenotypeDataset = {
 
     // make snp and indel filters
     val snpFilters = buildSnpHardFilters(args)
@@ -242,7 +242,7 @@ private[avocado] object HardFilterGenotypes extends Serializable {
 
     // flat map the filters over the genotype rdd
     val minQuality = args.minQuality
-    grdd.transform(rdd => {
+    genotypes.transform(rdd => {
       rdd.flatMap(filterGenotype(_,
         minQuality,
         snpFilters,

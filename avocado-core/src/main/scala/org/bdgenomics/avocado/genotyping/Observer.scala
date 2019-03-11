@@ -52,11 +52,11 @@ private[genotyping] object Observer extends Serializable {
 
     // for convenience, get the sample name, mapping quality, sequence,
     // qualities, and the contig name
-    val sampleId = read.getRecordGroupSample
-    val contigName = read.getContigName
-    val mapQ = read.getMapq
+    val sampleId = read.getReadGroupSampleId
+    val referenceName = read.getReferenceName
+    val mapQ = read.getMappingQuality
     val readSequence = read.getSequence
-    val readQualities = read.getQual
+    val readQualities = read.getQuality
     val forwardStrand = !read.getReadNegativeStrand
 
     // map over the alignment operators and generate allelic observations
@@ -73,7 +73,7 @@ private[genotyping] object Observer extends Serializable {
         (0 until length).map(idx => {
 
           // the key is the (site, allele, sampleId)
-          val key = (ReferenceRegion(contigName, pos, pos + 1),
+          val key = (ReferenceRegion(referenceName, pos, pos + 1),
             readSequence(readIdx).toString,
             sampleId)
 
@@ -104,7 +104,7 @@ private[genotyping] object Observer extends Serializable {
 
         // the key is the (site, allele, sampleId)
         // insertions associate to the site to their left, hence the -1
-        val key = (ReferenceRegion(contigName, pos - 1, pos),
+        val key = (ReferenceRegion(referenceName, pos - 1, pos),
           bases,
           sampleId)
 
@@ -124,7 +124,7 @@ private[genotyping] object Observer extends Serializable {
 
         // the key is the (site, allele, sampleId)
         // deletions have an empty string for the allele
-        val key = (ReferenceRegion(contigName, oldPos, pos),
+        val key = (ReferenceRegion(referenceName, oldPos, pos),
           "",
           sampleId)
 

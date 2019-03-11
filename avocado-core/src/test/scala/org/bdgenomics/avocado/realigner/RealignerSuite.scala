@@ -20,11 +20,11 @@ package org.bdgenomics.avocado.realigner
 import org.bdgenomics.adam.models.{
   SequenceDictionary,
   SequenceRecord,
-  RecordGroup,
-  RecordGroupDictionary
+  ReadGroup,
+  ReadGroupDictionary
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.avocado.models.{
   Clipped,
@@ -192,9 +192,9 @@ class RealignerSuite extends AvocadoFunSuite {
 
   def makeAndRealignRdd(reads: Seq[AlignmentRecord],
                         kmerLength: Int): Array[AlignmentRecord] = {
-    val gRdd = AlignmentRecordRDD(sc.parallelize(reads),
+    val gRdd = AlignmentRecordDataset(sc.parallelize(reads),
       SequenceDictionary(SequenceRecord("ctg", 50L)),
-      RecordGroupDictionary(Seq(RecordGroup("rg", "rg"))),
+      ReadGroupDictionary(Seq(ReadGroup("rg", "rg"))),
       Seq.empty)
 
     // realign the genomic rdd
@@ -219,8 +219,8 @@ class RealignerSuite extends AvocadoFunSuite {
 
       AlignmentRecord.newBuilder()
         .setReadName(rId.toString)
-        .setContigName("ctg")
-        .setRecordGroupName("rg")
+        .setReferenceName("ctg")
+        .setReadGroupId("rg")
         .setReadMapped(true)
         .setSequence(sequence.drop(rId).take(readLength))
         .setStart(rId.toLong)
@@ -262,8 +262,8 @@ class RealignerSuite extends AvocadoFunSuite {
 
       AlignmentRecord.newBuilder()
         .setReadName(rId.toString)
-        .setContigName("ctg")
-        .setRecordGroupName("rg")
+        .setReferenceName("ctg")
+        .setReadGroupId("rg")
         .setReadMapped(true)
         .setSequence(sequence.drop(rId).take(readLength))
         .setStart(rId.toLong)

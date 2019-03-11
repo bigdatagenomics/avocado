@@ -18,8 +18,8 @@
 package org.bdgenomics.avocado.genotyping
 
 import org.bdgenomics.adam.models.VariantContext
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
-import org.bdgenomics.adam.rdd.variant.{ GenotypeRDD, VariantContextRDD }
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
+import org.bdgenomics.adam.rdd.variant.{ GenotypeDataset, VariantContextDataset }
 import org.bdgenomics.formats.avro.{ Genotype, GenotypeAllele }
 import scala.collection.JavaConversions._
 
@@ -42,10 +42,10 @@ object TrioCaller extends Serializable {
    * @param rdd The reads to extract the sample ID from.
    * @return The sample ID.
    */
-  def extractSampleId(rdd: AlignmentRecordRDD): String = {
-    require(!rdd.recordGroups.isEmpty, "Record groups are empty.")
-    val samples = rdd.recordGroups.recordGroups
-      .map(rg => rg.sample)
+  def extractSampleId(rdd: AlignmentRecordDataset): String = {
+    require(!rdd.readGroups.isEmpty, "Read groups are empty.")
+    val samples = rdd.readGroups.readGroups
+      .map(rg => rg.sampleId)
       .distinct
     require(samples.size == 1,
       "Had multiple sample names (%s) attached to reads.".format(
@@ -57,18 +57,18 @@ object TrioCaller extends Serializable {
   /**
    * Trio calls genotypes in a pedigree with two parents and one child.
    *
-   * @param rdd RDD of base genotypes.
+   * @param genotypes Dataset of base genotypes.
    * @param firstParentId The sample ID for the first parent.
    * @param secondParentId The sample ID for the second parent.
    * @param childId The sample ID for the child.
    * @return Returns the final genotypes.
    */
-  def apply(rdd: GenotypeRDD,
+  def apply(genotypes: GenotypeDataset,
             firstParentId: String,
             secondParentId: String,
-            childId: String): GenotypeRDD = {
+            childId: String): GenotypeDataset = {
 
-    apply(rdd.toVariantContexts,
+    apply(genotypes.toVariantContexts,
       firstParentId,
       secondParentId,
       childId).toGenotypes
@@ -77,17 +77,17 @@ object TrioCaller extends Serializable {
   /**
    * Trio calls genotypes in a pedigree with two parents and one child.
    *
-   * @param rdd RDD of base genotypes.
+   * @param genotypes Dataset of base genotypes.
    * @param firstParentId The sample ID for the first parent.
    * @param secondParentId The sample ID for the second parent.
    * @param childId The sample ID for the child.
    * @return Returns the final genotypes.
    */
-  private[genotyping] def apply(rdd: VariantContextRDD,
+  private[genotyping] def apply(genotypes: VariantContextDataset,
                                 firstParentId: String,
                                 secondParentId: String,
-                                childId: String): VariantContextRDD = {
-    rdd.transform(rdd => {
+                                childId: String): VariantContextDataset = {
+    genotypes.transform(rdd => {
       rdd.filter(!filterRef(_))
         .map(processVariant(_, firstParentId, secondParentId, childId))
         .filter(!filterRef(_))
@@ -124,7 +124,7 @@ object TrioCaller extends Serializable {
 
     def makeNoCall(sampleId: String): Genotype = {
       Genotype.newBuilder
-        .setContigName(vc.variant.variant.getContigName)
+        .setReferenceName(vc.variant.variant.getReferenceName)
         .setStart(vc.variant.variant.getStart)
         .setEnd(vc.variant.variant.getEnd)
         .setVariant(vc.variant.variant)

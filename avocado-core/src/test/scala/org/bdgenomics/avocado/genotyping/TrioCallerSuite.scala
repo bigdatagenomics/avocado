@@ -19,13 +19,13 @@ package org.bdgenomics.avocado.genotyping
 
 import htsjdk.samtools.ValidationStringency
 import org.bdgenomics.adam.models.{
-  RecordGroup,
-  RecordGroupDictionary,
+  ReadGroup,
+  ReadGroupDictionary,
   SequenceDictionary,
   VariantContext
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.formats.avro.{
   AlignmentRecord,
@@ -38,42 +38,42 @@ import scala.collection.JavaConversions._
 
 class TrioCallerSuite extends AvocadoFunSuite {
 
-  def makeRdd(recordGroups: RecordGroupDictionary): AlignmentRecordRDD = {
-    AlignmentRecordRDD(sc.emptyRDD[AlignmentRecord],
+  def makeRdd(readGroups: ReadGroupDictionary): AlignmentRecordDataset = {
+    AlignmentRecordDataset(sc.emptyRDD[AlignmentRecord],
       SequenceDictionary.empty,
-      recordGroups,
+      readGroups,
       Seq.empty[ProcessingStep])
   }
 
   sparkTest("cannot have a sample with no record groups") {
     intercept[IllegalArgumentException] {
-      TrioCaller.extractSampleId(makeRdd(RecordGroupDictionary.empty))
+      TrioCaller.extractSampleId(makeRdd(ReadGroupDictionary.empty))
     }
   }
 
   sparkTest("cannot have a sample with discordant sample ids") {
     intercept[IllegalArgumentException] {
-      TrioCaller.extractSampleId(makeRdd(RecordGroupDictionary(Seq(
-        RecordGroup("sample1", "rg1"),
-        RecordGroup("sample2", "rg2")))))
+      TrioCaller.extractSampleId(makeRdd(ReadGroupDictionary(Seq(
+        ReadGroup("sample1", "rg1"),
+        ReadGroup("sample2", "rg2")))))
     }
   }
 
   sparkTest("extract id from a single read group") {
-    val sampleId = TrioCaller.extractSampleId(makeRdd(RecordGroupDictionary(Seq(
-      RecordGroup("sample1", "rg1")))))
+    val sampleId = TrioCaller.extractSampleId(makeRdd(ReadGroupDictionary(Seq(
+      ReadGroup("sample1", "rg1")))))
     assert(sampleId === "sample1")
   }
 
   sparkTest("extract id from multiple read groups") {
-    val sampleId = TrioCaller.extractSampleId(makeRdd(RecordGroupDictionary(Seq(
-      RecordGroup("sample1", "rg1"),
-      RecordGroup("sample1", "rg2")))))
+    val sampleId = TrioCaller.extractSampleId(makeRdd(ReadGroupDictionary(Seq(
+      ReadGroup("sample1", "rg1"),
+      ReadGroup("sample1", "rg2")))))
     assert(sampleId === "sample1")
   }
 
   val variant = Variant.newBuilder
-    .setContigName("chr")
+    .setReferenceName("chr")
     .setStart(100L)
     .setEnd(101L)
     .setReferenceAllele("A")

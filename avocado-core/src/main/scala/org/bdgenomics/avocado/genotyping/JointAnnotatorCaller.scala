@@ -21,8 +21,8 @@ import breeze.stats.distributions.Binomial
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.VariantContext
 import org.bdgenomics.adam.rdd.variant.{
-  GenotypeRDD,
-  VariantContextRDD
+  GenotypeDataset,
+  VariantContextDataset
 }
 import org.bdgenomics.adam.util.PhredUtils
 import org.bdgenomics.avocado.util.LogUtils
@@ -49,7 +49,7 @@ object JointAnnotatorCaller extends Serializable {
    * @param genotypes The genotypes to jointly process.
    * @return Returns a squared off and annotated set of variant contexts.
    */
-  def apply(genotypes: GenotypeRDD): VariantContextRDD = {
+  def apply(genotypes: GenotypeDataset): VariantContextDataset = {
     apply(genotypes.toVariantContexts)
   }
 
@@ -59,7 +59,7 @@ object JointAnnotatorCaller extends Serializable {
    * @param variantContexts The squared off sites to process.
    * @return Returns a squared off and annotated set of variant contexts.
    */
-  def apply(variantContexts: VariantContextRDD): VariantContextRDD = {
+  def apply(variantContexts: VariantContextDataset): VariantContextDataset = {
     variantContexts.transform(_.flatMap(annotateSite))
   }
 

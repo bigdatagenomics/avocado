@@ -18,11 +18,11 @@
 package org.bdgenomics.avocado.genotyping
 
 import org.bdgenomics.adam.models.{
-  RecordGroupDictionary,
+  ReadGroupDictionary,
   SequenceDictionary,
   SequenceRecord
 }
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.formats.avro.{ AlignmentRecord, Variant }
 
@@ -31,104 +31,104 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   val unalignedRead = AlignmentRecord.newBuilder()
     .setReadMapped(false)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .build
 
   val perfectReadMCigar = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .setCigar("8M")
     .setMismatchingPositions("8")
     .build
 
   val perfectReadEqCigar = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .setCigar("8=")
     .setMismatchingPositions("8")
     .build
 
   val snpReadMCigar = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .setCigar("8M")
     .setMismatchingPositions("4C3")
     .build
 
   val snpReadEqCigar = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .setCigar("4=1X3=")
     .setMismatchingPositions("4C3")
     .build
 
   val snpReadHardClip = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .setCigar("2H8M")
     .setMismatchingPositions("4C3")
     .build
 
   val snpReadSoftClip = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("1")
+    .setReferenceName("1")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("TGACACATGA")
-    .setQual("!!!!!!!!!!")
+    .setQuality("!!!!!!!!!!")
     .setCigar("2S8M")
     .setMismatchingPositions("4C3")
     .build
 
   val insertRead = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("2")
+    .setReferenceName("2")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACTTATGA")
-    .setQual("!!!!!!!!!!")
+    .setQuality("!!!!!!!!!!")
     .setCigar("4M2I4M")
     .setMismatchingPositions("8")
     .build
 
   val deleteRead = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("3")
+    .setReferenceName("3")
     .setStart(10L)
     .setEnd(20L)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .setCigar("4M2D4M")
     .setMismatchingPositions("4^TT4")
     .build
 
   val mnpRead = AlignmentRecord.newBuilder()
     .setReadMapped(true)
-    .setContigName("3")
+    .setReferenceName("3")
     .setStart(10L)
     .setEnd(18L)
     .setSequence("ACACATGA")
-    .setQual("!!!!!!!!")
+    .setQuality("!!!!!!!!")
     .setCigar("8M")
     .setMismatchingPositions("3T0T3")
     .build
@@ -153,7 +153,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   }
 
   def validateSnp(snp: Variant) {
-    assert(snp.getContigName() === "1")
+    assert(snp.getReferenceName() === "1")
     assert(snp.getStart() === 14L)
     assert(snp.getEnd() === 15L)
     assert(snp.getReferenceAllele === "C")
@@ -185,7 +185,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   }
 
   def validateInsertion(ins: Variant) {
-    assert(ins.getContigName() === "2")
+    assert(ins.getReferenceName() === "2")
     assert(ins.getStart() === 13L)
     assert(ins.getEnd() === 14L)
     assert(ins.getReferenceAllele() === "C")
@@ -206,7 +206,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   }
 
   def validateDeletion(del: Variant) {
-    assert(del.getContigName() === "3")
+    assert(del.getReferenceName() === "3")
     assert(del.getStart() === 13L)
     assert(del.getEnd() === 16L)
     assert(del.getReferenceAllele() === "CTT")
@@ -233,12 +233,12 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
       snpReadMCigar, snpReadEqCigar,
       insertRead,
       deleteRead))
-    val readRdd = AlignmentRecordRDD(rdd,
+    val readRdd = AlignmentRecordDataset(rdd,
       SequenceDictionary(
         SequenceRecord("1", 50L),
         SequenceRecord("2", 40L),
         SequenceRecord("3", 30L)),
-      RecordGroupDictionary.empty,
+      ReadGroupDictionary.empty,
       Seq.empty)
 
     val variantRdd = DiscoverVariants(readRdd)
@@ -250,7 +250,7 @@ class DiscoverVariantsSuite extends AvocadoFunSuite {
   test("break TT->CA mnp into two snps") {
     val variants = DiscoverVariants.variantsInRead(mnpRead, 0)
     assert(variants.size === 2)
-    assert(variants.forall(_.contigName == "3"))
+    assert(variants.forall(_.referenceName == "3"))
     assert(variants.forall(_.referenceAllele == "T"))
     val optC = variants.find(_.alternateAllele == Some("C"))
     assert(optC.isDefined)

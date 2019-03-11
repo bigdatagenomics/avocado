@@ -58,7 +58,7 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
 
     val variants = discoveredVariants.rdd.collect
     assert(variants.size === 3)
-    assert(variants.forall(_.getContigName == "chr22"))
+    assert(variants.forall(_.getReferenceName == "chr22"))
     val s602 = variants.filter(_.getStart == 16157602L)
     assert(s602.size === 1)
     assert(s602.forall(_.getReferenceAllele == "G"))
@@ -77,14 +77,14 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
 
   test("find genotype if variant is present") {
     val variant = Variant.newBuilder()
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setStart(1L)
       .setEnd(2L)
       .setReferenceAllele("A")
       .setAlternateAllele("T")
       .build
     val genotypes = Iterable(Genotype.newBuilder
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setStart(1L)
       .setEnd(2L)
       .setVariant(Variant.newBuilder()
@@ -101,14 +101,14 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
 
   test("don't find genotype if variant is not present") {
     val variant = Variant.newBuilder()
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setStart(1L)
       .setEnd(2L)
       .setReferenceAllele("A")
       .setAlternateAllele("T")
       .build
     val genotypes = Iterable(Genotype.newBuilder
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setStart(1L)
       .setEnd(10L)
       .setVariant(Variant.newBuilder()
@@ -126,14 +126,14 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
     val variant = Variant.newBuilder
       .setStart(100L)
       .setEnd(101L)
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setReferenceAllele("A")
       .setAlternateAllele("G")
       .build
     val genotypes = Iterable(Genotype.newBuilder
       .setStart(90L)
       .setEnd(110L)
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setNonReferenceLikelihoods(Seq(0.0, -1.0, -2.0)
         .map(d => d: java.lang.Double))
       .build)
@@ -146,7 +146,7 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
     optExcisedGenotype.foreach(gt => {
       assert(gt.getStart === 100L)
       assert(gt.getEnd === 101L)
-      assert(gt.getContigName === "ctg")
+      assert(gt.getReferenceName === "ctg")
       assert(gt.getVariant.getReferenceAllele === "A")
       assert(gt.getVariant.getAlternateAllele === "G")
       assert(gt.getGenotypeLikelihoods.size === 3)
@@ -160,12 +160,12 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
     val variant = Variant.newBuilder
       .setStart(100L)
       .setEnd(101L)
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setReferenceAllele("A")
       .setAlternateAllele("G")
       .build
     val genotypes = Iterable(Genotype.newBuilder
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setStart(100L)
       .setEnd(101L)
       .setVariant(Variant.newBuilder()
@@ -176,7 +176,7 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
       .build, Genotype.newBuilder
       .setStart(90L)
       .setEnd(110L)
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setNonReferenceLikelihoods(Seq(0.0, -1.0, -2.0)
         .map(d => d: java.lang.Double))
       .setSampleId("sample2")
@@ -189,7 +189,7 @@ class SquareOffReferenceModelSuite extends AvocadoFunSuite {
     assert(vc.genotypes.size === 2)
     assert(vc.genotypes.forall(_.getStart == 100L))
     assert(vc.genotypes.forall(_.getEnd == 101L))
-    assert(vc.genotypes.forall(_.getContigName == "ctg"))
+    assert(vc.genotypes.forall(_.getReferenceName == "ctg"))
     assert(vc.genotypes.forall(_.getVariant.getReferenceAllele == "A"))
     assert(vc.genotypes.forall(_.getVariant.getAlternateAllele == "G"))
     assert(vc.genotypes.count(_.getSampleId == "sample1") === 1)

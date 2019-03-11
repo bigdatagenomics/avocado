@@ -19,12 +19,12 @@ package org.bdgenomics.avocado.util
 
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.adam.models.{
-  RecordGroupDictionary,
+  ReadGroupDictionary,
   SequenceDictionary,
   SequenceRecord
 }
 import org.bdgenomics.adam.rdd.ADAMContext._
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.formats.avro.AlignmentRecord
 
 case class TestPrefilterReadsArgs(var autosomalOnly: Boolean = false,
@@ -68,7 +68,7 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
     assert(!PrefilterReads.filterMapped(unmappedRead, true))
   }
 
-  val contigNames = Seq("chr1",
+  val referenceNames = Seq("chr1",
     "1",
     "chrX",
     "X",
@@ -90,7 +90,7 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
       }
     }
 
-    contigNames.zipWithIndex
+    referenceNames.zipWithIndex
       .foreach(p => assertIdx(p._2, p._1))
   }
 
@@ -119,31 +119,31 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
   }
 
   test("filter autosomal chromosomes from generator") {
-    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(autosomalOnly = true)), Set(0, 1))
+    testChromosomeHelperSet(PrefilterReads.referenceFilterFn(TestPrefilterReadsArgs(autosomalOnly = true)), Set(0, 1))
   }
 
   test("filter autosomal + sex chromosomes from generator") {
-    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs()), Set(0, 1,
+    testChromosomeHelperSet(PrefilterReads.referenceFilterFn(TestPrefilterReadsArgs()), Set(0, 1,
       2, 3,
       4, 5))
   }
 
   test("filter all chromosomes from generator") {
-    testChromosomeHelperSet(PrefilterReads.contigFilterFn(TestPrefilterReadsArgs(keepMitochondrialChromosome = true)), Set(0, 1, 2, 3, 4, 5, 6, 7))
+    testChromosomeHelperSet(PrefilterReads.referenceFilterFn(TestPrefilterReadsArgs(keepMitochondrialChromosome = true)), Set(0, 1, 2, 3, 4, 5, 6, 7))
   }
 
-  test("update a read whose mate is mapped to a filtered contig") {
+  test("update a read whose mate is mapped to a filtered reference") {
     val read = AlignmentRecord.newBuilder()
       .setReadPaired(true)
       .setMateMapped(true)
-      .setMateContigName("notARealContig")
+      .setMateReferenceName("notARealReference")
       .build
 
-    val filters = PrefilterReads.contigFilterFn(TestPrefilterReadsArgs())
+    val filters = PrefilterReads.referenceFilterFn(TestPrefilterReadsArgs())
     val nullified = PrefilterReads.maybeNullifyMate(read, filters)
 
     assert(!nullified.getMateMapped)
-    assert(nullified.getMateContigName == null)
+    assert(nullified.getMateReferenceName == null)
   }
 
   val reads = Seq(AlignmentRecord.newBuilder()
@@ -154,12 +154,12 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
     AlignmentRecord.newBuilder()
       .setReadMapped(true)
       .setDuplicateRead(false)).flatMap(rb => {
-      contigNames.map(cn => rb.setContigName(cn).build)
+      referenceNames.map(cn => rb.setReferenceName(cn).build)
     })
 
   def testReadHelperSet(testArgs: PrefilterReadsArgs, passIdxSet: Set[Int]) {
     val testFn = PrefilterReads.readFilterFn(testArgs,
-      PrefilterReads.contigFilterFn(testArgs))
+      PrefilterReads.referenceFilterFn(testArgs))
 
     def assertIdx(idx: Int, testRead: AlignmentRecord) = {
       if (passIdxSet(idx)) {
@@ -203,16 +203,16 @@ class PrefilterReadsSuite extends AvocadoFunSuite {
       Set(16, 17, 18, 19, 20, 21, 22, 23))
   }
 
-  val sequences = new SequenceDictionary(contigNames.map(cn => SequenceRecord(cn, 10L))
+  val sequences = new SequenceDictionary(referenceNames.map(cn => SequenceRecord(cn, 10L))
     .toVector)
 
-  def testRdd(args: PrefilterReadsArgs, numReads: Int, numContigs: Int) {
+  def testRdd(args: PrefilterReadsArgs, numReads: Int, numReferences: Int) {
 
-    val readRdd = AlignmentRecordRDD(sc.parallelize(reads), sequences, RecordGroupDictionary.empty, Seq.empty)
+    val readRdd = AlignmentRecordDataset(sc.parallelize(reads), sequences, ReadGroupDictionary.empty, Seq.empty)
     val filteredRdd = PrefilterReads(readRdd, args)
 
     assert(filteredRdd.rdd.count === numReads)
-    assert(filteredRdd.sequences.records.size === numContigs)
+    assert(filteredRdd.sequences.records.size === numReferences)
   }
 
   sparkTest("filter rdd of reads mapped to autosomal chromosomes from generator") {

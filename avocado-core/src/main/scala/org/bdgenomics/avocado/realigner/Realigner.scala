@@ -18,7 +18,7 @@
 package org.bdgenomics.avocado.realigner
 
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.avocado.Timers._
 import org.bdgenomics.avocado.models.{
   Clipped,
@@ -43,8 +43,8 @@ object Realigner extends Logging {
    * @param kmerLength The length k of the k-mers.
    * @return Returns the realigned reads.
    */
-  def realign(reads: AlignmentRecordRDD,
-              kmerLength: Int): AlignmentRecordRDD = {
+  def realign(reads: AlignmentRecordDataset,
+              kmerLength: Int): AlignmentRecordDataset = {
     reads.transform(realignRdd(_, kmerLength))
   }
 

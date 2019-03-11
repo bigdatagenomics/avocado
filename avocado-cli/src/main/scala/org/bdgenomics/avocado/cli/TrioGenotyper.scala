@@ -21,8 +21,8 @@ import org.apache.spark.SparkContext
 import org.bdgenomics.adam.projections.{ AlignmentRecordField, Filter }
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMSaveAnyArgs
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
-import org.bdgenomics.adam.rdd.variant.GenotypeRDD
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
+import org.bdgenomics.adam.rdd.variant.GenotypeDataset
 import org.bdgenomics.avocado.genotyping.{
   BiallelicGenotyper => Biallelic,
   DiscoverVariants => Discover,
@@ -198,8 +198,8 @@ class TrioGenotyper(
 
     // load reads
     val projection = Some(Filter(AlignmentRecordField.attributes,
-      AlignmentRecordField.origQual,
-      AlignmentRecordField.recordGroupName))
+      AlignmentRecordField.originalQuality,
+      AlignmentRecordField.readGroupId))
     val firstParentReads = sc.loadAlignments(args.firstParentPath,
       optProjection = projection)
     val secondParentReads = sc.loadAlignments(args.secondParentPath,
@@ -250,7 +250,7 @@ class TrioGenotyper(
       copyNumber,
       false)
 
-    val genotypes = GenotypeRDD(sc.union(firstParentGenotypes.rdd,
+    val genotypes = GenotypeDataset(sc.union(firstParentGenotypes.rdd,
       secondParentGenotypes.rdd,
       childGenotypes.rdd),
       variants.sequences,
