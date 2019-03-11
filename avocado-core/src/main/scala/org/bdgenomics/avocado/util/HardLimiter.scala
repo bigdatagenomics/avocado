@@ -109,7 +109,7 @@ private[avocado] object HardLimiter extends Serializable {
       val (lastRead, _) = kv
       assert(lastRead.getStart <= readStart,
         "New read (%s) is before last read (%s).".format(read, lastRead))
-      assert(lastRead.getContigName == read._1.getContigName)
+      assert(lastRead.getReferenceName == read._1.getReferenceName)
     })
 
     // any read that ends before this new read starts can be flushed

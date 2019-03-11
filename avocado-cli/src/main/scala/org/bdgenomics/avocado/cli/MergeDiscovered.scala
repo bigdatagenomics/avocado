@@ -56,7 +56,7 @@ class MergeDiscovered(
     sc.loadVariants(args.inputPath)
       .transformDataset(_.dropDuplicates("start",
         "end",
-        "contigName",
+        "referenceName",
         "referenceAllele",
         "alternateAllele"))
       .saveAsParquet(args.outputPath)

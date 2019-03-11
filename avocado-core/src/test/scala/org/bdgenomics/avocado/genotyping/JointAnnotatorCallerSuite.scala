@@ -31,7 +31,7 @@ import scala.collection.JavaConversions._
 class JointAnnotatorCallerSuite extends AvocadoFunSuite {
 
   val baseGt = Genotype.newBuilder
-    .setContigName("chr1")
+    .setReferenceName("chr1")
     .setStart(1000)
     .setEnd(1001)
     .setVariant(Variant.newBuilder

@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.models
 
 import org.apache.spark.SparkContext._
 import org.bdgenomics.adam.models.ReferenceRegion
-import org.bdgenomics.adam.rdd.feature.FeatureRDD
+import org.bdgenomics.adam.rdd.feature.FeatureDataset
 import scala.math.{ max, min }
 
 private[avocado] object CopyNumberMap extends Serializable {
@@ -40,10 +40,11 @@ private[avocado] object CopyNumberMap extends Serializable {
    * Creates a copy number variant map from CNVs stored as features.
    *
    * @param basePloidy The ploidy of this sample.
+   * @param features Dataset of features.
    * @return Returns a map containing copy number variants.
    */
   def apply(basePloidy: Int,
-            features: FeatureRDD): CopyNumberMap = {
+            features: FeatureDataset): CopyNumberMap = {
 
     val cnvMap = features.rdd
       .flatMap(f => f.getFeatureType match {
@@ -68,19 +69,19 @@ private[avocado] object CopyNumberMap extends Serializable {
  * An object that stores copy number variation.
  *
  * @param basePloidy The ploidy of this sample.
- * @param variantsByContig A map mapping contig names to the regions containing
- *   copy number variants. These regions are sorted per contig, and are in
+ * @param variantsByReference A map mapping reference names to the regions containing
+ *   copy number variants. These regions are sorted per reference, and are in
  *   tuples with the observed copy number over that region.
  */
 private[avocado] case class CopyNumberMap private (
     val basePloidy: Int,
-    private[models] val variantsByContig: Map[String, Seq[(ReferenceRegion, Int)]]) {
+    private[models] val variantsByReference: Map[String, Seq[(ReferenceRegion, Int)]]) {
 
   /**
    * @return The lowest copy number seen over all regions.
    */
   def minPloidy: Int = {
-    variantsByContig.values
+    variantsByReference.values
       .flatMap(s => s.map(_._2))
       .fold(basePloidy)(_ min _)
   }
@@ -89,7 +90,7 @@ private[avocado] case class CopyNumberMap private (
    * @return The highest copy number seen over all regions.
    */
   def maxPloidy: Int = {
-    variantsByContig.values
+    variantsByReference.values
       .flatMap(s => s.map(_._2))
       .fold(basePloidy)(_ max _)
   }
@@ -103,7 +104,7 @@ private[avocado] case class CopyNumberMap private (
   def overlappingVariants(
     rr: ReferenceRegion): Iterable[(ReferenceRegion, Int)] = {
 
-    variantsByContig.get(rr.referenceName)
+    variantsByReference.get(rr.referenceName)
       .fold(Iterable.empty[(ReferenceRegion, Int)])(i => {
         i.dropWhile(!_._1.overlaps(rr))
           .takeWhile(_._1.overlaps(rr))

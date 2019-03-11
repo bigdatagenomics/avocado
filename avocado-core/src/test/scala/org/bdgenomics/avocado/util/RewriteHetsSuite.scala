@@ -19,7 +19,7 @@ package org.bdgenomics.avocado.util
 
 import org.bdgenomics.avocado.AvocadoFunSuite
 import org.bdgenomics.adam.models.SequenceDictionary
-import org.bdgenomics.adam.rdd.variant.GenotypeRDD
+import org.bdgenomics.adam.rdd.variant.GenotypeDataset
 import org.bdgenomics.formats.avro.{ Genotype, GenotypeAllele, Variant }
 import scala.collection.JavaConversions._
 
@@ -165,9 +165,9 @@ class RewriteHetsSuite extends AvocadoFunSuite {
     homRefSnp, homRefIndel,
     homAltSnp, homAltIndel)
 
-  def gtRdd: GenotypeRDD = {
+  def gtRdd: GenotypeDataset = {
     val rdd = sc.parallelize(genotypes)
-    GenotypeRDD(rdd,
+    GenotypeDataset(rdd,
       SequenceDictionary.empty,
       Seq.empty,
       Seq.empty)

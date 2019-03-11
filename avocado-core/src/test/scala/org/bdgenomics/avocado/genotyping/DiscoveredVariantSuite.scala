@@ -24,7 +24,7 @@ class DiscoveredVariantSuite extends FunSuite {
 
   test("round trip conversion to/from variant") {
     val variant = Variant.newBuilder
-      .setContigName("ctg")
+      .setReferenceName("ctg")
       .setStart(100L)
       .setEnd(101L)
       .setReferenceAllele("A")

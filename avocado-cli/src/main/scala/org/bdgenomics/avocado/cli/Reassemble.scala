@@ -20,7 +20,7 @@ package org.bdgenomics.avocado.cli
 import org.apache.spark.SparkContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rdd.ADAMSaveAnyArgs
-import org.bdgenomics.adam.rdd.read.{ AlignmentRecordRDD, MDTagging }
+import org.bdgenomics.adam.rdd.read.{ AlignmentRecordDataset, MDTagging }
 import org.bdgenomics.avocado.realigner.Realigner
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Argument, Option => Args4jOption }
